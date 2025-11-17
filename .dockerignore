@@ -10,8 +10,10 @@
 # Generate on crash by the VM
 erl_crash.dump
 
-# Static artifacts - These will be built within the image
-/priv/static/
+# Static artifacts - Only ignore built assets, not static files like favicon.ico
+/priv/static/assets/
+/priv/static/cache_manifest.json
+/priv/svelte/
 
 # Development database files
 *.db
