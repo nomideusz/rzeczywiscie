@@ -107,6 +107,14 @@ ENV MIX_ENV="prod"
 # Only copy the final release from the build stage
 COPY --from=builder --chown=nobody:root /app/_build/${MIX_ENV}/rel/rzeczywiscie ./
 
+# Create migration startup script
+RUN printf '#!/bin/sh\n\
+echo "Running migrations..."\n\
+/app/bin/rzeczywiscie eval "Rzeczywiscie.Release.migrate()"\n\
+echo "Starting server..."\n\
+exec /app/bin/rzeczywiscie start\n' > /app/bin/migrate_and_start \
+    && chmod +x /app/bin/migrate_and_start
+
 USER nobody
 
 # If using an environment that doesn't automatically reap zombie processes, it is
@@ -117,5 +125,5 @@ USER nobody
 # RUN chmod +x /tini
 # ENTRYPOINT ["/tini", "--"]
 
-# Run the server
-CMD ["/app/bin/server"]
+# Run migrations and start the server
+CMD ["/app/bin/migrate_and_start"]
