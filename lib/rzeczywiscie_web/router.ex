@@ -19,6 +19,7 @@ defmodule RzeczywiscieWeb.Router do
 
     get "/", PageController, :home
     live "/example", ExampleLive
+    live "/draw", DrawingBoardLive
   end
 
   # Other scopes may use custom stacks.
