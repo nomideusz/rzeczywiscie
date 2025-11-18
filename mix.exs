@@ -10,6 +10,7 @@ defmodule Rzeczywiscie.MixProject do
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       deps: deps(),
+      releases: releases(),
       compilers: [:phoenix_live_view] ++ Mix.compilers(),
       listeners: [Phoenix.CodeReloader]
     ]
@@ -34,6 +35,23 @@ defmodule Rzeczywiscie.MixProject do
   # Specifies which paths to compile per environment.
   defp elixirc_paths(:test), do: ["lib", "test/support"]
   defp elixirc_paths(_), do: ["lib"]
+
+  # Configure releases to include static assets
+  defp releases do
+    [
+      rzeczywiscie: [
+        include_executables_for: [:unix],
+        applications: [runtime_tools: :permanent],
+        steps: [:assemble, &copy_static_files/1]
+      ]
+    ]
+  end
+
+  defp copy_static_files(release) do
+    File.cp_r!("priv/static", Path.join(release.path, "priv/static"))
+    File.cp_r!("priv/svelte", Path.join(release.path, "priv/svelte"))
+    release
+  end
 
   # Specifies your project dependencies.
   #
