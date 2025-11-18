@@ -48,8 +48,14 @@ defmodule Rzeczywiscie.MixProject do
   end
 
   defp copy_static_files(release) do
-    File.cp_r!("priv/static", Path.join(release.path, "priv/static"))
-    File.cp_r!("priv/svelte", Path.join(release.path, "priv/svelte"))
+    # Create priv directory in release if it doesn't exist
+    priv_path = Path.join(release.path, "priv")
+    File.mkdir_p!(priv_path)
+
+    # Copy static files
+    File.cp_r!("priv/static", Path.join(priv_path, "static"))
+    File.cp_r!("priv/svelte", Path.join(priv_path, "svelte"))
+
     release
   end
 
