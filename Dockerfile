@@ -70,8 +70,13 @@ RUN mix compile
 # Changes to config/runtime.exs don't require recompiling the code
 COPY config/runtime.exs config/
 
-# Digest static files
-RUN mix phx.digest
+# Digest static files and verify they were created
+RUN mix phx.digest && \
+    echo "=== Listing digested files ===" && \
+    ls -la priv/static/assets/css/ && \
+    ls -la priv/static/assets/js/ && \
+    echo "=== Cache manifest ===" && \
+    head -20 priv/static/cache_manifest.json
 
 # Build the release
 RUN mix release

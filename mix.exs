@@ -52,9 +52,20 @@ defmodule Rzeczywiscie.MixProject do
     priv_path = Path.join(release.path, "priv")
     File.mkdir_p!(priv_path)
 
+    IO.puts("=== Copying static files to release ===")
+    IO.puts("Release path: #{release.path}")
+    IO.puts("Priv path: #{priv_path}")
+
     # Copy static files
     File.cp_r!("priv/static", Path.join(priv_path, "static"))
     File.cp_r!("priv/svelte", Path.join(priv_path, "svelte"))
+
+    IO.puts("=== Verifying copied files ===")
+    static_path = Path.join([priv_path, "static", "assets", "css"])
+    case File.ls(static_path) do
+      {:ok, files} -> IO.puts("CSS files in release: #{inspect(files)}")
+      {:error, reason} -> IO.puts("Error listing CSS files: #{inspect(reason)}")
+    end
 
     release
   end
