@@ -60,9 +60,7 @@ if config_env() == :prod do
     http: [
       # Bind on all IPv4 interfaces for CapRover compatibility
       ip: {0, 0, 0, 0},
-      port: port,
-      # Required for WebSocket connections behind reverse proxy
-      protocol_options: [idle_timeout: :infinity]
+      port: port
     ],
     secret_key_base: secret_key_base,
     # Allow WebSocket connections from the production domain
