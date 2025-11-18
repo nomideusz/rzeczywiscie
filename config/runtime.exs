@@ -55,6 +55,18 @@ if config_env() == :prod do
 
   config :rzeczywiscie, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
 
+  # Check origin configuration - can be disabled for debugging
+  check_origin_config =
+    case System.get_env("ORIGIN_CHECK") do
+      "false" -> false
+      _ -> [
+        "https://#{host}",
+        "https://www.#{host}",
+        "http://#{host}",
+        "http://www.#{host}"
+      ]
+    end
+
   config :rzeczywiscie, RzeczywiscieWeb.Endpoint,
     url: [host: host, port: 443, scheme: "https"],
     http: [
@@ -63,13 +75,7 @@ if config_env() == :prod do
       port: port
     ],
     secret_key_base: secret_key_base,
-    # Allow WebSocket connections from the production domain
-    check_origin: [
-      "https://#{host}",
-      "https://www.#{host}",
-      "http://#{host}",
-      "http://www.#{host}"
-    ]
+    check_origin: check_origin_config
 
   # ## SSL Support
   #
