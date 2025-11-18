@@ -13,7 +13,7 @@ defmodule RzeczywiscieWeb.Endpoint do
 
   socket "/live", Phoenix.LiveView.Socket,
     websocket: [
-      connect_info: [session: @session_options, :peer_data, :x_headers],
+      connect_info: [:peer_data, :x_headers, session: @session_options],
       timeout: 60_000
     ],
     longpoll: [connect_info: [session: @session_options]]
