@@ -17,7 +17,7 @@ defmodule RzeczywiscieWeb.Router do
   scope "/", RzeczywiscieWeb do
     pipe_through :browser
 
-    get "/", PageController, :home
+    live "/", HomeLive
     live "/example", ExampleLive
     live "/draw", DrawingBoardLive
     live "/kanban", KanbanBoardLive
