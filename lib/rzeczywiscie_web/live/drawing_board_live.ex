@@ -21,17 +21,19 @@ defmodule RzeczywiscieWeb.DrawingBoardLive do
       # Generate a unique user ID for this session
       user_id = generate_user_id()
 
-      # Get existing strokes from server state
-      strokes = Rzeczywiscie.DrawingState.get_strokes()
-
       {:ok,
        socket
        |> assign(:user_id, user_id)
-       |> assign(:cursor_color, generate_random_color())
-       |> push_event("load_strokes", %{strokes: strokes})}
+       |> assign(:cursor_color, generate_random_color())}
     else
       {:ok, socket}
     end
+  end
+
+  def handle_event("request_strokes", _params, socket) do
+    # Client is ready, send existing strokes
+    strokes = Rzeczywiscie.DrawingState.get_strokes()
+    {:noreply, push_event(socket, "load_strokes", %{strokes: strokes})}
   end
 
   def handle_event("draw_stroke", stroke_data, socket) do

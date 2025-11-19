@@ -56,6 +56,9 @@
             delete cursors[e.detail.user_id];
             cursors = cursors;
         });
+
+        // Request existing strokes from server now that we're ready
+        live.pushEvent('request_strokes', {});
     });
 
     function startDrawing(e) {
