@@ -50,21 +50,21 @@ RUN mkdir config
 COPY config/config.exs config/${MIX_ENV}.exs config/
 RUN mix deps.compile
 
-# Copy assets
+# Copy assets and lib (lib needed for Tailwind to scan templates)
 COPY priv priv
 COPY assets assets
+COPY lib lib
 
 # Install npm packages and build assets
 WORKDIR /app/assets
 RUN npm ci --prefer-offline --no-audit
 RUN node build.js --deploy
 
-# Compile Tailwind CSS
+# Compile Tailwind CSS (lib must exist for @source directives to work)
 WORKDIR /app
 RUN mix tailwind rzeczywiscie --minify
 
 # Compile the release
-COPY lib lib
 RUN mix compile
 
 # Changes to config/runtime.exs don't require recompiling the code
