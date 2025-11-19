@@ -201,6 +201,7 @@ defmodule RzeczywiscieWeb.HomeLive do
             </a>
           </div>
         </div>
+        </div>
       </div>
     </div>
     <!-- Technology Stack Section - Raw Grid -->
