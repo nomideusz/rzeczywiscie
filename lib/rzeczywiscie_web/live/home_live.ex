@@ -4,11 +4,10 @@ defmodule RzeczywiscieWeb.HomeLive do
   def render(assigns) do
     ~H"""
     <!-- Hero Section with Gradient -->
-    <div class="relative overflow-hidden bg-gradient-to-br from-primary/5 via-base-100 to-secondary/5">
-      <div class="absolute inset-0 bg-grid-pattern opacity-[0.02]"></div>
+    <div class="relative overflow-hidden bg-gradient-to-br from-primary/10 via-base-100 to-secondary/10">
       <div class="container mx-auto px-4 py-24 sm:py-32 relative">
         <div class="max-w-4xl mx-auto text-center">
-          <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-medium mb-8 animate-fade-in">
+          <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/20 border border-primary/30 text-primary text-sm font-medium mb-8">
             <span class="relative flex h-2 w-2">
               <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75">
               </span>
@@ -17,15 +16,17 @@ defmodule RzeczywiscieWeb.HomeLive do
             Real-time collaboration platform
           </div>
 
-          <h1 class="text-5xl sm:text-6xl lg:text-7xl font-bold mb-6 bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent leading-tight">
-            Rzeczywiscie
+          <h1 class="text-5xl sm:text-6xl lg:text-7xl font-bold mb-6 leading-tight">
+            <span class="bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent">
+              Rzeczywiscie
+            </span>
           </h1>
 
-          <p class="text-xl sm:text-2xl mb-6 text-base-content/80 font-light">
+          <p class="text-xl sm:text-2xl mb-6 font-light">
             Build together in real-time
           </p>
 
-          <p class="text-lg mb-12 text-base-content/60 max-w-2xl mx-auto leading-relaxed">
+          <p class="text-lg mb-12 text-base-content/70 max-w-2xl mx-auto leading-relaxed">
             Experience instant collaboration with Phoenix LiveView and Svelte 5.
             Every action synchronizes across all clients in milliseconds.
           </p>
@@ -87,11 +88,11 @@ defmodule RzeczywiscieWeb.HomeLive do
       <div class="grid lg:grid-cols-2 gap-8 max-w-6xl mx-auto">
         <!-- Drawing Board Card - Modern Design -->
         <div class="group relative">
-          <div class="absolute -inset-0.5 bg-gradient-to-r from-primary to-secondary rounded-3xl opacity-0 group-hover:opacity-100 transition duration-500 blur"></div>
-          <div class="relative bg-base-100 rounded-3xl p-8 shadow-xl hover:shadow-2xl transition-all duration-300">
+          <div class="absolute -inset-0.5 bg-gradient-to-r from-primary to-secondary rounded-3xl opacity-0 group-hover:opacity-75 transition duration-500 blur-xl"></div>
+          <div class="relative bg-base-100 border border-base-300 rounded-3xl p-8 shadow-lg hover:shadow-xl transition-all duration-300">
             <div class="flex items-start gap-6">
               <div class="flex-shrink-0">
-                <div class="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                <div class="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
                   <svg
                     viewBox="0 0 24 24"
                     fill="none"
@@ -167,11 +168,11 @@ defmodule RzeczywiscieWeb.HomeLive do
         </div>
         <!-- Kanban Board Card - Modern Design -->
         <div class="group relative">
-          <div class="absolute -inset-0.5 bg-gradient-to-r from-secondary to-accent rounded-3xl opacity-0 group-hover:opacity-100 transition duration-500 blur"></div>
-          <div class="relative bg-base-100 rounded-3xl p-8 shadow-xl hover:shadow-2xl transition-all duration-300">
+          <div class="absolute -inset-0.5 bg-gradient-to-r from-secondary to-accent rounded-3xl opacity-0 group-hover:opacity-75 transition duration-500 blur-xl"></div>
+          <div class="relative bg-base-100 border border-base-300 rounded-3xl p-8 shadow-lg hover:shadow-xl transition-all duration-300">
             <div class="flex items-start gap-6">
               <div class="flex-shrink-0">
-                <div class="w-16 h-16 rounded-2xl bg-secondary/10 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                <div class="w-16 h-16 rounded-2xl bg-secondary/10 border border-secondary/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
                   <svg
                     viewBox="0 0 24 24"
                     fill="none"
@@ -242,37 +243,37 @@ defmodule RzeczywiscieWeb.HomeLive do
       </div>
     </div>
     <!-- Technology Stack Section -->
-    <div class="bg-base-200/50 py-20">
+    <div class="bg-base-200/30 py-20">
       <div class="container mx-auto px-4">
         <div class="text-center mb-12">
           <h2 class="text-3xl font-bold mb-3">Powered by Modern Technology</h2>
-          <p class="text-base-content/60">Built with the best tools for real-time applications</p>
+          <p class="text-base-content/70">Built with the best tools for real-time applications</p>
         </div>
         <div class="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-          <div class="text-center p-6 bg-base-100 rounded-2xl shadow-md hover:shadow-lg transition-shadow">
-            <div class="w-12 h-12 mx-auto mb-4 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-2xl">
+          <div class="text-center p-6 bg-base-100 border border-base-300 rounded-2xl shadow-sm hover:shadow-md transition-shadow">
+            <div class="w-12 h-12 mx-auto mb-4 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 shadow-lg flex items-center justify-center text-2xl">
               ⚡
             </div>
             <h3 class="text-xl font-semibold mb-2">Phoenix LiveView</h3>
-            <p class="text-base-content/60 text-sm leading-relaxed">
+            <p class="text-base-content/70 text-sm leading-relaxed">
               Real-time server-rendered apps with minimal JavaScript
             </p>
           </div>
-          <div class="text-center p-6 bg-base-100 rounded-2xl shadow-md hover:shadow-lg transition-shadow">
-            <div class="w-12 h-12 mx-auto mb-4 rounded-xl bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center text-2xl">
+          <div class="text-center p-6 bg-base-100 border border-base-300 rounded-2xl shadow-sm hover:shadow-md transition-shadow">
+            <div class="w-12 h-12 mx-auto mb-4 rounded-xl bg-gradient-to-br from-orange-500 to-red-500 shadow-lg flex items-center justify-center text-2xl">
               🎨
             </div>
             <h3 class="text-xl font-semibold mb-2">Svelte 5</h3>
-            <p class="text-base-content/60 text-sm leading-relaxed">
+            <p class="text-base-content/70 text-sm leading-relaxed">
               Reactive components with blazing fast performance
             </p>
           </div>
-          <div class="text-center p-6 bg-base-100 rounded-2xl shadow-md hover:shadow-lg transition-shadow">
-            <div class="w-12 h-12 mx-auto mb-4 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-2xl">
+          <div class="text-center p-6 bg-base-100 border border-base-300 rounded-2xl shadow-sm hover:shadow-md transition-shadow">
+            <div class="w-12 h-12 mx-auto mb-4 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 shadow-lg flex items-center justify-center text-2xl">
               🚀
             </div>
             <h3 class="text-xl font-semibold mb-2">LiveSvelte</h3>
-            <p class="text-base-content/60 text-sm leading-relaxed">
+            <p class="text-base-content/70 text-sm leading-relaxed">
               Seamless integration between Phoenix and Svelte
             </p>
           </div>
