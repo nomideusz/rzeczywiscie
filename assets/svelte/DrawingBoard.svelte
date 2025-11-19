@@ -63,6 +63,15 @@
         const pos = getMousePos(e);
         ctx.beginPath();
         ctx.moveTo(pos.x, pos.y);
+
+        // Send starting position to server
+        live.pushEvent('draw_stroke', {
+            x: pos.x,
+            y: pos.y,
+            color: currentColor,
+            size: brushSize,
+            type: 'start'
+        });
     }
 
     function draw(e) {
@@ -121,17 +130,32 @@
     function loadStrokes(strokes) {
         // Replay all strokes from server state
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        strokes.reverse().forEach(stroke => {
+
+        // Strokes are stored newest first, so reverse to get chronological order
+        const chronological = [...strokes].reverse();
+
+        chronological.forEach(stroke => {
             drawStroke(stroke);
         });
     }
 
     function drawStroke(data) {
+        if (data.type === 'start') {
+            // Start a new path
+            ctx.beginPath();
+            ctx.strokeStyle = data.color;
+            ctx.lineWidth = data.size;
+            ctx.moveTo(data.x, data.y);
+            return;
+        }
+
         if (data.type === 'end') {
+            // End current path
             ctx.beginPath();
             return;
         }
 
+        // Draw stroke
         ctx.strokeStyle = data.color;
         ctx.lineWidth = data.size;
         ctx.lineTo(data.x, data.y);
