@@ -42,7 +42,7 @@ defmodule RzeczywiscieWeb.KanbanBoardLive do
       {:ok,
        socket
        |> assign(:columns, initial_columns())
-       |> assign(:cards, initial_cards())
+       |> assign(:cards, Rzeczywiscie.KanbanState.get_cards())
        |> assign(:users, get_present_users())
        |> assign(:username, generate_username())}
     else
@@ -64,7 +64,8 @@ defmodule RzeczywiscieWeb.KanbanBoardLive do
       created_at: System.system_time(:second)
     }
 
-    cards = [new_card | socket.assigns.cards]
+    # Update server-side state
+    cards = Rzeczywiscie.KanbanState.add_card(new_card)
 
     # Broadcast to all clients
     broadcast_cards_update(cards)
@@ -73,14 +74,8 @@ defmodule RzeczywiscieWeb.KanbanBoardLive do
   end
 
   def handle_event("update_card", %{"card_id" => card_id, "text" => text}, socket) do
-    cards =
-      Enum.map(socket.assigns.cards, fn card ->
-        if card.id == card_id do
-          %{card | text: text}
-        else
-          card
-        end
-      end)
+    # Update server-side state
+    cards = Rzeczywiscie.KanbanState.update_card(card_id, %{text: text})
 
     broadcast_cards_update(cards)
 
@@ -88,7 +83,8 @@ defmodule RzeczywiscieWeb.KanbanBoardLive do
   end
 
   def handle_event("delete_card", %{"card_id" => card_id}, socket) do
-    cards = Enum.reject(socket.assigns.cards, fn card -> card.id == card_id end)
+    # Update server-side state
+    cards = Rzeczywiscie.KanbanState.delete_card(card_id)
 
     broadcast_cards_update(cards)
 
@@ -96,14 +92,8 @@ defmodule RzeczywiscieWeb.KanbanBoardLive do
   end
 
   def handle_event("move_card", %{"card_id" => card_id, "to_column" => to_column}, socket) do
-    cards =
-      Enum.map(socket.assigns.cards, fn card ->
-        if card.id == card_id do
-          %{card | column: to_column}
-        else
-          card
-        end
-      end)
+    # Update server-side state
+    cards = Rzeczywiscie.KanbanState.move_card(card_id, to_column)
 
     broadcast_cards_update(cards)
 
@@ -153,39 +143,6 @@ defmodule RzeczywiscieWeb.KanbanBoardLive do
       %{id: "todo", name: "To Do"},
       %{id: "in_progress", name: "In Progress"},
       %{id: "done", name: "Done"}
-    ]
-  end
-
-  defp initial_cards do
-    [
-      %{
-        id: "1",
-        text: "Welcome to the Kanban Board! Try dragging this card to another column.",
-        column: "todo",
-        created_by: "System",
-        created_at: System.system_time(:second)
-      },
-      %{
-        id: "2",
-        text: "You can add new cards using the '+ Add Card' button in each column.",
-        column: "todo",
-        created_by: "System",
-        created_at: System.system_time(:second)
-      },
-      %{
-        id: "3",
-        text: "Click the pencil icon to edit a card, or the trash icon to delete it.",
-        column: "in_progress",
-        created_by: "System",
-        created_at: System.system_time(:second)
-      },
-      %{
-        id: "4",
-        text: "Open this page in multiple browser windows to see real-time collaboration!",
-        column: "done",
-        created_by: "System",
-        created_at: System.system_time(:second)
-      }
     ]
   end
 

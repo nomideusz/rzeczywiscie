@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mix phx.gen.secret:*)",
+      "Bash(openssl rand:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git fetch:*)",
+      "Bash(git merge:*)",
+      "Bash(cat:*)",
+      "Bash(curl:*)",
+      "Bash(mix compile:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
