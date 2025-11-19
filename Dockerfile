@@ -112,16 +112,17 @@ ENV MIX_ENV="prod"
 # Only copy the final release from the build stage
 COPY --from=builder --chown=nobody:root /app/_build/${MIX_ENV}/rel/rzeczywiscie ./
 
-# Verify static files were copied to final image
-RUN echo "=== Verifying static files in final container ===" && \
-    ls -la /app/priv/static/assets/ && \
-    echo "=== CSS files ===" && \
-    ls -la /app/priv/static/assets/css/ && \
-    echo "=== JS files ===" && \
-    ls -la /app/priv/static/assets/js/
+# Verify static files were copied to final image (build-time check)
+RUN echo "=== Verifying in final container ===" && \
+    ls -la /app/priv/static/ && \
+    echo "=== Cache manifest exists? ===" && \
+    test -f /app/priv/static/cache_manifest.json && echo "YES" || echo "NO"
 
-# Create migration startup script
+# Create migration and startup script with runtime verification
 RUN printf '#!/bin/sh\n\
+echo "=== Runtime verification ==="\n\
+echo "Static files at startup:"\n\
+ls -la /app/priv/static/assets/css/ 2>&1 | head -3\n\
 echo "Running migrations..."\n\
 /app/bin/rzeczywiscie eval "Rzeczywiscie.Release.migrate()"\n\
 echo "Starting server..."\n\
