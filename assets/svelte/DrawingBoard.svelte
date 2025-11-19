@@ -31,6 +31,11 @@
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
 
+        // Listen for loading existing strokes
+        window.addEventListener('phx:load_strokes', (e) => {
+            loadStrokes(e.detail.strokes);
+        });
+
         // Listen for drawing events from other users
         window.addEventListener('phx:draw_stroke', (e) => {
             drawStroke(e.detail);
@@ -111,6 +116,14 @@
             x: (clientX - rect.left) * scaleX,
             y: (clientY - rect.top) * scaleY
         };
+    }
+
+    function loadStrokes(strokes) {
+        // Replay all strokes from server state
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        strokes.reverse().forEach(stroke => {
+            drawStroke(stroke);
+        });
     }
 
     function drawStroke(data) {

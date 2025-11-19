@@ -15,6 +15,7 @@ defmodule Rzeczywiscie.Application do
       {Phoenix.PubSub, name: Rzeczywiscie.PubSub},
       RzeczywiscieWeb.Presence,
       Rzeczywiscie.KanbanState,
+      Rzeczywiscie.DrawingState,
       # Start a worker by calling: Rzeczywiscie.Worker.start_link(arg)
       # {Rzeczywiscie.Worker, arg},
       # Start to serve requests, typically the last entry

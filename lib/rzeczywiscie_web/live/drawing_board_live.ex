@@ -21,16 +21,23 @@ defmodule RzeczywiscieWeb.DrawingBoardLive do
       # Generate a unique user ID for this session
       user_id = generate_user_id()
 
+      # Get existing strokes from server state
+      strokes = Rzeczywiscie.DrawingState.get_strokes()
+
       {:ok,
        socket
        |> assign(:user_id, user_id)
-       |> assign(:cursor_color, generate_random_color())}
+       |> assign(:cursor_color, generate_random_color())
+       |> push_event("load_strokes", %{strokes: strokes})}
     else
       {:ok, socket}
     end
   end
 
   def handle_event("draw_stroke", stroke_data, socket) do
+    # Save stroke to server-side state
+    Rzeczywiscie.DrawingState.add_stroke(stroke_data)
+
     # Broadcast the stroke to all other users
     RzeczywiscieWeb.Endpoint.broadcast_from(
       self(),
@@ -43,6 +50,9 @@ defmodule RzeczywiscieWeb.DrawingBoardLive do
   end
 
   def handle_event("clear_canvas", _params, socket) do
+    # Clear server-side state
+    Rzeczywiscie.DrawingState.clear_strokes()
+
     # Broadcast clear canvas to all users
     RzeczywiscieWeb.Endpoint.broadcast_from(
       self(),
