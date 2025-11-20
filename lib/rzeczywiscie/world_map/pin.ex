@@ -12,13 +12,14 @@ defmodule Rzeczywiscie.WorldMap.Pin do
     field :ip_address, :string
     field :country, :string
     field :city, :string
+    field :image_data, :string
     timestamps()
   end
 
   @doc false
   def changeset(pin, attrs) do
     pin
-    |> cast(attrs, [:user_name, :user_color, :lat, :lng, :message, :emoji, :ip_address, :country, :city])
+    |> cast(attrs, [:user_name, :user_color, :lat, :lng, :message, :emoji, :ip_address, :country, :city, :image_data])
     |> validate_required([:user_name, :user_color, :lat, :lng])
     |> validate_number(:lat, greater_than_or_equal_to: -90, less_than_or_equal_to: 90)
     |> validate_number(:lng, greater_than_or_equal_to: -180, less_than_or_equal_to: 180)

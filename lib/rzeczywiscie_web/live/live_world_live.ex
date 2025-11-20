@@ -83,6 +83,7 @@ defmodule RzeczywiscieWeb.LiveWorldLive do
   def handle_event("drop_pin", %{"lat" => lat, "lng" => lng} = params, socket) do
     message = Map.get(params, "message", "")
     emoji = Map.get(params, "emoji", "📍")
+    image_data = Map.get(params, "image_data")
 
     user = socket.assigns.current_user
 
@@ -93,6 +94,7 @@ defmodule RzeczywiscieWeb.LiveWorldLive do
       lng: lng,
       message: message,
       emoji: emoji,
+      image_data: image_data,
       ip_address: user.ip,
       country: user.country,
       city: user.city
@@ -123,6 +125,18 @@ defmodule RzeczywiscieWeb.LiveWorldLive do
       }
     )
 
+    {:noreply, socket}
+  end
+
+  def handle_event("send_chat", %{"message" => message}, socket) do
+    chat_message = %{
+      user_name: socket.assigns.current_user.name,
+      color: socket.assigns.current_user.color,
+      message: message,
+      timestamp: System.system_time(:second)
+    }
+
+    broadcast_chat_message(chat_message)
     {:noreply, socket}
   end
 
@@ -158,9 +172,22 @@ defmodule RzeczywiscieWeb.LiveWorldLive do
     {:noreply, push_event(socket, "cursor_move", cursor_data)}
   end
 
+  # Handle chat messages
+  def handle_info({:chat_message, message}, socket) do
+    {:noreply, push_event(socket, "chat_message", message)}
+  end
+
   defp get_present_users do
     RzeczywiscieWeb.Presence.list(@presence_topic)
     |> Enum.map(fn {_id, %{metas: [meta | _]}} -> meta end)
+  end
+
+  defp broadcast_chat_message(message) do
+    Phoenix.PubSub.broadcast(
+      Rzeczywiscie.PubSub,
+      @topic,
+      {:chat_message, message}
+    )
   end
 
   defp get_connect_ip(socket) do
