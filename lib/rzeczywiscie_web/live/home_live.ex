@@ -46,19 +46,25 @@ defmodule RzeczywiscieWeb.HomeLive do
             </div>
 
             <!-- CTAs - brutal buttons -->
-            <div class="flex flex-col sm:flex-row gap-4">
+            <div class="flex flex-col sm:flex-row gap-3 sm:gap-4">
               <a
                 href={~p"/draw"}
-                class="group relative px-8 py-4 bg-primary text-primary-content font-bold text-lg tracking-wide uppercase border-4 border-base-content hover:translate-x-1 hover:translate-y-1 transition-transform"
+                class="group relative px-6 sm:px-8 py-3 sm:py-4 bg-primary text-primary-content font-bold text-base sm:text-lg tracking-wide uppercase border-4 border-base-content hover:translate-x-1 hover:translate-y-1 transition-transform text-center"
               >
                 <span class="relative z-10">Draw</span>
                 <div class="absolute inset-0 bg-base-content translate-x-1 translate-y-1 -z-10"></div>
               </a>
               <a
                 href={~p"/kanban"}
-                class="group relative px-8 py-4 bg-base-100 font-bold text-lg tracking-wide uppercase border-4 border-base-content hover:bg-base-content hover:text-base-100 transition-colors"
+                class="group relative px-6 sm:px-8 py-3 sm:py-4 bg-base-100 font-bold text-base sm:text-lg tracking-wide uppercase border-4 border-base-content hover:bg-base-content hover:text-base-100 transition-colors text-center"
               >
                 Kanban
+              </a>
+              <a
+                href={~p"/world"}
+                class="group relative px-6 sm:px-8 py-3 sm:py-4 bg-accent text-accent-content font-bold text-base sm:text-lg tracking-wide uppercase border-4 border-base-content hover:translate-x-1 hover:translate-y-1 transition-transform text-center"
+              >
+                🌍 World
               </a>
             </div>
           </div>
@@ -201,6 +207,81 @@ defmodule RzeczywiscieWeb.HomeLive do
             >
               Launch →
             </a>
+          </div>
+        </div>
+
+        <!-- Live World Map Card - Full Width, Special Feature -->
+        <div class="group relative border-4 border-base-content bg-gradient-to-br from-base-100 to-accent/5 p-6 sm:p-8 hover:translate-x-1 hover:translate-y-1 transition-transform lg:col-span-2">
+          <!-- Accent bar -->
+          <div class="absolute top-0 left-0 w-2 h-full bg-accent"></div>
+
+          <!-- Number badge -->
+          <div class="absolute top-4 right-4 w-12 h-12 border-2 border-base-content flex items-center justify-center font-black text-xl">
+            03
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-8">
+            <div class="pr-4 sm:pr-16">
+              <!-- Icon - geometric -->
+              <div class="w-20 h-20 border-4 border-accent mb-6 flex items-center justify-center">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  class="h-10 w-10"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                >
+                  <path
+                    stroke-linecap="square"
+                    stroke-linejoin="miter"
+                    d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+              </div>
+
+              <h3 class="text-3xl sm:text-4xl font-black mb-4 tracking-tight uppercase">
+                Live<br />World Map
+              </h3>
+
+              <p class="text-base opacity-70 mb-6 leading-relaxed">
+                See all connected users in real-time on an interactive world map. Drop pins, track cursors, and collaborate globally with IP geolocation.
+              </p>
+
+              <!-- Tags - raw style -->
+              <div class="flex flex-wrap gap-2 mb-8">
+                <span class="px-3 py-1 text-xs uppercase tracking-wider bg-accent text-accent-content font-bold">
+                  🌍 Global
+                </span>
+                <span class="px-3 py-1 text-xs uppercase tracking-wider border-2 border-base-content font-bold">
+                  Live Tracking
+                </span>
+                <span class="px-3 py-1 text-xs uppercase tracking-wider bg-base-content text-base-100 font-bold">
+                  Geolocation
+                </span>
+              </div>
+
+              <a
+                href={~p"/world"}
+                class="inline-block px-6 py-3 bg-accent text-accent-content font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors"
+              >
+                Explore →
+              </a>
+            </div>
+
+            <!-- Visual Preview -->
+            <div class="hidden md:flex items-center justify-center relative">
+              <div class="relative w-full max-w-xs">
+                <!-- Animated Globe Illustration -->
+                <div class="w-48 h-48 mx-auto border-4 border-accent rounded-full flex items-center justify-center relative overflow-hidden">
+                  <div class="absolute inset-0 opacity-10" style="background-image: radial-gradient(circle, currentColor 1px, transparent 1px); background-size: 20px 20px;"></div>
+                  <span class="text-6xl animate-pulse">🌍</span>
+                  <!-- Ping markers -->
+                  <div class="absolute top-1/4 right-1/4 w-3 h-3 bg-primary rounded-full animate-ping"></div>
+                  <div class="absolute bottom-1/3 left-1/4 w-2 h-2 bg-secondary rounded-full animate-ping" style="animation-delay: 0.5s;"></div>
+                  <div class="absolute top-1/2 right-1/3 w-2 h-2 bg-accent rounded-full animate-ping" style="animation-delay: 1s;"></div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
         </div>
