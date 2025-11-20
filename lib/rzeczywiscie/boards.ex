@@ -160,7 +160,7 @@ defmodule Rzeczywiscie.Boards do
       text: card.text,
       column: card.column,
       created_by: card.created_by,
-      created_at: DateTime.to_unix(card.inserted_at)
+      created_at: card.inserted_at |> DateTime.from_naive!("Etc/UTC") |> DateTime.to_unix()
     }
   end
 end
