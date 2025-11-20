@@ -1,6 +1,7 @@
 defmodule RzeczywiscieWeb.DrawingBoardLive do
   use RzeczywiscieWeb, :live_view
   import RzeczywiscieWeb.Layouts
+  alias Rzeczywiscie.Drawings
 
   @topic "drawing_board"
 
@@ -19,6 +20,12 @@ defmodule RzeczywiscieWeb.DrawingBoardLive do
   def mount(_params, _session, socket) do
     if connected?(socket) do
       # Subscribe to the drawing board topic
+      Drawings.subscribe()
+
+      # Get or create the main drawing board
+      {:ok, board} = Drawings.get_or_create_board("main")
+
+      # Subscribe to cursor updates
       RzeczywiscieWeb.Endpoint.subscribe(@topic)
 
       # Generate a unique user ID for this session
@@ -26,6 +33,7 @@ defmodule RzeczywiscieWeb.DrawingBoardLive do
 
       {:ok,
        socket
+       |> assign(:board_id, board.id)
        |> assign(:user_id, user_id)
        |> assign(:cursor_color, generate_random_color())}
     else
@@ -34,38 +42,20 @@ defmodule RzeczywiscieWeb.DrawingBoardLive do
   end
 
   def handle_event("request_strokes", _params, socket) do
-    # Client is ready, send existing strokes
-    strokes = Rzeczywiscie.DrawingState.get_strokes()
+    # Client is ready, send existing strokes from database
+    strokes = Drawings.get_strokes(socket.assigns.board_id)
     {:noreply, push_event(socket, "load_strokes", %{strokes: strokes})}
   end
 
   def handle_event("draw_stroke", stroke_data, socket) do
-    # Save stroke to server-side state
-    Rzeczywiscie.DrawingState.add_stroke(stroke_data)
-
-    # Broadcast the stroke to all other users
-    RzeczywiscieWeb.Endpoint.broadcast_from(
-      self(),
-      @topic,
-      "draw_stroke",
-      stroke_data
-    )
-
+    # Save stroke to database and broadcast
+    Drawings.add_stroke(socket.assigns.board_id, stroke_data)
     {:noreply, socket}
   end
 
   def handle_event("clear_canvas", _params, socket) do
-    # Clear server-side state
-    Rzeczywiscie.DrawingState.clear_strokes()
-
-    # Broadcast clear canvas to all users
-    RzeczywiscieWeb.Endpoint.broadcast_from(
-      self(),
-      @topic,
-      "clear_canvas",
-      %{}
-    )
-
+    # Clear database and broadcast
+    Drawings.clear_strokes(socket.assigns.board_id)
     {:noreply, socket}
   end
 
@@ -86,7 +76,16 @@ defmodule RzeczywiscieWeb.DrawingBoardLive do
     {:noreply, socket}
   end
 
-  # Handle incoming PubSub messages and push them to the client
+  # Handle incoming PubSub messages from Drawings context
+  def handle_info({:draw_stroke, stroke_data}, socket) do
+    {:noreply, push_event(socket, "draw_stroke", stroke_data)}
+  end
+
+  def handle_info({:clear_canvas, _}, socket) do
+    {:noreply, push_event(socket, "clear_canvas", %{})}
+  end
+
+  # Handle cursor updates (still using Endpoint.broadcast)
   def handle_info(%{event: "draw_stroke", payload: stroke_data}, socket) do
     {:noreply, push_event(socket, "draw_stroke", stroke_data)}
   end
