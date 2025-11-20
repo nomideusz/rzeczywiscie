@@ -20,6 +20,10 @@ if System.get_env("PHX_SERVER") do
   config :rzeczywiscie, RzeczywiscieWeb.Endpoint, server: true
 end
 
+# Configure Google Maps API key at runtime (works in all environments)
+config :rzeczywiscie,
+  google_maps_api_key: System.get_env("GOOGLE_MAPS_API_KEY", "")
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||
