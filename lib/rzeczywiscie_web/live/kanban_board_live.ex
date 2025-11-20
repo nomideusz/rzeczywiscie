@@ -2,6 +2,7 @@ defmodule RzeczywiscieWeb.KanbanBoardLive do
   use RzeczywiscieWeb, :live_view
   import RzeczywiscieWeb.Layouts
   alias Phoenix.PubSub
+  alias Rzeczywiscie.Boards
 
   @topic "kanban_board"
   @presence_topic "kanban_presence"
@@ -25,15 +26,20 @@ defmodule RzeczywiscieWeb.KanbanBoardLive do
   def mount(_params, _session, socket) do
     if connected?(socket) do
       # Subscribe to board updates
-      RzeczywiscieWeb.Endpoint.subscribe(@topic)
+      Boards.subscribe()
+
+      # Get or create the main kanban board
+      {:ok, board} = Boards.get_or_create_board("main")
 
       # Track user presence
+      username = generate_username()
+
       {:ok, _} = RzeczywiscieWeb.Presence.track(
         self(),
         @presence_topic,
         socket.id,
         %{
-          name: generate_username(),
+          name: username,
           color: generate_user_color(),
           joined_at: System.system_time(:second)
         }
@@ -44,10 +50,11 @@ defmodule RzeczywiscieWeb.KanbanBoardLive do
 
       {:ok,
        socket
+       |> assign(:board_id, board.id)
        |> assign(:columns, initial_columns())
-       |> assign(:cards, Rzeczywiscie.KanbanState.get_cards())
+       |> assign(:cards, Boards.get_cards(board.id))
        |> assign(:users, get_present_users())
-       |> assign(:username, generate_username())}
+       |> assign(:username, username)}
     else
       {:ok,
        socket
@@ -60,57 +67,49 @@ defmodule RzeczywiscieWeb.KanbanBoardLive do
 
   def handle_event("add_card", %{"text" => text, "column" => column}, socket) do
     new_card = %{
-      id: generate_id(),
+      card_id: generate_id(),
       text: text,
       column: column,
       created_by: socket.assigns.username,
-      created_at: System.system_time(:second)
+      position: 0
     }
 
-    # Update server-side state
-    cards = Rzeczywiscie.KanbanState.add_card(new_card)
-
-    # Broadcast to all clients
-    broadcast_cards_update(cards)
+    # Save to database and broadcast to all clients
+    cards = Boards.add_card(socket.assigns.board_id, new_card)
 
     {:noreply, assign(socket, :cards, cards)}
   end
 
   def handle_event("update_card", %{"card_id" => card_id, "text" => text}, socket) do
-    # Update server-side state
-    cards = Rzeczywiscie.KanbanState.update_card(card_id, %{text: text})
-
-    broadcast_cards_update(cards)
+    # Update database and broadcast
+    cards = Boards.update_card(socket.assigns.board_id, card_id, text)
 
     {:noreply, assign(socket, :cards, cards)}
   end
 
   def handle_event("delete_card", %{"card_id" => card_id}, socket) do
-    # Update server-side state
-    cards = Rzeczywiscie.KanbanState.delete_card(card_id)
-
-    broadcast_cards_update(cards)
+    # Delete from database and broadcast
+    cards = Boards.delete_card(socket.assigns.board_id, card_id)
 
     {:noreply, assign(socket, :cards, cards)}
   end
 
   def handle_event("move_card", %{"card_id" => card_id, "to_column" => to_column}, socket) do
-    # Update server-side state
-    cards = Rzeczywiscie.KanbanState.move_card(card_id, to_column)
-
-    broadcast_cards_update(cards)
+    # Move card in database and broadcast
+    cards = Boards.move_card(socket.assigns.board_id, card_id, to_column)
 
     {:noreply, assign(socket, :cards, cards)}
   end
 
-  # Handle incoming PubSub messages
-  def handle_info(%{event: "cards_updated", payload: payload}, socket) do
+  # Handle incoming PubSub messages from Boards context
+  def handle_info({:cards_updated, cards}, socket) do
     {:noreply,
      socket
-     |> assign(:cards, payload.cards)
-     |> push_event("cards_updated", %{cards: payload.cards})}
+     |> assign(:cards, cards)
+     |> push_event("cards_updated", %{cards: cards})}
   end
 
+  # Handle presence updates
   def handle_info(
         %{event: "presence_diff", payload: _payload},
         socket
@@ -121,14 +120,6 @@ defmodule RzeczywiscieWeb.KanbanBoardLive do
      socket
      |> assign(:users, users)
      |> push_event("presence_update", %{users: users})}
-  end
-
-  defp broadcast_cards_update(cards) do
-    PubSub.broadcast(
-      Rzeczywiscie.PubSub,
-      @topic,
-      %{event: "cards_updated", payload: %{cards: cards}}
-    )
   end
 
   defp get_present_users do
