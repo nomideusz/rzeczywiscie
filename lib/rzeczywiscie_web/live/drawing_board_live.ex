@@ -5,11 +5,13 @@ defmodule RzeczywiscieWeb.DrawingBoardLive do
 
   def render(assigns) do
     ~H"""
-    <.svelte
-      name="DrawingBoard"
-      props={%{canvasWidth: 1200, canvasHeight: 800}}
-      socket={@socket}
-    />
+    <.app flash={@flash}>
+      <.svelte
+        name="DrawingBoard"
+        props={%{canvasWidth: 1200, canvasHeight: 800}}
+        socket={@socket}
+      />
+    </.app>
     """
   end
 

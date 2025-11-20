@@ -7,15 +7,17 @@ defmodule RzeczywiscieWeb.KanbanBoardLive do
 
   def render(assigns) do
     ~H"""
-    <.svelte
-      name="KanbanBoard"
-      props={%{
-        columns: @columns,
-        cards: @cards,
-        users: @users
-      }}
-      socket={@socket}
-    />
+    <.app flash={@flash}>
+      <.svelte
+        name="KanbanBoard"
+        props={%{
+          columns: @columns,
+          cards: @cards,
+          users: @users
+        }}
+        socket={@socket}
+      />
+    </.app>
     """
   end
 

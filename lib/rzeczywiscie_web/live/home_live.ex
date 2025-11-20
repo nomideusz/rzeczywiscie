@@ -3,6 +3,7 @@ defmodule RzeczywiscieWeb.HomeLive do
 
   def render(assigns) do
     ~H"""
+    <.app flash={@flash}>
     <!-- Hero Section - Neo-Brutalist -->
     <div class="relative overflow-hidden bg-base-100">
       <!-- Textured background pattern -->
@@ -258,6 +259,7 @@ defmodule RzeczywiscieWeb.HomeLive do
         </div>
       </div>
     </div>
+    </.app>
     """
   end
 
