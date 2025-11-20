@@ -1,5 +1,5 @@
 <script>
-    import { onMount } from 'svelte'
+    import { onMount, onDestroy } from 'svelte'
 
     export let currentUser = {}
     export let users = []
@@ -16,8 +16,26 @@
     let showPinModal = false
     let newPinMessage = ""
     let newPinEmoji = "📍"
+    let newPinImage = null
+    let newPinImagePreview = null
     let pendingPinPosition = null
     let isMapLoaded = false
+
+    // Chat state
+    let showChat = false
+    let chatMessages = []
+    let newChatMessage = ""
+
+    // Stats
+    let showStats = true
+    let stats = {
+        usersOnline: 0,
+        totalPins: 0,
+        countries: new Set()
+    }
+
+    // Duration timer
+    let durationInterval
 
     const emojis = ["📍", "⭐", "❤️", "🎉", "🎯", "🔥", "💡", "🌍", "🚀", "🎨"]
 
@@ -44,11 +62,37 @@
         live.handleEvent("pin_deleted", handlePinDeleted)
         live.handleEvent("presence_update", handlePresenceUpdate)
         live.handleEvent("cursor_move", handleCursorMove)
+        live.handleEvent("chat_message", handleChatMessage)
+
+        // Update durations every second
+        durationInterval = setInterval(updateDurations, 1000)
+
+        // Update stats
+        updateStats()
 
         return () => {
-            document.head.removeChild(script)
+            if (script.parentNode) {
+                document.head.removeChild(script)
+            }
         }
     })
+
+    onDestroy(() => {
+        if (durationInterval) {
+            clearInterval(durationInterval)
+        }
+    })
+
+    function updateDurations() {
+        // This will trigger a re-render which updates all duration displays
+        users = users
+    }
+
+    function updateStats() {
+        stats.usersOnline = users.length
+        stats.totalPins = pins.length
+        stats.countries = new Set(users.map(u => u.country).filter(Boolean))
+    }
 
     function initializeMap() {
         const center = currentUser.lat && currentUser.lng
@@ -87,7 +131,7 @@
                         lng: e.latLng.lng()
                     }, () => {})
                     throttleTimeout = null
-                }, 100) // Throttle to every 100ms
+                }, 100)
             }
         })
 
@@ -125,6 +169,7 @@
             })
 
             marker.addListener('click', () => {
+                infoWindow.setContent(getUserInfoHTML(currentUser, true))
                 infoWindow.open(map, marker)
             })
 
@@ -154,6 +199,7 @@
                 })
 
                 marker.addListener('click', () => {
+                    infoWindow.setContent(getUserInfoHTML(user, false))
                     infoWindow.open(map, marker)
                 })
 
@@ -219,8 +265,9 @@
         const time = new Date(pin.created_at * 1000).toLocaleString()
 
         return `
-            <div style="padding: 8px; min-width: 200px;">
+            <div style="padding: 8px; min-width: 200px; max-width: 300px;">
                 <div style="font-size: 24px; margin-bottom: 8px;">${pin.emoji}</div>
+                ${pin.image_data ? `<img src="${pin.image_data}" style="width: 100%; max-height: 200px; object-fit: cover; border-radius: 8px; margin-bottom: 8px;" />` : ''}
                 ${pin.message ? `<p style="margin: 8px 0;">${pin.message}</p>` : ''}
                 <div style="font-size: 12px; color: #666;">
                     <div style="display: flex; align-items: center; gap: 4px;">
@@ -237,7 +284,6 @@
     function handleCursorMove(data) {
         if (!isMapLoaded || data.user_id === currentUser.id) return
 
-        // Create or update cursor marker
         if (cursorMarkers.has(data.user_id)) {
             const marker = cursorMarkers.get(data.user_id)
             marker.setPosition({ lat: data.lat, lng: data.lng })
@@ -260,7 +306,6 @@
 
             cursorMarkers.set(data.user_id, marker)
 
-            // Remove cursor after 2 seconds of inactivity
             setTimeout(() => {
                 const m = cursorMarkers.get(data.user_id)
                 if (m) {
@@ -274,16 +319,30 @@
     function handlePinCreated(pin) {
         pins = [pin, ...pins]
         renderPins()
+        updateStats()
     }
 
     function handlePinDeleted(data) {
         pins = pins.filter(p => p.id !== data.id)
         renderPins()
+        updateStats()
     }
 
     function handlePresenceUpdate(data) {
         users = data.users
         renderUsers()
+        updateStats()
+    }
+
+    function handleChatMessage(data) {
+        chatMessages = [...chatMessages, data]
+        // Auto-scroll chat to bottom
+        setTimeout(() => {
+            const chatContainer = document.getElementById('chat-messages')
+            if (chatContainer) {
+                chatContainer.scrollTop = chatContainer.scrollHeight
+            }
+        }, 10)
     }
 
     function openPinModal(lat, lng) {
@@ -298,13 +357,55 @@
             lat: pendingPinPosition.lat,
             lng: pendingPinPosition.lng,
             message: newPinMessage,
-            emoji: newPinEmoji
+            emoji: newPinEmoji,
+            image_data: newPinImage
         }, () => {})
 
         showPinModal = false
         newPinMessage = ""
         newPinEmoji = "📍"
+        newPinImage = null
+        newPinImagePreview = null
         pendingPinPosition = null
+    }
+
+    function handleImageSelect(event) {
+        const file = event.target.files[0]
+        if (!file) return
+
+        // Check file size (max 1MB)
+        if (file.size > 1024 * 1024) {
+            alert('Image must be smaller than 1MB')
+            return
+        }
+
+        // Check file type
+        if (!file.type.startsWith('image/')) {
+            alert('Please select an image file')
+            return
+        }
+
+        const reader = new FileReader()
+        reader.onload = (e) => {
+            newPinImage = e.target.result
+            newPinImagePreview = e.target.result
+        }
+        reader.readAsDataURL(file)
+    }
+
+    function removeImage() {
+        newPinImage = null
+        newPinImagePreview = null
+    }
+
+    function sendChatMessage() {
+        if (!newChatMessage.trim()) return
+
+        live.pushEvent("send_chat", {
+            message: newChatMessage
+        }, () => {})
+
+        newChatMessage = ""
     }
 
     function getFlagEmoji(countryCode) {
@@ -340,21 +441,35 @@
     $: if (isMapLoaded) {
         renderPins()
     }
+
+    $: {
+        users
+        updateStats()
+    }
 </script>
 
-<div class="min-h-screen bg-gray-50">
+<div class="min-h-screen bg-gray-50 relative">
     <!-- Header -->
     <div class="bg-white shadow-sm border-b border-gray-200">
         <div class="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
-            <div class="flex items-center justify-between">
+            <div class="flex items-center justify-between flex-wrap gap-4">
                 <div>
                     <h1 class="text-2xl font-bold text-gray-900">🌍 Live World</h1>
                     <p class="text-sm text-gray-500">Real-time global presence map</p>
                 </div>
-                <div class="flex items-center gap-4">
-                    <div class="text-sm text-gray-600">
-                        <span class="font-semibold">{users.length}</span> online
-                    </div>
+                <div class="flex items-center gap-3 flex-wrap">
+                    <button
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
+                        on:click={() => showChat = !showChat}
+                    >
+                        💬 Chat {chatMessages.length > 0 ? `(${chatMessages.length})` : ''}
+                    </button>
+                    <button
+                        class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium transition-colors"
+                        on:click={() => showStats = !showStats}
+                    >
+                        📊 Stats
+                    </button>
                     {#if currentUser.name}
                         <div class="flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-lg">
                             <div class="w-3 h-3 rounded-full" style="background: {currentUser.color}"></div>
@@ -380,14 +495,81 @@
             </div>
         {/if}
 
-        <!-- Instructions -->
-        <div class="absolute top-4 left-4 bg-white rounded-lg shadow-lg p-4 max-w-sm">
+        <!-- Stats Panel -->
+        {#if showStats}
+            <div class="absolute top-4 left-4 bg-white rounded-lg shadow-lg p-4 max-w-xs z-10">
+                <h3 class="font-semibold mb-3 flex items-center justify-between">
+                    📊 Live Stats
+                    <button class="text-gray-400 hover:text-gray-600" on:click={() => showStats = false}>✕</button>
+                </h3>
+                <div class="space-y-2 text-sm">
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-600">👥 Users Online:</span>
+                        <span class="font-bold text-green-600">{stats.usersOnline}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-600">📍 Total Pins:</span>
+                        <span class="font-bold text-blue-600">{stats.totalPins}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-600">🌍 Countries:</span>
+                        <span class="font-bold text-purple-600">{stats.countries.size}</span>
+                    </div>
+                </div>
+            </div>
+        {/if}
+
+        <!-- Chat Panel -->
+        {#if showChat}
+            <div class="absolute top-4 right-4 bg-white rounded-lg shadow-lg w-80 max-h-[500px] flex flex-col z-10">
+                <div class="p-4 border-b flex items-center justify-between">
+                    <h3 class="font-semibold">💬 Global Chat</h3>
+                    <button class="text-gray-400 hover:text-gray-600" on:click={() => showChat = false}>✕</button>
+                </div>
+                <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-2 min-h-[200px] max-h-[300px]">
+                    {#if chatMessages.length === 0}
+                        <p class="text-gray-400 text-sm text-center py-8">No messages yet. Start the conversation!</p>
+                    {/if}
+                    {#each chatMessages as msg}
+                        <div class="bg-gray-50 rounded-lg p-2">
+                            <div class="flex items-center gap-2 mb-1">
+                                <div class="w-2 h-2 rounded-full" style="background: {msg.color}"></div>
+                                <span class="text-xs font-semibold">{msg.user_name}</span>
+                                <span class="text-xs text-gray-400">{new Date(msg.timestamp * 1000).toLocaleTimeString()}</span>
+                            </div>
+                            <p class="text-sm">{msg.message}</p>
+                        </div>
+                    {/each}
+                </div>
+                <form on:submit|preventDefault={sendChatMessage} class="p-4 border-t">
+                    <div class="flex gap-2">
+                        <input
+                            type="text"
+                            bind:value={newChatMessage}
+                            placeholder="Type a message..."
+                            class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                            maxlength="200"
+                        />
+                        <button
+                            type="submit"
+                            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                        >
+                            Send
+                        </button>
+                    </div>
+                </form>
+            </div>
+        {/if}
+
+        <!-- Instructions (moved to bottom left) -->
+        <div class="absolute bottom-4 left-4 bg-white rounded-lg shadow-lg p-4 max-w-sm z-10">
             <h3 class="font-semibold mb-2">How to use:</h3>
             <ul class="text-sm space-y-1 text-gray-600">
                 <li>👆 <strong>Click</strong> on the map to drop a pin</li>
                 <li>🔴 <strong>Colored dots</strong> are online users</li>
                 <li>🖱️ <strong>Hover</strong> to see live cursors</li>
-                <li>📍 <strong>Pins</strong> persist in the database</li>
+                <li>💬 <strong>Chat</strong> with everyone in real-time</li>
+                <li>📊 <strong>Stats</strong> show live activity</li>
             </ul>
         </div>
     </div>
@@ -419,7 +601,31 @@
                         class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         rows="3"
                         placeholder="Leave a message..."
+                        maxlength="200"
                     ></textarea>
+                </div>
+
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Photo (optional, max 1MB)</label>
+                    {#if newPinImagePreview}
+                        <div class="relative">
+                            <img src={newPinImagePreview} alt="Preview" class="w-full h-40 object-cover rounded-lg" />
+                            <button
+                                class="absolute top-2 right-2 bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-red-600"
+                                on:click={removeImage}
+                                type="button"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                    {:else}
+                        <input
+                            type="file"
+                            accept="image/*"
+                            on:change={handleImageSelect}
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                        />
+                    {/if}
                 </div>
 
                 <div class="flex gap-3">
