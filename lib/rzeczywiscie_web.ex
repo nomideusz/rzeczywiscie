@@ -86,12 +86,13 @@ defmodule RzeczywiscieWeb do
       import Phoenix.HTML
       # Core UI components
       import RzeczywiscieWeb.CoreComponents
+      # Layouts (header, footer, etc.)
+      import RzeczywiscieWeb.Layouts
       # LiveSvelte
       import LiveSvelte
 
       # Common modules used in templates
       alias Phoenix.LiveView.JS
-      alias RzeczywiscieWeb.Layouts
 
       # Routes generation with the ~p sigil
       unquote(verified_routes())
