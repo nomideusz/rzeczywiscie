@@ -9,7 +9,8 @@ import Config
 
 config :rzeczywiscie,
   ecto_repos: [Rzeczywiscie.Repo],
-  generators: [timestamp_type: :utc_datetime]
+  generators: [timestamp_type: :utc_datetime],
+  google_maps_api_key: System.get_env("GOOGLE_MAPS_API_KEY", "")
 
 # Configures the endpoint
 config :rzeczywiscie, RzeczywiscieWeb.Endpoint,
