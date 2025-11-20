@@ -39,35 +39,88 @@ defmodule RzeczywiscieWeb.Layouts do
       <nav class="container mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex items-center justify-between h-16">
           <!-- Logo - Brutalist -->
-          <a href={~p"/"} class="flex items-center gap-3 group">
-            <div class="w-10 h-10 bg-primary border-2 border-base-content flex items-center justify-center font-black text-primary-content">
+          <a href={~p"/"} class="flex items-center gap-2 sm:gap-3 group">
+            <div class="w-8 h-8 sm:w-10 sm:h-10 bg-primary border-2 border-base-content flex items-center justify-center font-black text-primary-content text-sm sm:text-base">
               R
             </div>
-            <span class="text-xl font-black uppercase tracking-tighter">
+            <span class="text-base sm:text-xl font-black uppercase tracking-tighter hidden sm:inline">
               Rzeczywiscie
             </span>
+            <span class="text-base font-black uppercase tracking-tighter sm:hidden">
+              RZY
+            </span>
           </a>
-          <!-- Navigation - Raw style -->
-          <div class="flex items-center gap-1">
+
+          <!-- Desktop Navigation -->
+          <div class="hidden md:flex items-center gap-1">
             <a
               href={~p"/"}
-              class="px-4 py-2 text-sm font-bold uppercase tracking-wide hover:bg-base-content hover:text-base-100 transition-colors"
+              class="px-3 lg:px-4 py-2 text-xs lg:text-sm font-bold uppercase tracking-wide hover:bg-base-content hover:text-base-100 transition-colors"
             >
               Home
             </a>
             <a
               href={~p"/draw"}
-              class="px-4 py-2 text-sm font-bold uppercase tracking-wide hover:bg-base-content hover:text-base-100 transition-colors"
+              class="px-3 lg:px-4 py-2 text-xs lg:text-sm font-bold uppercase tracking-wide hover:bg-base-content hover:text-base-100 transition-colors"
             >
               Draw
             </a>
             <a
               href={~p"/kanban"}
-              class="px-4 py-2 text-sm font-bold uppercase tracking-wide hover:bg-base-content hover:text-base-100 transition-colors"
+              class="px-3 lg:px-4 py-2 text-xs lg:text-sm font-bold uppercase tracking-wide hover:bg-base-content hover:text-base-100 transition-colors"
             >
               Kanban
             </a>
-            <div class="ml-4 border-l-2 border-base-content pl-4">
+            <a
+              href={~p"/world"}
+              class="px-3 lg:px-4 py-2 text-xs lg:text-sm font-bold uppercase tracking-wide hover:bg-base-content hover:text-base-100 transition-colors"
+            >
+              World
+            </a>
+            <div class="ml-2 lg:ml-4 border-l-2 border-base-content pl-2 lg:pl-4">
+              <.theme_toggle />
+            </div>
+          </div>
+
+          <!-- Mobile Menu Button -->
+          <button
+            class="md:hidden p-2 border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors"
+            phx-click={JS.toggle(to: "#mobile-menu")}
+          >
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="square" stroke-linejoin="miter" stroke-width="3" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Mobile Menu -->
+        <div id="mobile-menu" class="hidden md:hidden border-t-2 border-base-content py-4">
+          <div class="flex flex-col space-y-2">
+            <a
+              href={~p"/"}
+              class="px-4 py-3 text-sm font-bold uppercase tracking-wide border-2 border-transparent hover:border-base-content hover:bg-base-content hover:text-base-100 transition-colors"
+            >
+              Home
+            </a>
+            <a
+              href={~p"/draw"}
+              class="px-4 py-3 text-sm font-bold uppercase tracking-wide border-2 border-transparent hover:border-base-content hover:bg-base-content hover:text-base-100 transition-colors"
+            >
+              Draw
+            </a>
+            <a
+              href={~p"/kanban"}
+              class="px-4 py-3 text-sm font-bold uppercase tracking-wide border-2 border-transparent hover:border-base-content hover:bg-base-content hover:text-base-100 transition-colors"
+            >
+              Kanban
+            </a>
+            <a
+              href={~p"/world"}
+              class="px-4 py-3 text-sm font-bold uppercase tracking-wide border-2 border-transparent hover:border-base-content hover:bg-base-content hover:text-base-100 transition-colors"
+            >
+              🌍 World Map
+            </a>
+            <div class="px-4 py-3 border-t-2 border-base-content mt-2 pt-4">
               <.theme_toggle />
             </div>
           </div>
@@ -119,6 +172,14 @@ defmodule RzeczywiscieWeb.Layouts do
                   class="text-sm font-bold hover:underline hover:underline-offset-4 decoration-2 decoration-secondary"
                 >
                   Kanban Board
+                </a>
+              </li>
+              <li>
+                <a
+                  href={~p"/world"}
+                  class="text-sm font-bold hover:underline hover:underline-offset-4 decoration-2 decoration-accent"
+                >
+                  Live World Map
                 </a>
               </li>
             </ul>
