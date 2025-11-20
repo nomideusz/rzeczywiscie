@@ -164,6 +164,30 @@ defmodule RzeczywiscieWeb.LiveWorldLive do
   end
 
   defp get_connect_ip(socket) do
+    # First, try to get real IP from proxy headers (x-real-ip or x-forwarded-for)
+    case get_in(socket.private, [:connect_info, :x_headers]) do
+      headers when is_list(headers) ->
+        # Look for x-real-ip first, then x-forwarded-for
+        real_ip = Enum.find_value(headers, fn
+          {"x-real-ip", ip} -> ip
+          _ -> nil
+        end)
+
+        forwarded_ip = Enum.find_value(headers, fn
+          {"x-forwarded-for", ips} ->
+            # x-forwarded-for can have multiple IPs, get the first one
+            ips |> String.split(",") |> List.first() |> String.trim()
+          _ -> nil
+        end)
+
+        real_ip || forwarded_ip || get_peer_ip(socket)
+
+      _ ->
+        get_peer_ip(socket)
+    end
+  end
+
+  defp get_peer_ip(socket) do
     case get_in(socket.private, [:connect_info, :peer_data, :address]) do
       {a, b, c, d} -> "#{a}.#{b}.#{c}.#{d}"
       _ -> nil
