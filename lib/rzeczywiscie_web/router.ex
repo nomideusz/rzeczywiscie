@@ -21,6 +21,7 @@ defmodule RzeczywiscieWeb.Router do
     live "/example", ExampleLive
     live "/draw", DrawingBoardLive
     live "/kanban", KanbanBoardLive
+    live "/counter", PersistentCounterLive
   end
 
   # Other scopes may use custom stacks.
