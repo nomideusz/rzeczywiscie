@@ -98,6 +98,10 @@ defmodule RzeczywiscieWeb.DrawingBoardLive do
     {:noreply, push_event(socket, "cursor_move", cursor_data)}
   end
 
+  def handle_info(%{event: "cursor_remove", payload: payload}, socket) do
+    {:noreply, push_event(socket, "cursor_remove", payload)}
+  end
+
   def terminate(_reason, socket) do
     # Broadcast cursor removal when user disconnects
     if Map.has_key?(socket.assigns, :user_id) do
@@ -110,10 +114,6 @@ defmodule RzeczywiscieWeb.DrawingBoardLive do
     end
 
     :ok
-  end
-
-  def handle_info(%{event: "cursor_remove", payload: payload}, socket) do
-    {:noreply, push_event(socket, "cursor_remove", payload)}
   end
 
   defp generate_user_id do
