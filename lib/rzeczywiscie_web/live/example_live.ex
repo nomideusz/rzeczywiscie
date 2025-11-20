@@ -1,5 +1,6 @@
 defmodule RzeczywiscieWeb.ExampleLive do
   use RzeczywiscieWeb, :live_view
+  import RzeczywiscieWeb.Layouts
 
   def render(assigns) do
     ~H"""

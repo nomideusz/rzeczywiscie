@@ -1,5 +1,6 @@
 defmodule RzeczywiscieWeb.DrawingBoardLive do
   use RzeczywiscieWeb, :live_view
+  import RzeczywiscieWeb.Layouts
 
   @topic "drawing_board"
 

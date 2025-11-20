@@ -1,5 +1,6 @@
 defmodule RzeczywiscieWeb.KanbanBoardLive do
   use RzeczywiscieWeb, :live_view
+  import RzeczywiscieWeb.Layouts
   alias Phoenix.PubSub
 
   @topic "kanban_board"
