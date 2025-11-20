@@ -104,8 +104,9 @@ defmodule Rzeczywiscie.WorldMap do
                ip: data["query"]
              }}
 
-          {:ok, %{"status" => "fail", "message" => message}} ->
-            {:error, message}
+          {:ok, %{"status" => "fail", "message" => _message}} ->
+            # API failed (e.g., private IP range) - use default location
+            {:ok, default_location()}
 
           _ ->
             # Default to Warsaw, Poland for development/localhost
