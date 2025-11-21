@@ -700,13 +700,13 @@
     {#if lightboxImage}
         <div
             class="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-[9999] p-4"
-            on:click={closeLightbox}
+            onclick={closeLightbox}
             role="dialog"
             aria-modal="true"
         >
             <button
                 class="absolute top-4 right-4 text-white text-4xl hover:text-gray-300 z-10"
-                on:click={closeLightbox}
+                onclick={closeLightbox}
                 aria-label="Close"
             >
                 ×
@@ -715,7 +715,7 @@
                 src={lightboxImage}
                 alt="Enlarged view"
                 class="max-w-full max-h-full object-contain"
-                on:click={(e) => e.stopPropagation()}
+                onclick={(e) => e.stopPropagation()}
             />
         </div>
     {/if}
