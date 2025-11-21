@@ -77,6 +77,12 @@ defmodule RzeczywiscieWeb.Layouts do
             >
               World
             </a>
+            <a
+              href={~p"/real-estate"}
+              class="px-3 lg:px-4 py-2 text-xs lg:text-sm font-bold uppercase tracking-wide hover:bg-base-content hover:text-base-100 transition-colors"
+            >
+              Properties
+            </a>
           </div>
 
           <!-- Mobile Menu Button -->
@@ -116,6 +122,12 @@ defmodule RzeczywiscieWeb.Layouts do
               class="px-4 py-3 text-sm font-bold uppercase tracking-wide border-2 border-transparent hover:border-base-content hover:bg-base-content hover:text-base-100 transition-colors"
             >
               🌍 World Map
+            </a>
+            <a
+              href={~p"/real-estate"}
+              class="px-4 py-3 text-sm font-bold uppercase tracking-wide border-2 border-transparent hover:border-base-content hover:bg-base-content hover:text-base-100 transition-colors"
+            >
+              🏠 Properties
             </a>
           </div>
         </div>
@@ -174,6 +186,14 @@ defmodule RzeczywiscieWeb.Layouts do
                   class="text-sm font-bold hover:underline hover:underline-offset-4 decoration-2 decoration-accent"
                 >
                   Live World Map
+                </a>
+              </li>
+              <li>
+                <a
+                  href={~p"/real-estate"}
+                  class="text-sm font-bold hover:underline hover:underline-offset-4 decoration-2 decoration-success"
+                >
+                  Real Estate Scraper
                 </a>
               </li>
             </ul>
