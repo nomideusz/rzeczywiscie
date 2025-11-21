@@ -139,6 +139,7 @@ defmodule Rzeczywiscie.WorldMap do
       lng: pin.lng,
       message: pin.message,
       emoji: pin.emoji,
+      image_data: pin.image_data,
       ip_address: pin.ip_address,
       country: pin.country,
       city: pin.city,
