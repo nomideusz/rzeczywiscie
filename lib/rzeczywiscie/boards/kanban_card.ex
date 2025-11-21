@@ -8,6 +8,7 @@ defmodule Rzeczywiscie.Boards.KanbanCard do
     field :column, :string
     field :created_by, :string
     field :position, :integer, default: 0
+    field :image_data, :string
     belongs_to :kanban_board, Rzeczywiscie.Boards.KanbanBoard
     timestamps()
   end
@@ -15,7 +16,7 @@ defmodule Rzeczywiscie.Boards.KanbanCard do
   @doc false
   def changeset(kanban_card, attrs) do
     kanban_card
-    |> cast(attrs, [:card_id, :text, :column, :created_by, :position, :kanban_board_id])
+    |> cast(attrs, [:card_id, :text, :column, :created_by, :position, :image_data, :kanban_board_id])
     |> validate_required([:card_id, :text, :column, :kanban_board_id])
   end
 end

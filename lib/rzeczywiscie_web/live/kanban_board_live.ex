@@ -65,13 +65,16 @@ defmodule RzeczywiscieWeb.KanbanBoardLive do
     end
   end
 
-  def handle_event("add_card", %{"text" => text, "column" => column}, socket) do
+  def handle_event("add_card", %{"text" => text, "column" => column} = params, socket) do
+    image_data = Map.get(params, "image_data")
+
     new_card = %{
       card_id: generate_id(),
       text: text,
       column: column,
       created_by: socket.assigns.username,
-      position: 0
+      position: 0,
+      image_data: image_data
     }
 
     # Save to database and broadcast to all clients
@@ -80,9 +83,12 @@ defmodule RzeczywiscieWeb.KanbanBoardLive do
     {:noreply, assign(socket, :cards, cards)}
   end
 
-  def handle_event("update_card", %{"card_id" => card_id, "text" => text}, socket) do
+  def handle_event("update_card", %{"card_id" => card_id, "text" => text} = params, socket) do
+    image_data = Map.get(params, "image_data")
+
     # Update database and broadcast
-    cards = Boards.update_card(socket.assigns.board_id, card_id, text)
+    attrs = %{text: text, image_data: image_data}
+    cards = Boards.update_card(socket.assigns.board_id, card_id, attrs)
 
     {:noreply, assign(socket, :cards, cards)}
   end
