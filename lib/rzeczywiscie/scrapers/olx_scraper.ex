@@ -71,28 +71,70 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
               "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
              {"accept",
               "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"},
-             {"accept-language", "pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7"}
+             {"accept-language", "pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7"},
+             {"accept-encoding", "gzip, deflate, br"},
+             {"cache-control", "max-age=0"},
+             {"sec-fetch-dest", "document"},
+             {"sec-fetch-mode", "navigate"},
+             {"sec-fetch-site", "none"},
+             {"upgrade-insecure-requests", "1"}
            ],
-           max_redirects: 3,
+           max_redirects: 5,
            receive_timeout: 30_000
          ) do
       {:ok, %{status: 200, body: body}} ->
+        Logger.debug("Successfully fetched #{String.length(body)} bytes")
+
+        # Save HTML for debugging if it's a short response (might be error/captcha)
+        if String.length(body) < 50_000 do
+          Logger.warn("Response seems short (#{String.length(body)} bytes) - might be blocked")
+          save_debug_html(body, url)
+        end
+
         {:ok, body}
 
-      {:ok, %{status: status}} ->
+      {:ok, %{status: status, body: body}} ->
+        Logger.error("HTTP #{status} from #{url}")
+        Logger.debug("Response preview: #{String.slice(body, 0, 200)}")
         {:error, "HTTP #{status}"}
 
       {:error, reason} ->
+        Logger.error("Request failed for #{url}: #{inspect(reason)}")
         {:error, reason}
+    end
+  end
+
+  defp save_debug_html(html, url) do
+    # Save to tmp for inspection
+    filename = "/tmp/olx_debug_#{:os.system_time(:second)}.html"
+
+    case File.write(filename, html) do
+      :ok ->
+        Logger.info("Saved debug HTML to #{filename} for URL: #{url}")
+        Logger.debug("Preview: #{String.slice(html, 0, 500)}")
+
+      {:error, reason} ->
+        Logger.warn("Could not save debug HTML: #{inspect(reason)}")
     end
   end
 
   defp parse_listings(html) do
     case Floki.parse_document(html) do
       {:ok, document} ->
-        # OLX uses data-cy="l-card" for listing cards
-        document
-        |> Floki.find("[data-cy='l-card']")
+        # Debug: Check what we received
+        Logger.debug("HTML length: #{String.length(html)}")
+
+        # Check if we got blocked/captcha
+        if String.contains?(html, ["captcha", "robot", "blocked"]) do
+          Logger.warn("Possible bot detection - page contains captcha/robot keywords")
+        end
+
+        # Try multiple selector strategies (OLX changes their HTML frequently)
+        cards = try_find_listings(document)
+
+        Logger.debug("Found #{length(cards)} listing cards")
+
+        cards
         |> Enum.map(&parse_listing/1)
         |> Enum.reject(&is_nil/1)
 
@@ -100,6 +142,73 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
         Logger.error("Failed to parse HTML: #{inspect(reason)}")
         []
     end
+  end
+
+  defp try_find_listings(document) do
+    # Try different selectors in order of likelihood
+    selectors = [
+      "[data-cy='l-card']",           # Original selector
+      "div[data-cy='l-card']",        # More specific
+      "[data-testid='l-card']",       # Alternative attribute
+      "div.css-1sw7q4x",              # CSS class (may change)
+      "article",                       # Semantic HTML
+      "[data-cy='listing-card']",     # Alternative naming
+      "div[data-cy] a[href*='/d/']"   # Links to detail pages
+    ]
+
+    result =
+      Enum.reduce_while(selectors, [], fn selector, _acc ->
+        cards = Floki.find(document, selector)
+
+        if length(cards) > 0 do
+          Logger.info("Found #{length(cards)} cards using selector: #{selector}")
+          {:halt, cards}
+        else
+          Logger.debug("Selector '#{selector}' found 0 cards")
+          {:cont, []}
+        end
+      end)
+
+    # If still nothing found, do some debugging
+    if result == [] do
+      debug_document_structure(document)
+    end
+
+    result
+  end
+
+  defp debug_document_structure(document) do
+    # Find all elements with data-cy attribute
+    data_cy_elements = Floki.find(document, "[data-cy]")
+    data_cy_values =
+      data_cy_elements
+      |> Enum.map(fn {_tag, attrs, _children} ->
+        Enum.find_value(attrs, fn
+          {"data-cy", value} -> value
+          _ -> nil
+        end)
+      end)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
+      |> Enum.take(20)
+
+    Logger.warn("No listings found! Available data-cy values: #{inspect(data_cy_values)}")
+
+    # Check for common containers
+    containers = [
+      "main",
+      "#__next",
+      "[role='main']",
+      ".listing-grid",
+      "[data-testid='listing-grid']"
+    ]
+
+    Enum.each(containers, fn selector ->
+      found = Floki.find(document, selector)
+      if length(found) > 0 do
+        Logger.debug("Found container: #{selector} (#{length(found)} elements)")
+      end
+    end)
   end
 
   defp parse_listing(card) do
