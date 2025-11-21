@@ -510,13 +510,13 @@
                 <div class="flex items-center gap-3 flex-wrap">
                     <button
                         class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
-                        on:click={() => showChat = !showChat}
+                        onclick={() => showChat = !showChat}
                     >
                         💬 Chat {chatMessages.length > 0 ? `(${chatMessages.length})` : ''}
                     </button>
                     <button
                         class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium transition-colors"
-                        on:click={() => showStats = !showStats}
+                        onclick={() => showStats = !showStats}
                     >
                         📊 Stats
                     </button>
@@ -550,7 +550,7 @@
             <div class="absolute top-4 left-4 bg-white rounded-lg shadow-lg p-4 max-w-xs z-10">
                 <h3 class="font-semibold mb-3 flex items-center justify-between">
                     📊 Live Stats
-                    <button class="text-gray-400 hover:text-gray-600" on:click={() => showStats = false}>✕</button>
+                    <button class="text-gray-400 hover:text-gray-600" onclick={() => showStats = false}>✕</button>
                 </h3>
                 <div class="space-y-2 text-sm">
                     <div class="flex justify-between items-center">
@@ -574,7 +574,7 @@
             <div class="absolute top-4 right-4 bg-white rounded-lg shadow-lg w-80 max-h-[500px] flex flex-col z-10">
                 <div class="p-4 border-b flex items-center justify-between">
                     <h3 class="font-semibold">💬 Global Chat</h3>
-                    <button class="text-gray-400 hover:text-gray-600" on:click={() => showChat = false}>✕</button>
+                    <button class="text-gray-400 hover:text-gray-600" onclick={() => showChat = false}>✕</button>
                 </div>
                 <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-2 min-h-[200px] max-h-[300px]">
                     {#if chatMessages.length === 0}
@@ -591,7 +591,7 @@
                         </div>
                     {/each}
                 </div>
-                <form on:submit|preventDefault={sendChatMessage} class="p-4 border-t">
+                <form onsubmit={(e) => { e.preventDefault(); sendChatMessage(); }} class="p-4 border-t">
                     <div class="flex gap-2">
                         <input
                             type="text"
@@ -626,8 +626,8 @@
 
     <!-- Pin Modal -->
     {#if showPinModal}
-        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" on:click={() => showPinModal = false}>
-            <div class="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4" on:click|stopPropagation>
+        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onclick={() => showPinModal = false}>
+            <div class="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4" onclick={(e) => e.stopPropagation()}>
                 <h3 class="text-lg font-semibold mb-4">Drop a Pin 📍</h3>
 
                 <div class="mb-4">
@@ -636,7 +636,7 @@
                         {#each emojis as emoji}
                             <button
                                 class="text-2xl p-2 rounded hover:bg-gray-100 {newPinEmoji === emoji ? 'bg-blue-100 ring-2 ring-blue-500' : ''}"
-                                on:click={() => newPinEmoji = emoji}
+                                onclick={() => newPinEmoji = emoji}
                             >
                                 {emoji}
                             </button>
@@ -662,7 +662,7 @@
                             <img src={newPinImagePreview} alt="Preview" class="w-full h-40 object-contain bg-gray-100 rounded-lg" />
                             <button
                                 class="absolute top-2 right-2 bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-red-600"
-                                on:click={removeImage}
+                                onclick={removeImage}
                                 type="button"
                             >
                                 ✕
@@ -672,7 +672,7 @@
                         <input
                             type="file"
                             accept="image/*"
-                            on:change={handleImageSelect}
+                            onchange={handleImageSelect}
                             class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                         />
                     {/if}
@@ -681,13 +681,13 @@
                 <div class="flex gap-3">
                     <button
                         class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
-                        on:click={dropPin}
+                        onclick={dropPin}
                     >
                         Drop Pin
                     </button>
                     <button
                         class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-                        on:click={() => showPinModal = false}
+                        onclick={() => showPinModal = false}
                     >
                         Cancel
                     </button>
