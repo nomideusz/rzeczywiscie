@@ -70,10 +70,30 @@
         // Update stats
         updateStats()
 
+        // Listen for clipboard paste events
+        const handlePaste = (e) => {
+            const items = e.clipboardData?.items;
+            if (!items) return;
+
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.startsWith('image/')) {
+                    e.preventDefault();
+                    const file = items[i].getAsFile();
+                    if (file) {
+                        processImageFile(file);
+                    }
+                    break;
+                }
+            }
+        };
+
+        document.addEventListener('paste', handlePaste);
+
         return () => {
             if (script.parentNode) {
                 document.head.removeChild(script)
             }
+            document.removeEventListener('paste', handlePaste);
         }
     })
 
@@ -267,7 +287,7 @@
         return `
             <div style="padding: 8px; min-width: 200px; max-width: 300px;">
                 <div style="font-size: 24px; margin-bottom: 8px;">${pin.emoji}</div>
-                ${pin.image_data ? `<img src="${pin.image_data}" style="width: 100%; max-height: 200px; object-fit: cover; border-radius: 8px; margin-bottom: 8px;" />` : ''}
+                ${pin.image_data ? `<img src="${pin.image_data}" style="width: 100%; max-height: 200px; object-fit: contain; background: #f3f4f6; border-radius: 8px; margin-bottom: 8px;" />` : ''}
                 ${pin.message ? `<p style="margin: 8px 0;">${pin.message}</p>` : ''}
                 <div style="font-size: 12px; color: #666;">
                     <div style="display: flex; align-items: center; gap: 4px;">
@@ -371,8 +391,12 @@
 
     function handleImageSelect(event) {
         const file = event.target.files[0]
-        if (!file) return
+        if (file) {
+            processImageFile(file)
+        }
+    }
 
+    function processImageFile(file) {
         // Check file size (max 3MB)
         if (file.size > 3 * 1024 * 1024) {
             alert('Image must be smaller than 3MB')
@@ -387,8 +411,11 @@
 
         const reader = new FileReader()
         reader.onload = (e) => {
-            newPinImage = e.target.result
-            newPinImagePreview = e.target.result
+            // Only add to pin modal if it's currently open
+            if (showPinModal) {
+                newPinImage = e.target.result
+                newPinImagePreview = e.target.result
+            }
         }
         reader.readAsDataURL(file)
     }
@@ -609,7 +636,7 @@
                     <label class="block text-sm font-medium text-gray-700 mb-2">Photo (optional, max 3MB)</label>
                     {#if newPinImagePreview}
                         <div class="relative">
-                            <img src={newPinImagePreview} alt="Preview" class="w-full h-40 object-cover rounded-lg" />
+                            <img src={newPinImagePreview} alt="Preview" class="w-full h-40 object-contain bg-gray-100 rounded-lg" />
                             <button
                                 class="absolute top-2 right-2 bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-red-600"
                                 on:click={removeImage}
