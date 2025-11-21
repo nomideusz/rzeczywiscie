@@ -284,6 +284,85 @@ defmodule RzeczywiscieWeb.HomeLive do
             </div>
           </div>
         </div>
+
+        <!-- Real Estate Scraper Card - Brutalist -->
+        <div class="group relative border-4 border-base-content bg-gradient-to-br from-base-100 to-success/5 p-6 sm:p-8 hover:translate-x-1 hover:translate-y-1 transition-transform lg:col-span-2 mt-8">
+          <!-- Accent bar -->
+          <div class="absolute top-0 left-0 w-2 h-full bg-success"></div>
+
+          <!-- Number badge -->
+          <div class="absolute top-4 right-4 w-12 h-12 border-2 border-base-content flex items-center justify-center font-black text-xl">
+            04
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-8">
+            <div class="pr-4 sm:pr-16">
+              <!-- Icon - geometric -->
+              <div class="w-20 h-20 border-4 border-success mb-6 flex items-center justify-center">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  class="h-10 w-10"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                >
+                  <path
+                    stroke-linecap="square"
+                    stroke-linejoin="miter"
+                    d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+                  />
+                </svg>
+              </div>
+
+              <h3 class="text-3xl sm:text-4xl font-black mb-4 tracking-tight uppercase">
+                Real Estate<br />Scraper
+              </h3>
+
+              <p class="text-base opacity-70 mb-6 leading-relaxed">
+                Live property listings from OLX and Otodom for Małopolskie region. Auto-updating table with filters, search, and real-time notifications.
+              </p>
+
+              <!-- Tags - raw style -->
+              <div class="flex flex-wrap gap-2 mb-8">
+                <span class="px-3 py-1 text-xs uppercase tracking-wider bg-success text-success-content font-bold">
+                  🏠 Properties
+                </span>
+                <span class="px-3 py-1 text-xs uppercase tracking-wider border-2 border-base-content font-bold">
+                  Auto-Scrape
+                </span>
+                <span class="px-3 py-1 text-xs uppercase tracking-wider bg-base-content text-base-100 font-bold">
+                  Live Updates
+                </span>
+              </div>
+
+              <a
+                href={~p"/real-estate"}
+                class="inline-block px-6 py-3 bg-success text-success-content font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors"
+              >
+                Browse →
+              </a>
+            </div>
+
+            <!-- Visual Preview -->
+            <div class="hidden md:flex items-center justify-center relative">
+              <div class="relative w-full max-w-xs">
+                <!-- Table/List Illustration -->
+                <div class="space-y-3">
+                  <div class="h-12 border-4 border-success bg-base-100 flex items-center px-4">
+                    <div class="w-3/4 h-2 bg-base-content/20"></div>
+                  </div>
+                  <div class="h-12 border-4 border-base-content/30 bg-base-100 flex items-center px-4">
+                    <div class="w-2/3 h-2 bg-base-content/20"></div>
+                  </div>
+                  <div class="h-12 border-4 border-base-content/30 bg-base-100 flex items-center px-4">
+                    <div class="w-1/2 h-2 bg-base-content/20"></div>
+                  </div>
+                  <div class="absolute top-0 right-0 w-4 h-4 bg-success rounded-full animate-ping"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
         </div>
       </div>
     </div>

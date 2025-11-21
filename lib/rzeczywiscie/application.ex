@@ -11,6 +11,7 @@ defmodule Rzeczywiscie.Application do
       {NodeJS.Supervisor, [path: LiveSvelte.SSR.NodeJS.server_path(), pool_size: 4]},
       RzeczywiscieWeb.Telemetry,
       Rzeczywiscie.Repo,
+      {Oban, Application.fetch_env!(:rzeczywiscie, Oban)},
       {DNSCluster, query: Application.get_env(:rzeczywiscie, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Rzeczywiscie.PubSub},
       RzeczywiscieWeb.Presence,

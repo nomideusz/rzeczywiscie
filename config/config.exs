@@ -31,6 +31,21 @@ config :rzeczywiscie, RzeczywiscieWeb.Endpoint,
 # at the `config/runtime.exs`.
 config :rzeczywiscie, Rzeczywiscie.Mailer, adapter: Swoosh.Adapters.Local
 
+# Configure Oban
+config :rzeczywiscie, Oban,
+  repo: Rzeczywiscie.Repo,
+  plugins: [
+    {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 7},
+    {Oban.Plugins.Cron,
+     crontab: [
+       # Scrape OLX every 30 minutes
+       {"*/30 * * * *", Rzeczywiscie.Workers.OlxScraperWorker},
+       # Mark stale properties inactive daily at 3 AM
+       {"0 3 * * *", Rzeczywiscie.Workers.CleanupWorker}
+     ]}
+  ],
+  queues: [scraper: 10, default: 5]
+
 # Configure tailwind (the version is required)
 config :tailwind,
   version: "4.1.7",
