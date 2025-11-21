@@ -103,13 +103,13 @@ defmodule Rzeczywiscie.Boards do
   end
 
   @doc """
-  Update a card's text.
+  Update a card's text and/or image.
   """
-  def update_card(board_id, card_id, text) do
+  def update_card(board_id, card_id, attrs) do
     card = Repo.get_by!(KanbanCard, kanban_board_id: board_id, card_id: card_id)
 
     card
-    |> KanbanCard.changeset(%{text: text})
+    |> KanbanCard.changeset(attrs)
     |> Repo.update()
 
     cards = get_cards(board_id)
@@ -160,6 +160,7 @@ defmodule Rzeczywiscie.Boards do
       text: card.text,
       column: card.column,
       created_by: card.created_by,
+      image_data: card.image_data,
       created_at: card.inserted_at |> DateTime.from_naive!("Etc/UTC") |> DateTime.to_unix()
     }
   end

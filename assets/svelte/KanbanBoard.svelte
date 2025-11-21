@@ -9,8 +9,12 @@
     let draggedCard = null;
     let newCardText = '';
     let newCardColumn = null;
+    let newCardImage = null;
+    let newCardImagePreview = null;
     let editingCard = null;
     let editText = '';
+    let editImage = null;
+    let editImagePreview = null;
 
     const columnColors = {
         'todo': 'bg-red-50 border-red-200',
@@ -80,21 +84,53 @@
     function cancelAddCard() {
         newCardColumn = null;
         newCardText = '';
+        newCardImage = null;
+        newCardImagePreview = null;
     }
 
     function addCard(columnId) {
         if (newCardText.trim()) {
             live.pushEvent('add_card', {
                 text: newCardText.trim(),
-                column: columnId
+                column: columnId,
+                image_data: newCardImage
             });
             cancelAddCard();
         }
     }
 
+    function handleNewCardImage(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        if (file.size > 3 * 1024 * 1024) {
+            alert('Image must be smaller than 3MB');
+            return;
+        }
+
+        if (!file.type.startsWith('image/')) {
+            alert('Please select an image file');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            newCardImage = e.target.result;
+            newCardImagePreview = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function removeNewCardImage() {
+        newCardImage = null;
+        newCardImagePreview = null;
+    }
+
     function startEdit(card) {
         editingCard = card.id;
         editText = card.text;
+        editImage = card.image_data;
+        editImagePreview = card.image_data;
         setTimeout(() => {
             document.getElementById(`edit-input-${card.id}`)?.focus();
         }, 100);
@@ -103,16 +139,46 @@
     function cancelEdit() {
         editingCard = null;
         editText = '';
+        editImage = null;
+        editImagePreview = null;
     }
 
     function saveEdit(cardId) {
         if (editText.trim()) {
             live.pushEvent('update_card', {
                 card_id: cardId,
-                text: editText.trim()
+                text: editText.trim(),
+                image_data: editImage
             });
         }
         cancelEdit();
+    }
+
+    function handleEditImage(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        if (file.size > 3 * 1024 * 1024) {
+            alert('Image must be smaller than 3MB');
+            return;
+        }
+
+        if (!file.type.startsWith('image/')) {
+            alert('Please select an image file');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            editImage = e.target.result;
+            editImagePreview = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function removeEditImage() {
+        editImage = null;
+        editImagePreview = null;
     }
 
     function deleteCard(cardId) {
@@ -207,6 +273,30 @@
                                                 }
                                             }}
                                         ></textarea>
+
+                                        <!-- Image Upload for Edit -->
+                                        <div>
+                                            {#if editImagePreview}
+                                                <div class="relative mb-2">
+                                                    <img src={editImagePreview} alt="Preview" class="w-full h-32 object-cover rounded" />
+                                                    <button
+                                                        class="absolute top-1 right-1 btn btn-xs btn-error"
+                                                        onclick={removeEditImage}
+                                                        type="button"
+                                                    >
+                                                        ✕
+                                                    </button>
+                                                </div>
+                                            {:else}
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    onchange={handleEditImage}
+                                                    class="file-input file-input-bordered file-input-sm w-full"
+                                                />
+                                            {/if}
+                                        </div>
+
                                         <div class="flex gap-2">
                                             <button
                                                 class="btn btn-sm btn-primary"
@@ -224,6 +314,9 @@
                                     </div>
                                 {:else}
                                     <!-- View Mode -->
+                                    {#if card.image_data}
+                                        <img src={card.image_data} alt="Card" class="w-full h-32 object-cover rounded mb-2" />
+                                    {/if}
                                     <div class="flex justify-between items-start gap-2">
                                         <p class="text-gray-800 flex-1 whitespace-pre-wrap break-words">
                                             {card.text}
@@ -272,6 +365,30 @@
                                         }
                                     }}
                                 ></textarea>
+
+                                <!-- Image Upload for New Card -->
+                                <div class="mb-2">
+                                    {#if newCardImagePreview}
+                                        <div class="relative">
+                                            <img src={newCardImagePreview} alt="Preview" class="w-full h-32 object-cover rounded" />
+                                            <button
+                                                class="absolute top-1 right-1 btn btn-xs btn-error"
+                                                onclick={removeNewCardImage}
+                                                type="button"
+                                            >
+                                                ✕
+                                            </button>
+                                        </div>
+                                    {:else}
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onchange={handleNewCardImage}
+                                            class="file-input file-input-bordered file-input-sm w-full"
+                                        />
+                                    {/if}
+                                </div>
+
                                 <div class="flex gap-2">
                                     <button
                                         class="btn btn-sm btn-primary"
