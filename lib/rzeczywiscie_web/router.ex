@@ -23,6 +23,7 @@ defmodule RzeczywiscieWeb.Router do
     live "/kanban", KanbanBoardLive
     live "/counter", PersistentCounterLive
     live "/world", LiveWorldLive
+    live "/real-estate", RealEstateLive
   end
 
   # Other scopes may use custom stacks.
