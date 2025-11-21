@@ -63,7 +63,7 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
   end
 
   defp fetch_page(url) do
-    Logger.debug("Fetching: #{url}")
+    Logger.info("Fetching: #{url}")
 
     case Req.get(url,
            headers: [
@@ -83,7 +83,7 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
            receive_timeout: 30_000
          ) do
       {:ok, %{status: 200, body: body}} ->
-        Logger.debug("Successfully fetched #{String.length(body)} bytes")
+        Logger.info("Successfully fetched #{String.length(body)} bytes")
 
         # Save HTML for debugging if it's a short response (might be error/captcha)
         if String.length(body) < 50_000 do
@@ -95,7 +95,7 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
 
       {:ok, %{status: status, body: body}} ->
         Logger.error("HTTP #{status} from #{url}")
-        Logger.debug("Response preview: #{String.slice(body, 0, 200)}")
+        Logger.info("Response preview: #{String.slice(body, 0, 200)}")
         {:error, "HTTP #{status}"}
 
       {:error, reason} ->
@@ -111,7 +111,7 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
     case File.write(filename, html) do
       :ok ->
         Logger.info("Saved debug HTML to #{filename} for URL: #{url}")
-        Logger.debug("Preview: #{String.slice(html, 0, 500)}")
+        Logger.info("Preview: #{String.slice(html, 0, 500)}")
 
       {:error, reason} ->
         Logger.warn("Could not save debug HTML: #{inspect(reason)}")
@@ -122,7 +122,7 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
     case Floki.parse_document(html) do
       {:ok, document} ->
         # Debug: Check what we received
-        Logger.debug("HTML length: #{String.length(html)}")
+        Logger.info("HTML length: #{String.length(html)}")
 
         # Check if we got blocked/captcha
         if String.contains?(html, ["captcha", "robot", "blocked"]) do
@@ -132,7 +132,7 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
         # Try multiple selector strategies (OLX changes their HTML frequently)
         cards = try_find_listings(document)
 
-        Logger.debug("Found #{length(cards)} listing cards")
+        Logger.info("Found #{length(cards)} listing cards")
 
         cards
         |> Enum.map(&parse_listing/1)
@@ -161,10 +161,10 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
         cards = Floki.find(document, selector)
 
         if length(cards) > 0 do
-          Logger.info("Found #{length(cards)} cards using selector: #{selector}")
+          Logger.info("✓ Found #{length(cards)} cards using selector: #{selector}")
           {:halt, cards}
         else
-          Logger.debug("Selector '#{selector}' found 0 cards")
+          Logger.info("✗ Selector '#{selector}' found 0 cards")
           {:cont, []}
         end
       end)
@@ -192,7 +192,7 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
       |> Enum.uniq()
       |> Enum.take(20)
 
-    Logger.warn("No listings found! Available data-cy values: #{inspect(data_cy_values)}")
+    Logger.warn("⚠️  No listings found! Available data-cy values: #{inspect(data_cy_values)}")
 
     # Check for common containers
     containers = [
@@ -206,7 +206,7 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
     Enum.each(containers, fn selector ->
       found = Floki.find(document, selector)
       if length(found) > 0 do
-        Logger.debug("Found container: #{selector} (#{length(found)} elements)")
+        Logger.info("Found container: #{selector} (#{length(found)} elements)")
       end
     end)
   end
