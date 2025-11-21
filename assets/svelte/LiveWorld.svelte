@@ -27,7 +27,7 @@
     let newChatMessage = ""
 
     // Stats
-    let showStats = true
+    let showStats = false
     let stats = {
         usersOnline: 0,
         totalPins: 0,
@@ -373,9 +373,9 @@
         const file = event.target.files[0]
         if (!file) return
 
-        // Check file size (max 1MB)
-        if (file.size > 1024 * 1024) {
-            alert('Image must be smaller than 1MB')
+        // Check file size (max 3MB)
+        if (file.size > 3 * 1024 * 1024) {
+            alert('Image must be smaller than 3MB')
             return
         }
 
@@ -606,7 +606,7 @@
                 </div>
 
                 <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Photo (optional, max 1MB)</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Photo (optional, max 3MB)</label>
                     {#if newPinImagePreview}
                         <div class="relative">
                             <img src={newPinImagePreview} alt="Preview" class="w-full h-40 object-cover rounded-lg" />
