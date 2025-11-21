@@ -37,6 +37,9 @@
     // Duration timer
     let durationInterval
 
+    // Lightbox
+    let lightboxImage = null
+
     const emojis = ["📍", "⭐", "❤️", "🎉", "🎯", "🔥", "💡", "🌍", "🚀", "🎨"]
 
     // Load Google Maps
@@ -89,11 +92,27 @@
 
         document.addEventListener('paste', handlePaste);
 
+        // Listen for ESC key to close lightbox
+        const handleKeydown = (e) => {
+            if (e.key === 'Escape' && lightboxImage) {
+                lightboxImage = null;
+            }
+        };
+
+        document.addEventListener('keydown', handleKeydown);
+
+        // Make openLightbox available globally for info window images
+        window.openLightbox = (imageSrc) => {
+            lightboxImage = imageSrc;
+        };
+
         return () => {
             if (script.parentNode) {
                 document.head.removeChild(script)
             }
             document.removeEventListener('paste', handlePaste);
+            document.removeEventListener('keydown', handleKeydown);
+            delete window.openLightbox;
         }
     })
 
@@ -287,7 +306,7 @@
         return `
             <div style="padding: 8px; min-width: 200px; max-width: 300px;">
                 <div style="font-size: 24px; margin-bottom: 8px;">${pin.emoji}</div>
-                ${pin.image_data ? `<img src="${pin.image_data}" style="width: 100%; max-height: 200px; object-fit: contain; background: #f3f4f6; border-radius: 8px; margin-bottom: 8px;" />` : ''}
+                ${pin.image_data ? `<img src="${pin.image_data}" onclick="window.openLightbox('${pin.image_data}')" style="width: 100%; max-height: 200px; object-fit: contain; background: #f3f4f6; border-radius: 8px; margin-bottom: 8px; cursor: pointer; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'" />` : ''}
                 ${pin.message ? `<p style="margin: 8px 0;">${pin.message}</p>` : ''}
                 <div style="font-size: 12px; color: #666;">
                     <div style="display: flex; align-items: center; gap: 4px;">
@@ -299,6 +318,10 @@
                 </div>
             </div>
         `
+    }
+
+    function closeLightbox() {
+        lightboxImage = null;
     }
 
     function handleCursorMove(data) {
@@ -670,6 +693,30 @@
                     </button>
                 </div>
             </div>
+        </div>
+    {/if}
+
+    <!-- Image Lightbox -->
+    {#if lightboxImage}
+        <div
+            class="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-[9999] p-4"
+            on:click={closeLightbox}
+            role="dialog"
+            aria-modal="true"
+        >
+            <button
+                class="absolute top-4 right-4 text-white text-4xl hover:text-gray-300 z-10"
+                on:click={closeLightbox}
+                aria-label="Close"
+            >
+                ×
+            </button>
+            <img
+                src={lightboxImage}
+                alt="Enlarged view"
+                class="max-w-full max-h-full object-contain"
+                on:click={(e) => e.stopPropagation()}
+            />
         </div>
     {/if}
 </div>

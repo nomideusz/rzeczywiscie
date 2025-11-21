@@ -15,6 +15,7 @@
     let editText = '';
     let editImage = null;
     let editImagePreview = null;
+    let lightboxImage = null;
 
     const columnColors = {
         'todo': 'bg-red-50 border-red-200',
@@ -52,8 +53,18 @@
 
         document.addEventListener('paste', handlePaste);
 
+        // Listen for ESC key to close lightbox
+        const handleKeydown = (e) => {
+            if (e.key === 'Escape' && lightboxImage) {
+                lightboxImage = null;
+            }
+        };
+
+        document.addEventListener('keydown', handleKeydown);
+
         return () => {
             document.removeEventListener('paste', handlePaste);
+            document.removeEventListener('keydown', handleKeydown);
         };
     });
 
@@ -217,6 +228,14 @@
         };
         return icons[columnId] || '📌';
     }
+
+    function openLightbox(imageSrc) {
+        lightboxImage = imageSrc;
+    }
+
+    function closeLightbox() {
+        lightboxImage = null;
+    }
 </script>
 
 <div class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
@@ -333,7 +352,15 @@
                                 {:else}
                                     <!-- View Mode -->
                                     {#if card.image_data}
-                                        <img src={card.image_data} alt="Card" class="w-full h-32 object-contain bg-gray-100 rounded mb-2" />
+                                        <img
+                                            src={card.image_data}
+                                            alt="Card"
+                                            class="w-full h-32 object-contain bg-gray-100 rounded mb-2 cursor-pointer hover:opacity-80 transition-opacity"
+                                            on:click={() => openLightbox(card.image_data)}
+                                            role="button"
+                                            tabindex="0"
+                                            on:keydown={(e) => e.key === 'Enter' && openLightbox(card.image_data)}
+                                        />
                                     {/if}
                                     <div class="flex justify-between items-start gap-2">
                                         <p class="text-gray-800 flex-1 whitespace-pre-wrap break-words">
@@ -440,4 +467,28 @@
     <div class="max-w-7xl mx-auto mt-6 text-center text-sm text-gray-600">
         💡 Tip: Drag cards between columns to update their status. Open in multiple windows to see real-time collaboration!
     </div>
+
+    <!-- Image Lightbox -->
+    {#if lightboxImage}
+        <div
+            class="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4"
+            on:click={closeLightbox}
+            role="dialog"
+            aria-modal="true"
+        >
+            <button
+                class="absolute top-4 right-4 text-white text-4xl hover:text-gray-300 z-10"
+                on:click={closeLightbox}
+                aria-label="Close"
+            >
+                ×
+            </button>
+            <img
+                src={lightboxImage}
+                alt="Enlarged view"
+                class="max-w-full max-h-full object-contain"
+                on:click={(e) => e.stopPropagation()}
+            />
+        </div>
+    {/if}
 </div>
