@@ -32,6 +32,29 @@
         window.addEventListener('phx:presence_update', (e) => {
             users = e.detail.users;
         });
+
+        // Listen for clipboard paste events
+        const handlePaste = (e) => {
+            const items = e.clipboardData?.items;
+            if (!items) return;
+
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.startsWith('image/')) {
+                    e.preventDefault();
+                    const file = items[i].getAsFile();
+                    if (file) {
+                        processImageFile(file);
+                    }
+                    break;
+                }
+            }
+        };
+
+        document.addEventListener('paste', handlePaste);
+
+        return () => {
+            document.removeEventListener('paste', handlePaste);
+        };
     });
 
     function handleDragStart(e, card) {
@@ -101,8 +124,12 @@
 
     function handleNewCardImage(event) {
         const file = event.target.files[0];
-        if (!file) return;
+        if (file) {
+            processImageFile(file);
+        }
+    }
 
+    function processImageFile(file) {
         if (file.size > 3 * 1024 * 1024) {
             alert('Image must be smaller than 3MB');
             return;
@@ -115,8 +142,14 @@
 
         const reader = new FileReader();
         reader.onload = (e) => {
-            newCardImage = e.target.result;
-            newCardImagePreview = e.target.result;
+            // Determine if we're adding a new card or editing
+            if (editingCard) {
+                editImage = e.target.result;
+                editImagePreview = e.target.result;
+            } else if (newCardColumn) {
+                newCardImage = e.target.result;
+                newCardImagePreview = e.target.result;
+            }
         };
         reader.readAsDataURL(file);
     }
@@ -156,24 +189,9 @@
 
     function handleEditImage(event) {
         const file = event.target.files[0];
-        if (!file) return;
-
-        if (file.size > 3 * 1024 * 1024) {
-            alert('Image must be smaller than 3MB');
-            return;
+        if (file) {
+            processImageFile(file);
         }
-
-        if (!file.type.startsWith('image/')) {
-            alert('Please select an image file');
-            return;
-        }
-
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            editImage = e.target.result;
-            editImagePreview = e.target.result;
-        };
-        reader.readAsDataURL(file);
     }
 
     function removeEditImage() {
@@ -278,7 +296,7 @@
                                         <div>
                                             {#if editImagePreview}
                                                 <div class="relative mb-2">
-                                                    <img src={editImagePreview} alt="Preview" class="w-full h-32 object-cover rounded" />
+                                                    <img src={editImagePreview} alt="Preview" class="w-full h-32 object-contain bg-gray-100 rounded" />
                                                     <button
                                                         class="absolute top-1 right-1 btn btn-xs btn-error"
                                                         onclick={removeEditImage}
@@ -315,7 +333,7 @@
                                 {:else}
                                     <!-- View Mode -->
                                     {#if card.image_data}
-                                        <img src={card.image_data} alt="Card" class="w-full h-32 object-cover rounded mb-2" />
+                                        <img src={card.image_data} alt="Card" class="w-full h-32 object-contain bg-gray-100 rounded mb-2" />
                                     {/if}
                                     <div class="flex justify-between items-start gap-2">
                                         <p class="text-gray-800 flex-1 whitespace-pre-wrap break-words">
@@ -370,7 +388,7 @@
                                 <div class="mb-2">
                                     {#if newCardImagePreview}
                                         <div class="relative">
-                                            <img src={newCardImagePreview} alt="Preview" class="w-full h-32 object-cover rounded" />
+                                            <img src={newCardImagePreview} alt="Preview" class="w-full h-32 object-contain bg-gray-100 rounded" />
                                             <button
                                                 class="absolute top-1 right-1 btn btn-xs btn-error"
                                                 onclick={removeNewCardImage}
