@@ -104,14 +104,17 @@ defmodule Rzeczywiscie.RealEstate do
   This is the main function called by scrapers.
   """
   def upsert_property(attrs) do
+    require Logger
     now = DateTime.utc_now() |> DateTime.truncate(:second)
     attrs = Map.put(attrs, :last_seen_at, now)
 
     case get_property_by_external_id(attrs.source, attrs.external_id) do
       nil ->
+        Logger.info("Creating new property: #{attrs.external_id}")
         create_property(attrs)
 
       existing ->
+        Logger.info("Updating existing property: #{attrs.external_id}")
         update_property(existing, attrs)
     end
   end

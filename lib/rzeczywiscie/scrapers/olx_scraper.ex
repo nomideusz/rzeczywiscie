@@ -44,20 +44,28 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
       end)
 
     # Save to database
+    Logger.info("Starting database save for #{length(results)} properties...")
+
     saved =
-      Enum.map(results, fn property_data ->
+      Enum.with_index(results, 1)
+      |> Enum.map(fn {property_data, index} ->
+        Logger.info("Saving property #{index}/#{length(results)}: #{property_data.title}")
+
         case RealEstate.upsert_property(property_data) do
           {:ok, property} ->
+            Logger.info("✓ Saved: #{property.title}")
             {:ok, property}
 
           {:error, changeset} ->
-            Logger.error("Failed to save property: #{inspect(changeset.errors)}")
+            Logger.error("✗ Failed to save '#{property_data.title}': #{inspect(changeset.errors)}")
             {:error, changeset}
         end
       end)
 
     successful = Enum.count(saved, fn {status, _} -> status == :ok end)
-    Logger.info("OLX scrape completed: #{successful}/#{length(results)} properties saved")
+    failed = length(saved) - successful
+
+    Logger.info("OLX scrape completed: #{successful}/#{length(results)} properties saved, #{failed} failed")
 
     {:ok, %{total: length(results), saved: successful}}
   end
