@@ -356,10 +356,10 @@
                                             src={card.image_data}
                                             alt="Card"
                                             class="w-full h-32 object-contain bg-gray-100 rounded mb-2 cursor-pointer hover:opacity-80 transition-opacity"
-                                            on:click={() => openLightbox(card.image_data)}
+                                            onclick={() => openLightbox(card.image_data)}
                                             role="button"
                                             tabindex="0"
-                                            on:keydown={(e) => e.key === 'Enter' && openLightbox(card.image_data)}
+                                            onkeydown={(e) => e.key === 'Enter' && openLightbox(card.image_data)}
                                         />
                                     {/if}
                                     <div class="flex justify-between items-start gap-2">
@@ -472,13 +472,13 @@
     {#if lightboxImage}
         <div
             class="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4"
-            on:click={closeLightbox}
+            onclick={closeLightbox}
             role="dialog"
             aria-modal="true"
         >
             <button
                 class="absolute top-4 right-4 text-white text-4xl hover:text-gray-300 z-10"
-                on:click={closeLightbox}
+                onclick={closeLightbox}
                 aria-label="Close"
             >
                 ×
@@ -487,7 +487,7 @@
                 src={lightboxImage}
                 alt="Enlarged view"
                 class="max-w-full max-h-full object-contain"
-                on:click={(e) => e.stopPropagation()}
+                onclick={(e) => e.stopPropagation()}
             />
         </div>
     {/if}
