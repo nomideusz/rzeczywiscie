@@ -212,10 +212,12 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
   end
 
   defp parse_listing(card) do
-    # Extract data from listing card
-    with {:ok, external_id} <- extract_id(card),
-         {:ok, url} <- extract_url(card),
+    # Extract data from listing card - try multiple strategies
+    with {:ok, url} <- extract_url(card),
          {:ok, title} <- extract_title(card) do
+      # Use URL as external_id if no id attribute (more reliable)
+      external_id = extract_id_from_url(url) || generate_id_from_card(card)
+
       %{
         source: "olx",
         external_id: external_id,
@@ -236,43 +238,93 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
       }
     else
       {:error, reason} ->
-        Logger.debug("Skipping listing: #{inspect(reason)}")
+        Logger.info("Skipping listing: #{inspect(reason)}")
         nil
     end
   end
 
-  defp extract_id(card) do
-    case Floki.attribute(card, "id") do
-      [id | _] when is_binary(id) and id != "" -> {:ok, id}
-      _ -> {:error, :no_id}
+  defp extract_id_from_url(url) do
+    # OLX URLs typically contain ID like /d/ogloszenie/TITLE-ID12345678.html
+    case Regex.run(~r/ID([A-Za-z0-9]+)/, url) do
+      [_, id] -> id
+      _ -> nil
     end
+  end
+
+  defp generate_id_from_card(card) do
+    # Fallback: use hash of card content
+    card
+    |> Floki.text()
+    |> String.slice(0, 100)
+    |> :erlang.phash2()
+    |> Integer.to_string()
   end
 
   defp extract_url(card) do
-    case Floki.find(card, "a[data-cy='listing-ad-title']") do
-      [{_tag, attrs, _} | _] ->
-        case List.keyfind(attrs, "href", 0) do
-          {"href", url} when is_binary(url) -> {:ok, url}
-          _ -> {:error, :no_url}
-        end
+    # Try multiple selectors for finding the URL
+    selectors = [
+      "a[data-cy='listing-ad-title']",
+      "a[data-cy='ad-card']",
+      "a[href*='/d/']",
+      "a[href*='/oferta/']",
+      "a"
+    ]
 
-      _ ->
-        {:error, :no_url}
-    end
+    result =
+      Enum.reduce_while(selectors, nil, fn selector, _acc ->
+        case Floki.find(card, selector) do
+          [{_tag, attrs, _} | _] ->
+            case List.keyfind(attrs, "href", 0) do
+              {"href", url} when is_binary(url) and url != "" ->
+                {:halt, {:ok, url}}
+
+              _ ->
+                {:cont, nil}
+            end
+
+          _ ->
+            {:cont, nil}
+        end
+      end)
+
+    result || {:error, :no_url}
   end
 
   defp extract_title(card) do
-    case Floki.find(card, "h6") |> Floki.text() do
-      "" -> {:error, :no_title}
-      title -> {:ok, title}
-    end
+    # Try multiple selectors for title
+    selectors = ["h6", "h4", "h3", "[data-cy='ad-card-title']", "a[data-cy='listing-ad-title']"]
+
+    result =
+      Enum.reduce_while(selectors, nil, fn selector, _acc ->
+        case Floki.find(card, selector) |> Floki.text() do
+          "" -> {:cont, nil}
+          title -> {:halt, {:ok, String.trim(title)}}
+        end
+      end)
+
+    result || {:error, :no_title}
   end
 
   defp extract_price(card) do
-    card
-    |> Floki.find("p[data-testid='ad-price']")
-    |> Floki.text()
-    |> parse_price()
+    # Try multiple selectors for price
+    selectors = [
+      "p[data-testid='ad-price']",
+      "[data-testid='ad-price']",
+      "p[class*='price']",
+      "span[class*='price']"
+    ]
+
+    result =
+      Enum.reduce_while(selectors, nil, fn selector, _acc ->
+        text = Floki.find(card, selector) |> Floki.text()
+
+        case parse_price(text) do
+          nil -> {:cont, nil}
+          price -> {:halt, price}
+        end
+      end)
+
+    result
   end
 
   defp parse_price(text) do
@@ -324,28 +376,55 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
   end
 
   defp extract_city(card) do
-    card
-    |> Floki.find("p[data-testid='location-date']")
-    |> Floki.text()
-    |> String.split("-")
-    |> List.first()
-    |> case do
-      nil -> nil
-      city -> String.trim(city)
-    end
+    # Try multiple selectors for location
+    selectors = [
+      "p[data-testid='location-date']",
+      "[data-testid='location-date']",
+      "p[class*='location']",
+      "span[class*='location']"
+    ]
+
+    result =
+      Enum.reduce_while(selectors, nil, fn selector, _acc ->
+        text = Floki.find(card, selector) |> Floki.text()
+
+        case String.split(text, "-") |> List.first() |> String.trim() do
+          "" -> {:cont, nil}
+          city -> {:halt, city}
+        end
+      end)
+
+    result
   end
 
   defp extract_district(card) do
-    # Try to extract district from location text
-    card
-    |> Floki.find("p[data-testid='location-date']")
-    |> Floki.text()
-    |> String.split(",")
-    |> Enum.at(1)
-    |> case do
-      nil -> nil
-      district -> String.trim(district) |> String.split("-") |> List.first() |> String.trim()
-    end
+    # Try multiple selectors for location
+    selectors = [
+      "p[data-testid='location-date']",
+      "[data-testid='location-date']",
+      "p[class*='location']",
+      "span[class*='location']"
+    ]
+
+    result =
+      Enum.reduce_while(selectors, nil, fn selector, _acc ->
+        text = Floki.find(card, selector) |> Floki.text()
+
+        case String.split(text, ",") |> Enum.at(1) do
+          nil ->
+            {:cont, nil}
+
+          district ->
+            cleaned = String.trim(district) |> String.split("-") |> List.first() |> String.trim()
+
+            case cleaned do
+              "" -> {:cont, nil}
+              d -> {:halt, d}
+            end
+        end
+      end)
+
+    result
   end
 
   defp extract_image(card) do
