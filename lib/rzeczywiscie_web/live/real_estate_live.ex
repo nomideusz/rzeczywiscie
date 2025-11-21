@@ -1,5 +1,6 @@
 defmodule RzeczywiscieWeb.RealEstateLive do
   use RzeczywiscieWeb, :live_view
+  import RzeczywiscieWeb.Layouts
 
   require Logger
   alias Rzeczywiscie.RealEstate
@@ -25,11 +26,13 @@ defmodule RzeczywiscieWeb.RealEstateLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <.svelte
-      name="PropertyTable"
-      props={%{properties: serialize_properties(@properties)}}
-      socket={@socket}
-    />
+    <.app flash={@flash}>
+      <.svelte
+        name="PropertyTable"
+        props={%{properties: serialize_properties(@properties)}}
+        socket={@socket}
+      />
+    </.app>
     """
   end
 
