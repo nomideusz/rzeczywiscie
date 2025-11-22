@@ -6,13 +6,19 @@
 
   let mapContainer
   let map
-  let markerClusterGroup
-  let L // Leaflet will be loaded dynamically
+  let markers = []
+  let google
   let browser = false
 
   // Default center: Kraków, Małopolskie
-  const DEFAULT_CENTER = [50.0647, 19.9450]
+  const DEFAULT_CENTER = { lat: 50.0647, lng: 19.9450 }
   const DEFAULT_ZOOM = 11
+
+  // Get Google Maps API key from meta tag
+  function getApiKey() {
+    const meta = document.querySelector('meta[name="google-maps-api-key"]')
+    return meta ? meta.getAttribute('content') : ''
+  }
 
   // Format price
   function formatPrice(price) {
@@ -26,58 +32,40 @@
 
   // Get marker color based on AQI
   function getMarkerColor(aqi) {
-    if (!aqi) return 'gray'
-    if (aqi <= 50) return 'green'      // Good
-    if (aqi <= 100) return 'yellow'    // Moderate
-    if (aqi <= 150) return 'orange'    // Unhealthy for sensitive
-    if (aqi <= 200) return 'red'       // Unhealthy
-    if (aqi <= 300) return 'purple'    // Very unhealthy
-    return 'darkred'                   // Hazardous
+    if (!aqi) return '#9CA3AF'        // Gray - No data
+    if (aqi <= 50) return '#10B981'   // Green - Good
+    if (aqi <= 100) return '#F59E0B'  // Yellow - Moderate
+    if (aqi <= 150) return '#F97316'  // Orange - Unhealthy for sensitive
+    if (aqi <= 200) return '#EF4444'  // Red - Unhealthy
+    if (aqi <= 300) return '#A855F7'  // Purple - Very unhealthy
+    return '#7C2D12'                   // Dark red - Hazardous
   }
 
-  // Create custom marker icon
-  function createMarkerIcon(color) {
-    return L.divIcon({
-      className: 'custom-marker',
-      html: `<div style="
-        background-color: ${color};
-        width: 24px;
-        height: 24px;
-        border-radius: 50%;
-        border: 2px solid white;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-      "></div>`,
-      iconSize: [24, 24],
-      iconAnchor: [12, 12],
-      popupAnchor: [0, -12]
-    })
-  }
-
-  // Create popup content
-  function createPopupContent(property) {
+  // Create info window content
+  function createInfoWindowContent(property) {
     const aqiBadgeColor = property.aqi
-      ? (property.aqi <= 50 ? '#10b981' : property.aqi <= 100 ? '#f59e0b' : '#ef4444')
-      : '#9ca3af'
+      ? (property.aqi <= 50 ? '#10B981' : property.aqi <= 100 ? '#F59E0B' : '#EF4444')
+      : '#9CA3AF'
 
     return `
-      <div style="min-width: 250px; font-family: system-ui, sans-serif;">
-        <div style="font-weight: bold; font-size: 14px; margin-bottom: 8px; color: #1f2937;">
+      <div style="min-width: 250px; font-family: system-ui, sans-serif; padding: 8px;">
+        <div style="font-weight: bold; font-size: 14px; margin-bottom: 8px; color: #1F2937;">
           ${property.title || 'N/A'}
         </div>
-        <div style="margin-bottom: 4px; color: #4b5563; font-size: 13px;">
+        <div style="margin-bottom: 4px; color: #6B7280; font-size: 13px;">
           📍 ${property.city || 'N/A'}${property.district ? ', ' + property.district : ''}
         </div>
-        <div style="margin-bottom: 4px; color: #1f2937; font-size: 14px; font-weight: 600;">
+        <div style="margin-bottom: 4px; color: #1F2937; font-size: 14px; font-weight: 600;">
           💰 ${formatPrice(property.price)}
         </div>
-        ${property.area_sqm ? `<div style="margin-bottom: 4px; color: #4b5563; font-size: 13px;">📐 ${property.area_sqm} m²</div>` : ''}
-        ${property.rooms ? `<div style="margin-bottom: 4px; color: #4b5563; font-size: 13px;">🛏️ ${property.rooms} rooms</div>` : ''}
+        ${property.area_sqm ? `<div style="margin-bottom: 4px; color: #6B7280; font-size: 13px;">📐 ${property.area_sqm} m²</div>` : ''}
+        ${property.rooms ? `<div style="margin-bottom: 4px; color: #6B7280; font-size: 13px;">🛏️ ${property.rooms} rooms</div>` : ''}
         ${property.aqi ? `
           <div style="margin-bottom: 8px; margin-top: 8px;">
             <span style="
               background-color: ${aqiBadgeColor};
               color: white;
-              padding: 2px 8px;
+              padding: 4px 8px;
               border-radius: 4px;
               font-size: 12px;
               font-weight: 600;
@@ -86,16 +74,16 @@
             </span>
           </div>
         ` : ''}
-        <div style="margin-top: 8px;">
+        <div style="margin-top: 12px;">
           <a
             href="${property.url}"
             target="_blank"
             rel="noopener noreferrer"
             style="
               display: inline-block;
-              background-color: #3b82f6;
+              background-color: #3B82F6;
               color: white;
-              padding: 4px 12px;
+              padding: 6px 12px;
               border-radius: 4px;
               text-decoration: none;
               font-size: 12px;
@@ -109,99 +97,125 @@
     `
   }
 
+  // Load Google Maps API
+  async function loadGoogleMaps() {
+    return new Promise((resolve, reject) => {
+      if (window.google && window.google.maps) {
+        resolve(window.google)
+        return
+      }
+
+      const apiKey = getApiKey()
+      if (!apiKey) {
+        console.warn('Google Maps API key not found')
+        resolve(null)
+        return
+      }
+
+      const script = document.createElement('script')
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=marker`
+      script.async = true
+      script.defer = true
+      script.onload = () => resolve(window.google)
+      script.onerror = reject
+      document.head.appendChild(script)
+    })
+  }
+
   // Initialize map (client-side only)
   onMount(async () => {
     if (!mapContainer) return
-
-    // Only run in browser (not during SSR)
     if (typeof window === 'undefined') return
 
     browser = true
 
-    // Dynamically import Leaflet only on client-side
-    const leafletModule = await import('leaflet')
-    L = leafletModule.default
+    try {
+      google = await loadGoogleMaps()
+      if (!google) {
+        console.error('Failed to load Google Maps')
+        return
+      }
 
-    // Import marker clustering
-    await import('leaflet.markercluster')
+      // Create map
+      map = new google.maps.Map(mapContainer, {
+        center: DEFAULT_CENTER,
+        zoom: DEFAULT_ZOOM,
+        mapId: 'real-estate-map', // Required for advanced markers
+      })
 
-    // Create map
-    map = L.map(mapContainer, {
-      center: DEFAULT_CENTER,
-      zoom: DEFAULT_ZOOM,
-      scrollWheelZoom: true
-    })
-
-    // Add OpenStreetMap tile layer
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors',
-      maxZoom: 19
-    }).addTo(map)
-
-    // Create marker cluster group
-    markerClusterGroup = L.markerClusterGroup({
-      maxClusterRadius: 50,
-      spiderfyOnMaxZoom: true,
-      showCoverageOnHover: false,
-      zoomToBoundsOnClick: true
-    })
-
-    map.addLayer(markerClusterGroup)
-
-    // Add markers
-    updateMarkers()
-
-    // Fix Leaflet icon paths
-    delete L.Icon.Default.prototype._getIconUrl
-    L.Icon.Default.mergeOptions({
-      iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-      iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-      shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png'
-    })
+      // Add markers
+      updateMarkers()
+    } catch (error) {
+      console.error('Error loading Google Maps:', error)
+    }
   })
 
   // Update markers when properties change
-  $: if (map && markerClusterGroup && properties) {
+  $: if (map && google && properties && browser) {
     updateMarkers()
   }
 
   function updateMarkers() {
-    if (!markerClusterGroup) return
+    if (!map || !google) return
 
     // Clear existing markers
-    markerClusterGroup.clearLayers()
+    markers.forEach(marker => marker.setMap(null))
+    markers = []
 
     // Filter properties with valid coordinates
     const validProperties = properties.filter(p => p.latitude && p.longitude)
 
     if (validProperties.length === 0) return
 
+    const bounds = new google.maps.LatLngBounds()
+    const infoWindow = new google.maps.InfoWindow()
+
     // Add markers for each property
     validProperties.forEach(property => {
-      const marker = L.marker(
-        [property.latitude, property.longitude],
-        { icon: createMarkerIcon(getMarkerColor(property.aqi)) }
-      )
+      const position = { lat: property.latitude, lng: property.longitude }
+      const color = getMarkerColor(property.aqi)
 
-      marker.bindPopup(createPopupContent(property))
-      markerClusterGroup.addLayer(marker)
+      // Create custom marker with colored pin
+      const marker = new google.maps.Marker({
+        position,
+        map,
+        title: property.title,
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 8,
+          fillColor: color,
+          fillOpacity: 1,
+          strokeColor: '#FFFFFF',
+          strokeWeight: 2,
+        }
+      })
+
+      // Add click listener for info window
+      marker.addListener('click', () => {
+        infoWindow.setContent(createInfoWindowContent(property))
+        infoWindow.open(map, marker)
+      })
+
+      markers.push(marker)
+      bounds.extend(position)
     })
 
     // Fit map to show all markers
     if (validProperties.length > 0) {
-      const bounds = markerClusterGroup.getBounds()
-      if (bounds.isValid()) {
-        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 })
-      }
+      map.fitBounds(bounds)
+
+      // Don't zoom in too much for a single property
+      const listener = google.maps.event.addListener(map, 'idle', () => {
+        if (map.getZoom() > 14) map.setZoom(14)
+        google.maps.event.removeListener(listener)
+      })
     }
   }
 
   // Cleanup on destroy
   onDestroy(() => {
-    if (map) {
-      map.remove()
-      map = null
-    }
+    markers.forEach(marker => marker.setMap(null))
+    markers = []
   })
 </script>
 
@@ -210,44 +224,44 @@
     <div bind:this={mapContainer} class="map-container"></div>
 
     {#if properties.filter(p => p.latitude && p.longitude).length === 0}
-    <div class="map-overlay">
-      <div class="alert alert-info shadow-lg">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-        </svg>
-        <div>
-          <h3 class="font-bold">No geocoded properties</h3>
-          <div class="text-xs">Properties need coordinates to appear on the map. The geocoding worker runs hourly.</div>
+      <div class="map-overlay">
+        <div class="alert alert-info shadow-lg">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+          <div>
+            <h3 class="font-bold">No geocoded properties</h3>
+            <div class="text-xs">Properties need coordinates to appear on the map. Click "Geocode Now" to add them.</div>
+          </div>
         </div>
       </div>
-    </div>
-  {/if}
+    {/if}
 
-  <!-- Legend -->
-  <div class="map-legend">
-    <div class="legend-title">Air Quality Index</div>
-    <div class="legend-item">
-      <span class="legend-dot" style="background-color: green;"></span>
-      <span>Good (0-50)</span>
-    </div>
-    <div class="legend-item">
-      <span class="legend-dot" style="background-color: yellow;"></span>
-      <span>Moderate (51-100)</span>
-    </div>
-    <div class="legend-item">
-      <span class="legend-dot" style="background-color: orange;"></span>
-      <span>Unhealthy* (101-150)</span>
-    </div>
-    <div class="legend-item">
-      <span class="legend-dot" style="background-color: red;"></span>
-      <span>Unhealthy (151-200)</span>
-    </div>
-    <div class="legend-item">
-      <span class="legend-dot" style="background-color: gray;"></span>
-      <span>No AQI data</span>
+    <!-- Legend -->
+    <div class="map-legend">
+      <div class="legend-title">Air Quality Index</div>
+      <div class="legend-item">
+        <span class="legend-dot" style="background-color: #10B981;"></span>
+        <span>Good (0-50)</span>
+      </div>
+      <div class="legend-item">
+        <span class="legend-dot" style="background-color: #F59E0B;"></span>
+        <span>Moderate (51-100)</span>
+      </div>
+      <div class="legend-item">
+        <span class="legend-dot" style="background-color: #F97316;"></span>
+        <span>Unhealthy* (101-150)</span>
+      </div>
+      <div class="legend-item">
+        <span class="legend-dot" style="background-color: #EF4444;"></span>
+        <span>Unhealthy (151-200)</span>
+      </div>
+      <div class="legend-item">
+        <span class="legend-dot" style="background-color: #9CA3AF;"></span>
+        <span>No AQI data</span>
+      </div>
     </div>
   </div>
-</div>
 {:else}
   <div class="map-wrapper flex items-center justify-center">
     <div class="text-center">
@@ -300,14 +314,14 @@
   .legend-title {
     font-weight: 600;
     margin-bottom: 8px;
-    color: #1f2937;
+    color: #1F2937;
   }
 
   .legend-item {
     display: flex;
     align-items: center;
     margin-bottom: 4px;
-    color: #4b5563;
+    color: #6B7280;
   }
 
   .legend-dot {
@@ -315,7 +329,7 @@
     height: 12px;
     border-radius: 50%;
     margin-right: 8px;
-    border: 1px solid white;
+    border: 2px solid white;
     box-shadow: 0 1px 3px rgba(0,0,0,0.3);
   }
 
