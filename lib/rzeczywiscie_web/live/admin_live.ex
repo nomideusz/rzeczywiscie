@@ -19,6 +19,18 @@ defmodule RzeczywiscieWeb.AdminLive do
     <div class="container mx-auto p-8 max-w-2xl">
       <h1 class="text-3xl font-bold mb-6">Admin Tasks</h1>
 
+      <div class="alert alert-info mb-6">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        <div>
+          <div class="font-bold">Need to debug URLs?</div>
+          <div class="text-xs">
+            <a href="/url-inspector" class="link">Visit URL Inspector</a> to see sample property URLs
+          </div>
+        </div>
+      </div>
+
       <!-- Backfill Property Types -->
       <div class="card bg-base-200 shadow-xl mb-6">
         <div class="card-body">
