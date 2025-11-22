@@ -22,7 +22,7 @@ defmodule RzeczywiscieWeb.AdminLive do
   def render(assigns) do
     ~H"""
     <.app flash={@flash}>
-    <div class="container mx-auto p-8 max-w-2xl">
+    <div class="container mx-auto p-4">
       <!-- Sub-navigation tabs -->
       <div class="mb-6">
         <div class="tabs tabs-boxed bg-base-200 border-2 border-base-content">

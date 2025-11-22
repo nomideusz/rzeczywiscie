@@ -69,6 +69,34 @@ defmodule Rzeczywiscie.RealEstate do
     |> Repo.aggregate(:count)
   end
 
+  @doc """
+  Count properties with coordinates (latitude and longitude) matching filters.
+  """
+  def count_properties_with_coordinates(opts \\ []) do
+    Property
+    |> where([p], p.active == true)
+    |> where([p], not is_nil(p.latitude) and not is_nil(p.longitude))
+    |> apply_filters(opts)
+    |> Repo.aggregate(:count)
+  end
+
+  @doc """
+  Count properties with AQI data (have both coordinates and cache entry) matching filters.
+  """
+  def count_properties_with_aqi(opts \\ []) do
+    # Need to import the Cache module alias
+    alias Rzeczywiscie.AirQuality.Cache
+
+    from(p in Property,
+      join: c in Cache,
+      on: fragment("ROUND(?::numeric, 2)", p.latitude) == c.lat and
+          fragment("ROUND(?::numeric, 2)", p.longitude) == c.lng,
+      where: p.active == true and not is_nil(p.latitude) and not is_nil(p.longitude)
+    )
+    |> apply_filters(opts)
+    |> Repo.aggregate(:count)
+  end
+
   defp apply_filters(query, opts) do
     Enum.reduce(opts, query, fn
       {:city, city}, query when is_binary(city) ->
