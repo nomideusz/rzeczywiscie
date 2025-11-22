@@ -5,6 +5,7 @@ defmodule RzeczywiscieWeb.RealEstateLive do
   require Logger
   alias Rzeczywiscie.RealEstate
   alias Rzeczywiscie.Workers.OlxScraperWorker
+  alias Rzeczywiscie.Services.AirQuality
 
   @impl true
   def mount(_params, _session, socket) do
@@ -150,6 +151,9 @@ defmodule RzeczywiscieWeb.RealEstateLive do
 
   defp serialize_properties(properties) do
     Enum.map(properties, fn property ->
+      # Get air quality data if property has coordinates
+      aqi_data = AirQuality.get_property_aqi(property)
+
       %{
         id: property.id,
         source: property.source,
@@ -173,7 +177,10 @@ defmodule RzeczywiscieWeb.RealEstateLive do
         active: property.active,
         last_seen_at: serialize_datetime(property.last_seen_at),
         inserted_at: serialize_datetime(property.inserted_at),
-        updated_at: serialize_datetime(property.updated_at)
+        updated_at: serialize_datetime(property.updated_at),
+        aqi: aqi_data && aqi_data.aqi,
+        aqi_category: aqi_data && aqi_data.category,
+        dominant_pollutant: aqi_data && aqi_data.dominant_pollutant
       }
     end)
   end
