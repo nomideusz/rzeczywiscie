@@ -37,8 +37,8 @@ defmodule RzeczywiscieWeb.RealEstateLive do
       <.svelte
         name="PropertyView"
         props={%{
-          properties: serialize_properties(@properties, @user_id),
-          map_properties: serialize_properties(@all_map_properties, @user_id),
+          properties: @properties,
+          map_properties: @all_map_properties,
           pagination: %{
             page: @page,
             page_size: @page_size,
@@ -139,7 +139,7 @@ defmodule RzeczywiscieWeb.RealEstateLive do
       Logger.info("Current favorited status: #{is_favorited}")
 
       result = if is_favorited do
-        {:ok, count} = RealEstate.remove_favorite(property_id, user_id)
+        {count, _} = RealEstate.remove_favorite(property_id, user_id)
         Logger.info("Removed from favorites (deleted #{count} rows)")
         "Removed from favorites"
       else
@@ -209,6 +209,10 @@ defmodule RzeczywiscieWeb.RealEstateLive do
     # Get paginated properties for table (already sorted by DB)
     properties = RealEstate.list_properties(opts)
 
+    # Serialize properties with is_favorited field
+    user_id = socket.assigns.user_id
+    serialized_properties = serialize_properties(properties, user_id)
+
     # Get ALL properties with coordinates for map (with same filters and sorting but no pagination)
     map_opts =
       filters
@@ -219,6 +223,7 @@ defmodule RzeczywiscieWeb.RealEstateLive do
       |> Keyword.put(:limit, 10000)  # High limit to get all
 
     all_map_properties = RealEstate.list_properties(map_opts)
+    serialized_map_properties = serialize_properties(all_map_properties, user_id)
 
     # Calculate global stats
     with_coords = Enum.count(all_map_properties, fn p -> p.latitude && p.longitude end)
@@ -232,8 +237,8 @@ defmodule RzeczywiscieWeb.RealEstateLive do
     end)
 
     socket
-    |> assign(:properties, properties)
-    |> assign(:all_map_properties, all_map_properties)
+    |> assign(:properties, serialized_properties)
+    |> assign(:all_map_properties, serialized_map_properties)
     |> assign(:total_count, total_count)
     |> assign(:total_pages, ceil(total_count / page_size))
     |> assign(:total_with_coords, with_coords)
