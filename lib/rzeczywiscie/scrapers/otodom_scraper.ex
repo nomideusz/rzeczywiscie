@@ -210,19 +210,20 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
 
     # Extract ID from URL
     url = offer["url"] || ""
+    title = String.trim(offer["name"] || "")
     external_id = extract_id_from_url(url)
 
     %{
       source: "otodom",
       external_id: external_id || generate_id_from_url(url),
-      title: String.trim(offer["name"] || ""),
+      title: title,
       url: url,
       price: parse_json_price(offer["price"]),
       currency: offer["priceCurrency"] || "PLN",
       area_sqm: parse_json_number(floor_size["value"]),
       rooms: parse_json_integer(item["numberOfRooms"]),
       transaction_type: transaction_type,
-      property_type: nil,  # Not in JSON-LD, could extract from title
+      property_type: extract_property_type_from_text(title <> " " <> url),
       city: address["addressLocality"],
       voivodeship: address["addressRegion"] || "małopolskie",
       image_url: offer["image"],
@@ -653,6 +654,53 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
       # Commercial space (lokal użytkowy)
       String.contains?(url_lower, "lokal-uzytkowy") -> "lokal użytkowy"
       String.contains?(url_lower, "lokal") -> "lokal użytkowy"
+
+      true -> nil
+    end
+  end
+
+  # Extract property type from text (title, URL, description)
+  defp extract_property_type_from_text(text) do
+    text_lower = String.downcase(text)
+
+    cond do
+      # Apartment (mieszkanie) - most common, check first
+      String.contains?(text_lower, "mieszkan") -> "mieszkanie"
+      String.contains?(text_lower, "m²") && String.contains?(text_lower, "pokój") -> "mieszkanie"
+      String.contains?(text_lower, "-m-") -> "mieszkanie"
+      String.contains?(text_lower, "apartament") -> "mieszkanie"
+      String.contains?(text_lower, "kawalerka") -> "mieszkanie"
+
+      # House (dom)
+      String.contains?(text_lower, "dom ") -> "dom"
+      String.contains?(text_lower, " dom") -> "dom"
+      String.match?(text_lower, ~r/\bdom\b/) -> "dom"
+      String.contains?(text_lower, "willa") -> "dom"
+      String.contains?(text_lower, "bliźniak") -> "dom"
+      String.contains?(text_lower, "segment") -> "dom"
+
+      # Room (pokój)
+      String.contains?(text_lower, "pokój") -> "pokój"
+      String.contains?(text_lower, "pokoj") -> "pokój"
+      String.contains?(text_lower, "stancja") -> "pokój"
+
+      # Garage (garaż)
+      String.contains?(text_lower, "garaż") -> "garaż"
+      String.contains?(text_lower, "garaz") -> "garaż"
+      String.contains?(text_lower, "miejsce") && String.contains?(text_lower, "parking") -> "garaż"
+
+      # Plot/land (działka)
+      String.contains?(text_lower, "działka") -> "działka"
+      String.contains?(text_lower, "dzialka") -> "działka"
+      String.contains?(text_lower, "grunt") -> "działka"
+      String.contains?(text_lower, "teren") -> "działka"
+
+      # Commercial space (lokal użytkowy)
+      String.contains?(text_lower, "lokal użytkowy") -> "lokal użytkowy"
+      String.contains?(text_lower, "lokal") -> "lokal użytkowy"
+      String.contains?(text_lower, "biuro") -> "lokal użytkowy"
+      String.contains?(text_lower, "sklep") -> "lokal użytkowy"
+      String.contains?(text_lower, "magazyn") -> "lokal użytkowy"
 
       true -> nil
     end
