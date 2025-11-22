@@ -25,13 +25,10 @@ defmodule Rzeczywiscie.Repo.Migrations.CreateAirQualityCache do
       timestamps(type: :utc_datetime)
     end
 
-    # Index for location lookup (grid-based)
-    create index(:air_quality_cache, [:lat, :lng])
+    # Composite unique index for location lookup (prevents duplicates and enables fast lookups)
+    create unique_index(:air_quality_cache, [:lat, :lng])
 
     # Index for finding expired entries
     create index(:air_quality_cache, [:expires_at])
-
-    # Composite unique index to prevent duplicate cache entries
-    create unique_index(:air_quality_cache, [:lat, :lng])
   end
 end
