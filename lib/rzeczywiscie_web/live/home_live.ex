@@ -66,6 +66,12 @@ defmodule RzeczywiscieWeb.HomeLive do
               >
                 🌍 World
               </a>
+              <a
+                href={~p"/real-estate"}
+                class="group relative px-6 sm:px-8 py-3 sm:py-4 bg-success text-success-content font-bold text-base sm:text-lg tracking-wide uppercase border-4 border-base-content hover:translate-x-1 hover:translate-y-1 transition-transform text-center"
+              >
+                🏠 Properties
+              </a>
             </div>
           </div>
 
