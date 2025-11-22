@@ -25,6 +25,7 @@ defmodule RzeczywiscieWeb.Router do
     live "/world", LiveWorldLive
     live "/real-estate", RealEstateLive
     live "/admin", AdminLive
+    live "/stats", StatsLive
     live "/url-inspector", UrlInspectorLive
   end
 
