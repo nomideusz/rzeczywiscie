@@ -18,7 +18,7 @@ This is a **real estate listing aggregator** for the Małopolskie region of Pola
 - Phoenix LiveView 1.1.0
 - LiveSvelte 0.16.0 (Svelte 5)
 - PostgreSQL database with performance indexes
-- Bandit web server with HTTP compression
+- Bandit web server (modern HTTP/1.1 and HTTP/2)
 - Custom esbuild configuration (dual build process)
 - Tailwind CSS with DaisyUI
 - NodeJS.Supervisor for SSR
@@ -244,9 +244,9 @@ Multiple indexes for common query patterns:
 - **Collapsible UI**: Filters collapse to save space, show active badges
 
 ### 5. Production Optimizations
-- **HTTP compression**: Enabled in `config/runtime.exs` (10-50% payload reduction)
 - **Asset minification**: Production builds minify JS and CSS
 - **Phoenix digest**: Fingerprinted assets for optimal caching
+- **Gzip static files**: Can be enabled via `Plug.Static` with `gzip: true`
 
 ## Common Commands
 
@@ -382,7 +382,7 @@ Just use Tailwind classes in your Svelte components and they'll be included.
 - `mix.exs` - Dependencies and aliases
 - `config/config.exs` - Tailwind config (esbuild removed)
 - `config/dev.exs` - Development settings, port 4001, watchers
-- `config/runtime.exs` - Production config with HTTP compression
+- `config/runtime.exs` - Production runtime configuration
 - `lib/rzeczywiscie/application.ex` - NodeJS.Supervisor setup
 
 ### Assets
