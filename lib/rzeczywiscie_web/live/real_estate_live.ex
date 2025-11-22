@@ -138,27 +138,31 @@ defmodule RzeczywiscieWeb.RealEstateLive do
       is_favorited = RealEstate.is_favorited?(property_id, user_id)
       Logger.info("Current favorited status: #{is_favorited}")
 
-      result = if is_favorited do
+      {result_message, new_status} = if is_favorited do
         {count, _} = RealEstate.remove_favorite(property_id, user_id)
         Logger.info("Removed from favorites (deleted #{count} rows)")
-        "Removed from favorites"
+        {"Removed from favorites", false}
       else
         case RealEstate.add_favorite(property_id, user_id) do
           {:ok, favorite} ->
             Logger.info("Added to favorites: #{inspect(favorite)}")
-            "Added to favorites"
+            {"Added to favorites", true}
           {:error, changeset} ->
             Logger.warning("Failed to add favorite: #{inspect(changeset.errors)}")
-            "Already in favorites"
+            {"Already in favorites", true}
         end
       end
 
+      # Send lightweight update to client instead of reloading all properties
       socket =
         socket
-        |> put_flash(:info, result)
-        |> load_properties()
+        |> put_flash(:info, result_message)
+        |> push_event("favorite-updated", %{
+          property_id: property_id,
+          is_favorited: new_status
+        })
 
-      Logger.info("Properties reloaded, sending update to client")
+      Logger.info("Sent favorite update to client - Property: #{property_id}, Status: #{new_status}")
 
       {:noreply, socket}
     rescue

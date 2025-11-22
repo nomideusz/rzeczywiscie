@@ -15,6 +15,16 @@
   let filterTransactionType = ''
   let filterPropertyType = ''
 
+  // Listen for favorite updates from server (instant UI update)
+  if (live && live.handleEvent) {
+    live.handleEvent('favorite-updated', ({ property_id, is_favorited }) => {
+      // Update the property in the local properties array
+      properties = properties.map(p =>
+        p.id === property_id ? { ...p, is_favorited } : p
+      )
+    })
+  }
+
   // Format price
   function formatPrice(price) {
     if (!price) return 'N/A'
