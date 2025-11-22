@@ -49,23 +49,30 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
     saved =
       Enum.with_index(results, 1)
       |> Enum.map(fn {property_data, index} ->
-        Logger.info("Saving property #{index}/#{length(results)}: #{property_data.title}")
+        title_preview = String.slice(property_data.title, 0, 50)
+        Logger.info("Saving #{index}/#{length(results)}: #{title_preview} (ID: #{property_data.external_id})")
 
-        case RealEstate.upsert_property(property_data) do
-          {:ok, property} ->
-            Logger.info("✓ Saved: #{property.title}")
-            {:ok, property}
+        try do
+          case RealEstate.upsert_property(property_data) do
+            {:ok, property} ->
+              Logger.info("✓ Saved property ID #{property.id}")
+              {:ok, property}
 
-          {:error, changeset} ->
-            Logger.error("✗ Failed to save '#{property_data.title}': #{inspect(changeset.errors)}")
-            {:error, changeset}
+            {:error, changeset} ->
+              Logger.error("✗ Failed: #{inspect(changeset.errors)}")
+              {:error, changeset}
+          end
+        rescue
+          e ->
+            Logger.error("✗ Exception: #{inspect(e)}")
+            {:error, e}
         end
       end)
 
     successful = Enum.count(saved, fn {status, _} -> status == :ok end)
     failed = length(saved) - successful
 
-    Logger.info("OLX scrape completed: #{successful}/#{length(results)} properties saved, #{failed} failed")
+    Logger.info("OLX scrape completed: #{successful}/#{length(results)} saved, #{failed} failed")
 
     {:ok, %{total: length(results), saved: successful}}
   end
@@ -224,11 +231,15 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
     with {:ok, url} <- extract_url(card),
          {:ok, title} <- extract_title(card) do
       # Use URL as external_id if no id attribute (more reliable)
-      external_id = extract_id_from_url(url) || generate_id_from_card(card)
+      external_id = extract_id_from_url(url)
+
+      if is_nil(external_id) do
+        Logger.warn("Could not extract ID from URL: #{url}")
+      end
 
       %{
         source: "olx",
-        external_id: external_id,
+        external_id: external_id || generate_id_from_url(url),
         title: String.trim(title),
         url: ensure_absolute_url(url),
         price: extract_price(card),
@@ -252,20 +263,48 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
   end
 
   defp extract_id_from_url(url) do
-    # OLX URLs typically contain ID like /d/ogloszenie/TITLE-ID12345678.html
-    case Regex.run(~r/ID([A-Za-z0-9]+)/, url) do
-      [_, id] -> id
-      _ -> nil
+    # OLX URLs have multiple formats, try them all:
+    # Format 1: /d/ogloszenie/TITLE-ID12345678.html
+    # Format 2: /oferta/TITLE-ID12345678
+    # Format 3: Just use the last segment with ID prefix
+    cond do
+      String.contains?(url, "-ID") ->
+        case Regex.run(~r/-ID([A-Za-z0-9]+)/, url) do
+          [_, id] -> id
+          _ -> nil
+        end
+
+      String.contains?(url, "/d/") ->
+        # Extract the last part of the URL path
+        url
+        |> String.split("/")
+        |> List.last()
+        |> String.replace(".html", "")
+        |> String.split("-")
+        |> List.last()
+
+      true ->
+        nil
     end
   end
 
-  defp generate_id_from_card(card) do
-    # Fallback: use hash of card content
-    card
-    |> Floki.text()
-    |> String.slice(0, 100)
-    |> :erlang.phash2()
-    |> Integer.to_string()
+  defp generate_id_from_url(url) do
+    # Generate a stable ID from the URL itself
+    url
+    |> String.split("/")
+    |> List.last()
+    |> String.replace(~r/[^a-zA-Z0-9]/, "")
+    |> String.slice(0, 50)
+    |> case do
+      "" ->
+        # Ultimate fallback: hash the entire URL
+        :crypto.hash(:md5, url)
+        |> Base.encode16()
+        |> String.slice(0, 16)
+
+      id ->
+        id
+    end
   end
 
   defp extract_url(card) do
