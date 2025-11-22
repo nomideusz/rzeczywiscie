@@ -9,6 +9,10 @@ defmodule RzeczywiscieWeb.AdminLive do
       |> assign(:backfill_status, nil)
       |> assign(:backfill_running, false)
       |> assign(:backfill_result, nil)
+      |> assign(:olx_scrape_running, false)
+      |> assign(:olx_scrape_result, nil)
+      |> assign(:otodom_scrape_running, false)
+      |> assign(:otodom_scrape_result, nil)
 
     {:ok, socket}
   end
@@ -17,7 +21,15 @@ defmodule RzeczywiscieWeb.AdminLive do
   def render(assigns) do
     ~H"""
     <div class="container mx-auto p-8 max-w-2xl">
-      <h1 class="text-3xl font-bold mb-6">Admin Tasks</h1>
+      <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold">Admin Tasks</h1>
+        <a href="/stats" class="btn btn-secondary btn-sm">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+          </svg>
+          View Dashboard
+        </a>
+      </div>
 
       <div class="alert alert-info mb-6">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
@@ -27,6 +39,81 @@ defmodule RzeczywiscieWeb.AdminLive do
           <div class="font-bold">Need to debug URLs?</div>
           <div class="text-xs">
             <a href="/url-inspector" class="link">Visit URL Inspector</a> to see sample property URLs
+          </div>
+        </div>
+      </div>
+
+      <!-- Manual Scrapers -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <!-- OLX Scraper -->
+        <div class="card bg-base-200 shadow-xl">
+          <div class="card-body">
+            <h2 class="card-title">OLX Scraper</h2>
+            <p class="text-sm opacity-70 mb-4">
+              Manually trigger OLX scraping. Will scrape 2 pages of listings.
+            </p>
+
+            <%= if @olx_scrape_running do %>
+              <div class="alert alert-info">
+                <div class="loading loading-spinner"></div>
+                <span>Scraping OLX...</span>
+              </div>
+            <% end %>
+
+            <%= if @olx_scrape_result do %>
+              <div class="alert alert-success">
+                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div class="text-sm"><%= @olx_scrape_result %></div>
+              </div>
+            <% end %>
+
+            <div class="card-actions justify-end mt-4">
+              <button
+                phx-click="run_olx_scrape"
+                class="btn btn-primary btn-sm"
+                disabled={@olx_scrape_running}
+              >
+                <%= if @olx_scrape_running, do: "Running...", else: "Scrape OLX" %>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Otodom Scraper -->
+        <div class="card bg-base-200 shadow-xl">
+          <div class="card-body">
+            <h2 class="card-title">Otodom Scraper</h2>
+            <p class="text-sm opacity-70 mb-4">
+              Manually trigger Otodom scraping. Will scrape 2 pages each of sale and rent listings.
+            </p>
+
+            <%= if @otodom_scrape_running do %>
+              <div class="alert alert-info">
+                <div class="loading loading-spinner"></div>
+                <span>Scraping Otodom...</span>
+              </div>
+            <% end %>
+
+            <%= if @otodom_scrape_result do %>
+              <div class="alert alert-success">
+                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div class="text-sm"><%= @otodom_scrape_result %></div>
+              </div>
+            <% end %>
+
+            <div class="card-actions justify-end mt-4">
+              <button
+                phx-click="run_otodom_scrape"
+                class="btn btn-primary btn-sm"
+                disabled={@otodom_scrape_running}
+              >
+                <%= if @otodom_scrape_running, do: "Running...", else: "Scrape Otodom" %>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -91,11 +178,61 @@ defmodule RzeczywiscieWeb.AdminLive do
   end
 
   @impl true
+  def handle_event("run_olx_scrape", _params, socket) do
+    Logger.info("Starting OLX scrape from admin panel")
+
+    socket = assign(socket, :olx_scrape_running, true)
+
+    parent = self()
+    Task.start(fn ->
+      result = run_olx_scraper()
+      send(parent, {:olx_scrape_complete, result})
+    end)
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("run_otodom_scrape", _params, socket) do
+    Logger.info("Starting Otodom scrape from admin panel")
+
+    socket = assign(socket, :otodom_scrape_running, true)
+
+    parent = self()
+    Task.start(fn ->
+      result = run_otodom_scraper()
+      send(parent, {:otodom_scrape_complete, result})
+    end)
+
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_info({:backfill_complete, result}, socket) do
     socket =
       socket
       |> assign(:backfill_running, false)
       |> assign(:backfill_result, result)
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:olx_scrape_complete, result}, socket) do
+    socket =
+      socket
+      |> assign(:olx_scrape_running, false)
+      |> assign(:olx_scrape_result, result)
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:otodom_scrape_complete, result}, socket) do
+    socket =
+      socket
+      |> assign(:otodom_scrape_running, false)
+      |> assign(:otodom_scrape_result, result)
 
     {:noreply, socket}
   end
@@ -204,6 +341,34 @@ defmodule RzeczywiscieWeb.AdminLive do
       String.contains?(url_lower, "stancja") -> "stancja"
 
       true -> nil
+    end
+  end
+
+  defp run_olx_scraper do
+    alias Rzeczywiscie.Scrapers.OlxScraper
+
+    Logger.info("Running manual OLX scrape...")
+
+    case OlxScraper.scrape(pages: 2, delay: 2000) do
+      {:ok, %{total: total, saved: saved}} ->
+        "OLX: Found #{total} listings, saved #{saved} properties"
+
+      {:error, reason} ->
+        "OLX scrape failed: #{inspect(reason)}"
+    end
+  end
+
+  defp run_otodom_scraper do
+    alias Rzeczywiscie.Scrapers.OtodomScraper
+
+    Logger.info("Running manual Otodom scrape...")
+
+    case OtodomScraper.scrape(pages: 2, delay: 3000) do
+      {:ok, %{total: total, saved: saved}} ->
+        "Otodom: Found #{total} listings, saved #{saved} properties"
+
+      {:error, reason} ->
+        "Otodom scrape failed: #{inspect(reason)}"
     end
   end
 end
