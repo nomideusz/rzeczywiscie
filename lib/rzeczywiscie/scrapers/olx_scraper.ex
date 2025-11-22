@@ -418,10 +418,10 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
     text = Floki.text(card)
 
     # Look for pattern: number + m² (with optional space/comma/dot)
-    # Limit to max 5 digits to avoid matching dates (2025...) or other large numbers
-    # Example: "75 m²", "75.5 m²", "1 200 m²", "1,200 m²", "9999.99 m²"
-    # Use negative lookbehind to avoid matching if preceded by digit (avoid dates like "2025 32 m²")
-    regex = ~r/(?<![0-9-])(\d{1,2}(?:[\s,.]\d{3})?(?:[,.]\d{1,2})?)\s*m[²2]/iu
+    # Examples: "75 m²", "75.5 m²", "1 200 m²", "5000m2", "1558 m^2"
+    # Use negative lookbehind to avoid matching years (2024, 2025, etc.)
+    # Allow up to 5 digits to match land plots but reject via validation if too large
+    regex = ~r/(?<![0-9-])(\d{1,5}(?:[\s,.]\d{3})*(?:[,.]\d{1,2})?)\s*m[\^²2]/iu
 
     case Regex.run(regex, text) do
       [_, number_str] ->
@@ -433,10 +433,10 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
 
         case Decimal.parse(clean_number) do
           {decimal, _} ->
-            # Validate: area should be reasonable (10 to 10,000 m²)
-            # Most residential properties are 20-500 m², but allow wider range
+            # Validate: area should be reasonable (10 to 50,000 m²)
+            # Residential: 20-500 m², Commercial: up to 5,000 m², Land: up to 50,000 m² (5 hectares)
             if Decimal.compare(decimal, Decimal.new("10")) != :lt and
-                 Decimal.compare(decimal, Decimal.new("10000")) != :gt do
+                 Decimal.compare(decimal, Decimal.new("50000")) != :gt do
               decimal
             else
               Logger.debug("Area out of range: #{clean_number} m² - ignoring")
