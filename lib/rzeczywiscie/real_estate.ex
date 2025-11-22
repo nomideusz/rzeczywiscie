@@ -41,14 +41,19 @@ defmodule Rzeczywiscie.RealEstate do
     * `:source` - Filter by source (olx, otodom, etc.)
     * `:transaction_type` - Filter by transaction type (sprzedaż, wynajem)
     * `:property_type` - Filter by property type (mieszkanie, dom, etc.)
+    * `:sort_by` - Column to sort by (default: "inserted_at")
+    * `:sort_direction` - Sort direction "asc" or "desc" (default: "desc")
     * `:limit` - Limit results (default: 100)
     * `:offset` - Offset for pagination (default: 0)
   """
   def list_properties(opts \\ []) do
+    sort_by = Keyword.get(opts, :sort_by, "inserted_at")
+    sort_direction = Keyword.get(opts, :sort_direction, "desc")
+
     Property
     |> where([p], p.active == true)
     |> apply_filters(opts)
-    |> order_by([p], desc: p.inserted_at)
+    |> apply_sorting(sort_by, sort_direction)
     |> limit(^Keyword.get(opts, :limit, 100))
     |> offset(^Keyword.get(opts, :offset, 0))
     |> Repo.all()
@@ -93,6 +98,30 @@ defmodule Rzeczywiscie.RealEstate do
       _other, query ->
         query
     end)
+  end
+
+  defp apply_sorting(query, column, direction) do
+    # Convert string column to atom, defaulting to :inserted_at if invalid
+    column_atom = try do
+      String.to_existing_atom(column)
+    rescue
+      ArgumentError -> :inserted_at
+    end
+
+    # Convert direction string to atom
+    direction_atom = case direction do
+      "asc" -> :asc
+      "desc" -> :desc
+      _ -> :desc
+    end
+
+    # Apply ordering with NULL handling (NULLs last for both directions)
+    case direction_atom do
+      :asc ->
+        order_by(query, [p], [asc_nulls_last: field(p, ^column_atom)])
+      :desc ->
+        order_by(query, [p], [desc_nulls_last: field(p, ^column_atom)])
+    end
   end
 
   @doc """

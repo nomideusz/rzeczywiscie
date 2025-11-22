@@ -181,28 +181,29 @@ defmodule RzeczywiscieWeb.RealEstateLive do
     # Calculate offset
     offset = (page - 1) * page_size
 
-    # Build query options for paginated list
+    # Build query options for paginated list (with sorting in DB)
     opts =
       filters
       |> Map.to_list()
       |> Keyword.new()
+      |> Keyword.put(:sort_by, sort_column)
+      |> Keyword.put(:sort_direction, sort_direction)
       |> Keyword.put(:limit, page_size)
       |> Keyword.put(:offset, offset)
 
     # Get total count for pagination
     total_count = RealEstate.count_properties(Keyword.new(Map.to_list(filters)))
 
-    # Get paginated properties for table
+    # Get paginated properties for table (already sorted by DB)
     properties = RealEstate.list_properties(opts)
 
-    # Sort in memory (could be moved to query for better performance)
-    sorted_properties = sort_properties(properties, sort_column, sort_direction)
-
-    # Get ALL properties with coordinates for map (with same filters but no pagination)
+    # Get ALL properties with coordinates for map (with same filters and sorting but no pagination)
     map_opts =
       filters
       |> Map.to_list()
       |> Keyword.new()
+      |> Keyword.put(:sort_by, sort_column)
+      |> Keyword.put(:sort_direction, sort_direction)
       |> Keyword.put(:limit, 10000)  # High limit to get all
 
     all_map_properties = RealEstate.list_properties(map_opts)
@@ -219,34 +220,12 @@ defmodule RzeczywiscieWeb.RealEstateLive do
     end)
 
     socket
-    |> assign(:properties, sorted_properties)
+    |> assign(:properties, properties)
     |> assign(:all_map_properties, all_map_properties)
     |> assign(:total_count, total_count)
     |> assign(:total_pages, ceil(total_count / page_size))
     |> assign(:total_with_coords, with_coords)
     |> assign(:total_with_aqi, with_aqi)
-  end
-
-  defp sort_properties(properties, column, direction) do
-    column_atom = String.to_existing_atom(column)
-
-    sorted =
-      Enum.sort_by(properties, fn property ->
-        value = Map.get(property, column_atom)
-
-        # Handle nil values
-        case value do
-          nil -> if direction == "asc", do: "", else: "zzz"
-          %Decimal{} -> Decimal.to_float(value)
-          _ -> value
-        end
-      end)
-
-    if direction == "desc", do: Enum.reverse(sorted), else: sorted
-  rescue
-    ArgumentError ->
-      # If column doesn't exist, return unsorted
-      properties
   end
 
   defp serialize_properties(properties, user_id) do
