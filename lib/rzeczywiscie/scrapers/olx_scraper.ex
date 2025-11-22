@@ -409,8 +409,8 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
           |> String.replace(~r/\s+/, "")  # Remove all spaces
           |> String.replace(",", ".")     # Replace comma with dot
 
-        case Decimal.new(clean_number) do
-          {:ok, decimal} ->
+        case Decimal.parse(clean_number) do
+          {decimal, _} ->
             # Validate: area should be reasonable (0.1 to 100,000 m²)
             if Decimal.compare(decimal, Decimal.new("0.1")) == :gt and
                Decimal.compare(decimal, Decimal.new("100000")) == :lt do
