@@ -1,7 +1,5 @@
 <script>
   import { onMount, onDestroy } from 'svelte'
-  import L from 'leaflet'
-  import 'leaflet.markercluster'
 
   export let properties = []
   export let live
@@ -9,6 +7,8 @@
   let mapContainer
   let map
   let markerClusterGroup
+  let L // Leaflet will be loaded dynamically
+  let browser = false
 
   // Default center: Kraków, Małopolskie
   const DEFAULT_CENTER = [50.0647, 19.9450]
@@ -109,9 +109,21 @@
     `
   }
 
-  // Initialize map
-  onMount(() => {
+  // Initialize map (client-side only)
+  onMount(async () => {
     if (!mapContainer) return
+
+    // Only run in browser (not during SSR)
+    if (typeof window === 'undefined') return
+
+    browser = true
+
+    // Dynamically import Leaflet only on client-side
+    const leafletModule = await import('leaflet')
+    L = leafletModule.default
+
+    // Import marker clustering
+    await import('leaflet.markercluster')
 
     // Create map
     map = L.map(mapContainer, {
@@ -193,10 +205,11 @@
   })
 </script>
 
-<div class="map-wrapper">
-  <div bind:this={mapContainer} class="map-container"></div>
+{#if browser}
+  <div class="map-wrapper">
+    <div bind:this={mapContainer} class="map-container"></div>
 
-  {#if properties.filter(p => p.latitude && p.longitude).length === 0}
+    {#if properties.filter(p => p.latitude && p.longitude).length === 0}
     <div class="map-overlay">
       <div class="alert alert-info shadow-lg">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
@@ -235,6 +248,14 @@
     </div>
   </div>
 </div>
+{:else}
+  <div class="map-wrapper flex items-center justify-center">
+    <div class="text-center">
+      <div class="loading loading-spinner loading-lg"></div>
+      <p class="mt-4 text-gray-600">Loading map...</p>
+    </div>
+  </div>
+{/if}
 
 <style>
   .map-wrapper {
