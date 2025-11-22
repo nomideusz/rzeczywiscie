@@ -6,6 +6,7 @@
   export let map_properties = []
   export let pagination = { page: 1, page_size: 50, total_count: 0, total_pages: 1 }
   export let stats = { total_count: 0, with_coords: 0, with_aqi: 0 }
+  export let user_id = null
   export let live
 
   let currentView = 'table' // 'table' or 'map'
@@ -86,7 +87,7 @@
 
   <!-- View Content -->
   {#if currentView === 'table'}
-    <PropertyTable {properties} {pagination} {live} />
+    <PropertyTable {properties} {pagination} {user_id} {live} />
   {:else}
     <PropertyMap properties={map_properties} {live} />
   {/if}

@@ -3,6 +3,7 @@ defmodule RzeczywiscieWeb.StatsLive do
   require Logger
   import Ecto.Query
   alias Rzeczywiscie.Repo
+  alias Rzeczywiscie.RealEstate
   alias Rzeczywiscie.RealEstate.Property
 
   @impl true
@@ -180,6 +181,52 @@ defmodule RzeczywiscieWeb.StatsLive do
           </div>
         </div>
       </div>
+
+      <!-- Price Drops -->
+      <%= if length(@stats.price_drops) > 0 do %>
+        <div class="card bg-base-200 shadow-xl mb-6">
+          <div class="card-body">
+            <h2 class="card-title">Recent Price Drops</h2>
+            <p class="text-sm opacity-70 mb-4">Properties with price reductions in the last 7 days</p>
+            <div class="overflow-x-auto">
+              <table class="table table-sm">
+                <thead>
+                  <tr>
+                    <th>Property</th>
+                    <th>Location</th>
+                    <th>Old Price</th>
+                    <th>New Price</th>
+                    <th>Change</th>
+                    <th>Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <%= for {property, price_history} <- @stats.price_drops do %>
+                    <tr>
+                      <td class="max-w-xs truncate"><%= property.title %></td>
+                      <td><%= property.city || "N/A" %></td>
+                      <td>
+                        <%= if price_history.change_percentage do %>
+                          <%= format_price(Decimal.mult(price_history.price, Decimal.div(Decimal.new(100), Decimal.add(Decimal.new(100), price_history.change_percentage)))) %>
+                        <% else %>
+                          N/A
+                        <% end %>
+                      </td>
+                      <td class="font-bold"><%= format_price(price_history.price) %></td>
+                      <td>
+                        <span class="badge badge-success">
+                          <%= Float.round(Decimal.to_float(price_history.change_percentage), 1) %>%
+                        </span>
+                      </td>
+                      <td class="text-xs"><%= Calendar.strftime(price_history.detected_at, "%Y-%m-%d") %></td>
+                    </tr>
+                  <% end %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      <% end %>
 
       <!-- Recent Activity -->
       <div class="card bg-base-200 shadow-xl">
@@ -361,6 +408,9 @@ defmodule RzeczywiscieWeb.StatsLive do
       end)
       |> Enum.reverse()
 
+    # Price drops
+    price_drops = RealEstate.get_properties_with_price_drops(7) |> Enum.take(10)
+
     %{
       total_properties: total_properties,
       active_properties: active_properties,
@@ -377,7 +427,19 @@ defmodule RzeczywiscieWeb.StatsLive do
       with_area: with_area,
       with_rooms: with_rooms,
       complete_data: complete_data,
-      recent_activity: recent_activity
+      recent_activity: recent_activity,
+      price_drops: price_drops
     }
+  end
+
+  defp format_price(price) when is_nil(price), do: "N/A"
+
+  defp format_price(price) do
+    price
+    |> Decimal.to_float()
+    |> Float.round(0)
+    |> then(fn p ->
+      "#{trunc(p)} zł"
+    end)
   end
 end

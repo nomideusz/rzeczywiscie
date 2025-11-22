@@ -42,6 +42,8 @@ config :rzeczywiscie, Oban,
        {"*/30 * * * *", Rzeczywiscie.Workers.OlxScraperWorker},
        # Scrape Otodom every 30 minutes (offset by 15 minutes from OLX)
        {"15,45 * * * *", Rzeczywiscie.Workers.OtodomScraperWorker},
+       # Track price changes every 2 hours
+       {"0 */2 * * *", Rzeczywiscie.Workers.PriceTrackerWorker},
        # Mark stale properties inactive daily at 3 AM
        {"0 3 * * *", Rzeczywiscie.Workers.CleanupWorker},
        # Geocode properties every hour
