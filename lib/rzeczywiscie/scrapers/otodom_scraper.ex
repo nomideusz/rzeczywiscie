@@ -220,7 +220,7 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
       price: parse_json_price(offer["price"]),
       currency: offer["priceCurrency"] || "PLN",
       area_sqm: parse_json_number(floor_size["value"]),
-      rooms: parse_json_number(item["numberOfRooms"]),
+      rooms: parse_json_integer(item["numberOfRooms"]),
       transaction_type: transaction_type,
       property_type: nil,  # Not in JSON-LD, could extract from title
       city: address["addressLocality"],
@@ -244,6 +244,10 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
   defp parse_json_number(num) when is_float(num), do: Decimal.from_float(num)
   defp parse_json_number(num) when is_integer(num), do: Decimal.new(num)
   defp parse_json_number(_), do: nil
+
+  defp parse_json_integer(num) when is_integer(num), do: num
+  defp parse_json_integer(num) when is_float(num), do: round(num)
+  defp parse_json_integer(_), do: nil
 
   defp try_find_listings(document) do
     # Otodom-specific selectors - trying many variations
