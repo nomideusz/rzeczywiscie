@@ -139,7 +139,7 @@ defmodule RzeczywiscieWeb.RealEstateLive do
       Logger.info("Current favorited status: #{is_favorited}")
 
       result = if is_favorited do
-        {:ok, count} = RealEstate.remove_favorite(property_id, user_id)
+        {count, _} = RealEstate.remove_favorite(property_id, user_id)
         Logger.info("Removed from favorites (deleted #{count} rows)")
         "Removed from favorites"
       else
