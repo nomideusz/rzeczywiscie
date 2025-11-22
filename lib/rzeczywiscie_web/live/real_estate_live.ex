@@ -132,16 +132,24 @@ defmodule RzeczywiscieWeb.RealEstateLive do
     property_id = if is_binary(property_id), do: String.to_integer(property_id), else: property_id
     user_id = socket.assigns.user_id
 
+    Logger.info("Toggle favorite - Property: #{property_id}, User: #{user_id}")
+
     try do
       is_favorited = RealEstate.is_favorited?(property_id, user_id)
+      Logger.info("Current favorited status: #{is_favorited}")
 
       result = if is_favorited do
-        RealEstate.remove_favorite(property_id, user_id)
+        {:ok, count} = RealEstate.remove_favorite(property_id, user_id)
+        Logger.info("Removed from favorites (deleted #{count} rows)")
         "Removed from favorites"
       else
         case RealEstate.add_favorite(property_id, user_id) do
-          {:ok, _favorite} -> "Added to favorites"
-          {:error, _changeset} -> "Already in favorites"
+          {:ok, favorite} ->
+            Logger.info("Added to favorites: #{inspect(favorite)}")
+            "Added to favorites"
+          {:error, changeset} ->
+            Logger.warning("Failed to add favorite: #{inspect(changeset.errors)}")
+            "Already in favorites"
         end
       end
 
@@ -150,11 +158,14 @@ defmodule RzeczywiscieWeb.RealEstateLive do
         |> put_flash(:info, result)
         |> load_properties()
 
+      Logger.info("Properties reloaded, sending update to client")
+
       {:noreply, socket}
     rescue
       e ->
         Logger.error("Error toggling favorite: #{inspect(e)}")
-        {:noreply, put_flash(socket, :error, "Failed to update favorites. Please run database migrations: mix ecto.migrate")}
+        Logger.error("Stacktrace: #{Exception.format_stacktrace(__STACKTRACE__)}")
+        {:noreply, put_flash(socket, :error, "Failed to update favorites. Please check logs.")}
     end
   end
 
@@ -284,50 +295,57 @@ defmodule RzeczywiscieWeb.RealEstateLive do
   defp serialize_datetime(value), do: value
 
   defp get_or_create_user_id(socket) do
-    # Check if user_id cookie exists
-    case get_connect_info(socket, :peer_data) do
-      %{address: address} ->
-        # Use a combination of IP and a random component for uniqueness
-        # This creates a somewhat persistent ID per browser/IP
-        user_id = get_cookie_user_id(socket) || generate_user_id(address)
+    # Priority: user_agent (most persistent) > peer IP > fallback
+    user_id = get_user_agent_id(socket) || get_peer_ip_id(socket) || get_fallback_id()
 
-        # Store in cookie for next time (via JavaScript in client)
+    # Log the generated user_id for debugging
+    Logger.debug("Generated user_id: #{user_id}")
+
+    user_id
+  end
+
+  defp get_user_agent_id(socket) do
+    # Most reliable: consistent ID based on browser user agent
+    case get_connect_info(socket, :user_agent) do
+      ua when is_binary(ua) and byte_size(ua) > 0 ->
+        user_id = :crypto.hash(:md5, ua)
+          |> Base.encode16()
+          |> String.slice(0, 16)
+
+        Logger.debug("Using user_agent ID: #{user_id}")
         user_id
 
       _ ->
-        # Fallback: generate random ID
-        get_cookie_user_id(socket) || generate_user_id(nil)
-    end
-  end
-
-  defp get_cookie_user_id(socket) do
-    # Try to get user_id from cookie via LiveView session
-    # The cookie is set by JavaScript on the client
-    case get_connect_info(socket, :user_agent) do
-      ua when is_binary(ua) ->
-        # Generate consistent ID based on user agent
-        # This will be the same for each browser
-        :crypto.hash(:md5, ua)
-        |> Base.encode16()
-        |> String.slice(0, 16)
-
-      _ ->
+        Logger.debug("No user_agent available")
         nil
     end
   end
 
-  defp generate_user_id(address) do
-    # Generate a unique user ID
-    base = if address do
-      address |> :inet.ntoa() |> to_string()
-    else
-      "anonymous"
-    end
+  defp get_peer_ip_id(socket) do
+    # Fallback: use peer IP if available (less reliable due to NAT/proxies)
+    case get_connect_info(socket, :peer_data) do
+      %{address: address} ->
+        ip_str = address |> :inet.ntoa() |> to_string()
+        user_id = :crypto.hash(:md5, ip_str)
+          |> Base.encode16()
+          |> String.slice(0, 16)
 
-    # Combine with timestamp and random to ensure uniqueness
-    "#{base}_#{System.system_time(:second)}_#{:rand.uniform(100000)}"
-    |> then(&:crypto.hash(:md5, &1))
-    |> Base.encode16()
-    |> String.slice(0, 16)
+        Logger.debug("Using peer IP ID: #{user_id}")
+        user_id
+
+      _ ->
+        Logger.debug("No peer_data available")
+        nil
+    end
+  end
+
+  defp get_fallback_id do
+    # Last resort: truly random ID (won't persist, but better than crashing)
+    user_id = :crypto.strong_rand_bytes(8)
+      |> Base.encode16()
+      |> String.slice(0, 16)
+
+    Logger.warning("Using fallback random ID (favorites won't persist!): #{user_id}")
+    user_id
   end
 end
