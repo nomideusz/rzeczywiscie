@@ -65,66 +65,69 @@
       : '#9CA3AF'
 
     return `
-      <div style="min-width: 250px; max-width: 300px; font-family: system-ui, sans-serif; padding: 8px;">
+      <div style="min-width: 280px; max-width: 350px; font-family: system-ui, sans-serif; padding: 8px;">
         ${property.image_url ? `
-          <div style="margin-bottom: 12px;">
+          <div style="margin-bottom: 12px; margin: -8px -8px 12px -8px;">
             <img
               src="${property.image_url}"
               alt="${property.title || 'Property'}"
               style="
                 width: 100%;
                 height: auto;
-                max-height: 200px;
+                max-height: 250px;
                 object-fit: cover;
-                border-radius: 8px;
+                border-radius: 8px 8px 0 0;
+                display: block;
               "
-              onerror="this.style.display='none'"
+              onerror="this.parentElement.style.display='none'"
             />
           </div>
         ` : ''}
-        <div style="font-weight: bold; font-size: 14px; margin-bottom: 8px; color: #1F2937;">
-          ${property.title || 'N/A'}
-        </div>
-        <div style="margin-bottom: 4px; color: #6B7280; font-size: 13px;">
-          📍 ${property.city || 'N/A'}${property.district ? ', ' + property.district : ''}
-        </div>
-        <div style="margin-bottom: 4px; color: #1F2937; font-size: 14px; font-weight: 600;">
-          💰 ${formatPrice(property.price)}
-        </div>
-        ${property.area_sqm ? `<div style="margin-bottom: 4px; color: #6B7280; font-size: 13px;">📐 ${property.area_sqm} m²</div>` : ''}
-        ${property.rooms ? `<div style="margin-bottom: 4px; color: #6B7280; font-size: 13px;">🛏️ ${property.rooms} rooms</div>` : ''}
-        ${property.aqi ? `
-          <div style="margin-bottom: 8px; margin-top: 8px;">
-            <span style="
-              background-color: ${aqiBadgeColor};
-              color: white;
-              padding: 4px 8px;
-              border-radius: 4px;
-              font-size: 12px;
-              font-weight: 600;
-            ">
-              AQI: ${property.aqi} - ${property.aqi_category || 'N/A'}
-            </span>
+        <div style="padding: 0 8px;">
+          <div style="font-weight: bold; font-size: 14px; margin-bottom: 8px; color: #1F2937; line-height: 1.4;">
+            ${property.title || 'N/A'}
           </div>
-        ` : ''}
-        <div style="margin-top: 12px;">
-          <a
-            href="${property.url}"
-            target="_blank"
-            rel="noopener noreferrer"
-            style="
-              display: inline-block;
-              background-color: #3B82F6;
-              color: white;
-              padding: 6px 12px;
-              border-radius: 4px;
-              text-decoration: none;
-              font-size: 12px;
-              font-weight: 500;
-            "
-          >
-            View Listing →
-          </a>
+          <div style="margin-bottom: 4px; color: #6B7280; font-size: 13px;">
+            📍 ${property.city || 'N/A'}${property.district ? ', ' + property.district : ''}
+          </div>
+          <div style="margin-bottom: 4px; color: #1F2937; font-size: 14px; font-weight: 600;">
+            💰 ${formatPrice(property.price)}
+          </div>
+          ${property.area_sqm ? `<div style="margin-bottom: 4px; color: #6B7280; font-size: 13px;">📐 ${property.area_sqm} m²</div>` : ''}
+          ${property.rooms ? `<div style="margin-bottom: 4px; color: #6B7280; font-size: 13px;">🛏️ ${property.rooms} rooms</div>` : ''}
+          ${property.aqi ? `
+            <div style="margin-bottom: 8px; margin-top: 8px;">
+              <span style="
+                background-color: ${aqiBadgeColor};
+                color: white;
+                padding: 4px 8px;
+                border-radius: 4px;
+                font-size: 12px;
+                font-weight: 600;
+              ">
+                AQI: ${property.aqi} - ${property.aqi_category || 'N/A'}
+              </span>
+            </div>
+          ` : ''}
+          <div style="margin-top: 12px;">
+            <a
+              href="${property.url}"
+              target="_blank"
+              rel="noopener noreferrer"
+              style="
+                display: inline-block;
+                background-color: #3B82F6;
+                color: white;
+                padding: 6px 12px;
+                border-radius: 4px;
+                text-decoration: none;
+                font-size: 12px;
+                font-weight: 500;
+              "
+            >
+              View Listing →
+            </a>
+          </div>
         </div>
       </div>
     `
@@ -330,6 +333,28 @@
       marker.addListener('click', () => {
         infoWindow.setContent(createInfoWindowContent(property))
         infoWindow.open(map, marker)
+
+        // Pan map to ensure popup is visible (with some offset for popup height)
+        // Wait a bit for InfoWindow to render and get its size
+        setTimeout(() => {
+          const currentCenter = map.getCenter()
+          const markerPosition = marker.getPosition()
+
+          // Calculate offset to move map down slightly so popup fits above marker
+          const scale = Math.pow(2, map.getZoom())
+          const worldCoordinate = map.getProjection().fromLatLngToPoint(markerPosition)
+
+          // Offset by ~150 pixels upward (adjust for popup height)
+          const pixelOffset = new google.maps.Point(0, -150 / scale)
+          const newCenter = map.getProjection().fromPointToLatLng(
+            new google.maps.Point(
+              worldCoordinate.x + pixelOffset.x,
+              worldCoordinate.y + pixelOffset.y
+            )
+          )
+
+          map.panTo(newCenter)
+        }, 100)
       })
 
       markers.push(marker)
@@ -441,7 +466,7 @@
   .map-wrapper {
     position: relative;
     width: 100%;
-    height: 600px;
+    height: 800px;
     border-radius: 8px;
     overflow: hidden;
     box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
@@ -536,7 +561,7 @@
   /* Make map responsive */
   @media (max-width: 768px) {
     .map-wrapper {
-      height: 400px;
+      height: 500px;
     }
 
     .map-legend {
