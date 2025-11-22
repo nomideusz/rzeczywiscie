@@ -1,6 +1,8 @@
-# Rzeczywiscie - Phoenix + LiveSvelte Project
+# Rzeka - Phoenix + LiveSvelte Project
 
 ## Project Overview
+
+**Live at:** https://rzeka.live
 
 This is a Phoenix 1.8.1 application integrating LiveSvelte 0.16.0 with Svelte 5, featuring both client-side and server-side rendering (SSR) of Svelte components within Phoenix LiveView.
 
@@ -9,12 +11,29 @@ This is a Phoenix 1.8.1 application integrating LiveSvelte 0.16.0 with Svelte 5,
 - Phoenix LiveView 1.1.0
 - LiveSvelte 0.16.0 (Svelte 5)
 - PostgreSQL database
+- Oban 2.17 (background job processing)
 - Bandit web server
 - Custom esbuild configuration (dual build process)
 - Tailwind CSS with DaisyUI
 - NodeJS.Supervisor for SSR
+- Google Maps JavaScript API (with Air Quality heatmap tiles)
+- Google Geocoding API
+- Google Air Quality API
 
 **Development Server:** http://localhost:4001
+
+## Applications
+
+Rzeka consists of 4 main collaborative apps:
+
+1. **Draw** - Real-time collaborative drawing board
+2. **Kanban** - Task management with drag-and-drop
+3. **World** - Live world map with user tracking
+4. **Properties** - Real estate scraper for Małopolskie region with:
+   - Properties listings (table and map views)
+   - Favorites (session-based)
+   - Stats (monitoring dashboard)
+   - Admin (manual scraper triggers)
 
 ## Architecture
 
@@ -71,7 +90,9 @@ LiveSvelte connects Svelte components to Phoenix LiveView:
    ```elixir
    def render(assigns) do
      ~H"""
-     <.svelte name="Example" props={%{number: @number}} socket={@socket} />
+     <.app flash={@flash}>
+       <.svelte name="Example" props={%{number: @number}} socket={@socket} />
+     </.app>
      """
    end
    ```
@@ -87,6 +108,128 @@ children = [
   # ... other children
 ]
 ```
+
+## Real Estate Scraper
+
+### Overview
+
+The Properties app scrapes real estate listings from OLX and Otodom for the Małopolskie region, featuring:
+- Automated scraping via Oban background jobs
+- Google Maps integration with Air Quality heatmaps (US_AQI)
+- Price history tracking with change detection
+- Session-based favorites (no authentication required)
+- Real-time updates via Phoenix PubSub
+- Comprehensive monitoring dashboard
+
+### Routes
+
+- `/real-estate` - Main listings (table and map views)
+- `/favorites` - Saved properties
+- `/stats` - Monitoring dashboard
+- `/admin` - Manual scraper triggers and backfill tasks
+
+All property pages have sub-navigation tabs for easy switching.
+
+### Scrapers
+
+**OLX Scraper** (`lib/rzeczywiscie/scrapers/olx_scraper.ex`)
+- Scrapes: https://www.olx.pl/nieruchomosci/malopolskie/
+- Extracts: title, price, area, rooms, location, images, URLs
+- Runs: Every 30 minutes (:00, :30)
+- Worker: `Rzeczywiscie.Workers.OlxScraperWorker`
+
+**Otodom Scraper** (`lib/rzeczywiscie/scrapers/otodom_scraper.ex`)
+- Scrapes: https://www.otodom.pl/pl/wyniki/...
+- Extracts: same as OLX
+- Runs: Every 30 minutes (:15, :45)
+- Worker: `Rzeczywiscie.Workers.OtodomScraperWorker`
+
+### Background Jobs (Oban)
+
+```elixir
+# config/config.exs
+crontab: [
+  {"*/30 * * * *", OlxScraperWorker},       # Every 30 min
+  {"15,45 * * * *", OtodomScraperWorker},   # Every 30 min (offset)
+  {"0 */2 * * *", PriceTrackerWorker},      # Every 2 hours
+  {"0 * * * *", GeocodingWorker},           # Every hour
+  {"0 3 * * *", CleanupWorker}              # Daily 3 AM
+]
+```
+
+### Database Schema
+
+**Properties** (`properties` table):
+- Core fields: title, description, price, currency, area_sqm, rooms, floor
+- Types: transaction_type (sprzedaż/wynajem), property_type (mieszkanie/dom/etc)
+- Location: city, district, street, postal_code, voivodeship
+- Geocoding: latitude, longitude
+- Metadata: source (olx/otodom), external_id, url, image_url, active, last_seen_at
+
+**Price History** (`price_history` table):
+- Tracks price changes over time
+- Fields: property_id, price, price_per_sqm, currency, change_percentage, detected_at
+- Automatically records changes when price updates detected
+
+**Favorites** (`favorites` table):
+- Session-based (no authentication)
+- Fields: property_id, user_id (session/socket ID), notes, alert_on_price_drop
+
+**Air Quality Cache** (`air_quality_cache` table):
+- Caches Google Air Quality API responses
+- Fields: lat, lng, aqi, category, dominant_pollutant, pollutant values
+- TTL: 1 hour
+
+### Google APIs Integration
+
+**Maps JavaScript API**:
+- Used in PropertyMap component
+- Displays properties as markers
+- Air Quality heatmap tiles (US_AQI)
+- Configured via `GOOGLE_MAPS_API_KEY` env var
+
+**Geocoding API**:
+- Converts addresses to coordinates
+- Runs hourly via GeocodingWorker
+- Batch size: 50 properties at a time
+- Delay: 500ms between requests
+
+**Air Quality API**:
+- Fetches current conditions for property locations
+- Cached for 1 hour per location
+- Returns: AQI value, category, dominant pollutant
+
+### Features
+
+**Price Tracking**:
+- Automatically detects price changes
+- Calculates percentage change
+- Tracks price per m² (if area available)
+- Displays recent drops in Stats dashboard
+
+**Favorites**:
+- Click heart icon (❤️/🤍) to save properties
+- No login required (uses session ID)
+- View all saved properties at `/favorites`
+- Remove favorites individually
+
+**Monitoring Dashboard** (`/stats`):
+- Total properties and active count
+- Geocoding coverage percentage
+- Air Quality data coverage
+- Properties added today
+- Source breakdown (OLX vs Otodom)
+- Transaction type distribution
+- Property type distribution
+- Top 10 cities
+- Data quality metrics
+- Recent price drops
+- Recent activity (last 7 days)
+
+**Admin Panel** (`/admin`):
+- Manual OLX scraper trigger
+- Manual Otodom scraper trigger
+- Backfill task (classify existing properties)
 
 ## Common Commands
 
@@ -118,6 +261,12 @@ mix ecto.reset
 psql -U postgres -d rzeczywiscie_dev
 ```
 
+**Production (Caprover):**
+Migrations run automatically on deploy via Dockerfile:
+```bash
+/app/bin/rzeczywiscie eval "Rzeczywiscie.Release.migrate()"
+```
+
 ### Assets
 
 ```bash
@@ -145,6 +294,9 @@ mix assets.build  # Runs: tailwind + node build.js
 
 # Deploy assets
 mix assets.deploy  # Runs: tailwind --minify + node build.js --deploy + phx.digest
+
+# Run backfill task
+mix backfill.property_types
 ```
 
 ## Creating New Features
@@ -173,10 +325,13 @@ mix assets.deploy  # Runs: tailwind --minify + node build.js --deploy + phx.dige
    ```elixir
    defmodule RzeczywiscieWeb.MyComponentLive do
      use RzeczywiscieWeb, :live_view
+     import RzeczywiscieWeb.Layouts
 
      def render(assigns) do
        ~H"""
-       <.svelte name="MyComponent" props={%{name: @name}} socket={@socket} />
+       <.app flash={@flash}>
+         <.svelte name="MyComponent" props={%{name: @name}} socket={@socket} />
+       </.app>
        """
      end
 
@@ -220,9 +375,10 @@ Just use Tailwind classes in your Svelte components and they'll be included.
 
 ### Configuration
 - `mix.exs` - Dependencies and aliases
-- `config/config.exs` - Tailwind config (esbuild removed)
+- `config/config.exs` - Oban cron schedule, Tailwind config
 - `config/dev.exs` - Development settings, port 4001, watchers
-- `lib/rzeczywiscie/application.ex` - NodeJS.Supervisor setup
+- `config/runtime.exs` - Environment variables (Google API keys)
+- `lib/rzeczywiscie/application.ex` - NodeJS.Supervisor and Oban setup
 
 ### Assets
 - `assets/build.js` - **Dual build configuration** (client + server)
@@ -236,6 +392,18 @@ Just use Tailwind classes in your Svelte components and they'll be included.
 - `lib/rzeczywiscie_web.ex` - Imports LiveSvelte in html_helpers
 - `lib/rzeczywiscie_web/live/` - LiveView modules
 - `lib/rzeczywiscie_web/router.ex` - Route definitions
+- `lib/rzeczywiscie_web/components/layouts.ex` - Header, footer, navigation
+
+### Real Estate Scraper
+- `lib/rzeczywiscie/scrapers/olx_scraper.ex` - OLX scraper
+- `lib/rzeczywiscie/scrapers/otodom_scraper.ex` - Otodom scraper
+- `lib/rzeczywiscie/workers/` - Oban background workers
+- `lib/rzeczywiscie/real_estate.ex` - Context module
+- `lib/rzeczywiscie/real_estate/property.ex` - Property schema
+- `lib/rzeczywiscie/real_estate/price_history.ex` - Price history schema
+- `lib/rzeczywiscie/real_estate/favorite.ex` - Favorites schema
+- `lib/rzeczywiscie/services/geocoding.ex` - Google Geocoding integration
+- `lib/rzeczywiscie/services/air_quality.ex` - Google Air Quality integration
 
 ### Build Output (DO NOT EDIT)
 - `priv/static/assets/js/` - Client-side compiled JS
@@ -261,6 +429,27 @@ outdir: "../priv/static/assets"
 
 Then rebuild: `cd assets && node build.js`
 
+### Numeric Field Overflow
+
+**Error**: `numeric field overflow - A field with precision 8, scale 2 must round to...`
+
+**Cause**: Property area or price exceeds database column precision
+
+**Fix**: Migrations added to increase precision:
+- `area_sqm`: precision 10, scale 2 (up to 99,999,999.99 m²)
+- `price`: precision 12, scale 2 (up to 9,999,999,999.99 PLN)
+
+Run migrations: `mix ecto.migrate` or deploy (auto-runs)
+
+### Wrong Area Values (e.g., 202574.80 m² instead of 75 m²)
+
+**Cause**: Area extraction regex matching wrong numbers in card text
+
+**Fix**: Updated `extract_area/1` in OLX scraper with:
+- Better regex for Polish number formatting
+- Validation: area must be 0.1 - 100,000 m²
+- Cleanup migration to NULL invalid data
+
 ### Port Already in Use
 
 **Error**: `(Bandit.TransportError) listen: address already in use`
@@ -268,10 +457,12 @@ Then rebuild: `cd assets && node build.js`
 **Fix**:
 ```bash
 # Find process on port 4001
-netstat -ano | grep 4001
+lsof -i :4001  # macOS/Linux
+netstat -ano | grep 4001  # Windows
 
 # Kill process (replace PID)
-taskkill //PID <PID> //F
+kill -9 <PID>  # macOS/Linux
+taskkill //PID <PID> //F  # Windows
 ```
 
 ### NodeJS.Error - Cannot find module 'server'
@@ -283,13 +474,27 @@ taskkill //PID <PID> //F
 2. Check `priv/svelte/server.js` was generated
 3. Rebuild: `cd assets && node build.js`
 
-### Mix Command Not Found (Windows)
+### Scraper Finds 0 Properties
 
-**Cause**: Elixir not in PATH
+**Cause**: OLX/Otodom changed their HTML structure or blocking requests
+
+**Debug**:
+1. Check logs for selector debugging output
+2. HTML saved to `/tmp/olx_debug_*.html` for inspection
+3. Try different user-agent strings
+4. Check for captcha/bot detection keywords in response
+
+### Favorites Not Persisting
+
+**Cause**: Database migrations not run
 
 **Fix**:
 ```bash
-export PATH="/c/ProgramData/chocolatey/lib/elixir/tools/bin:/c/ProgramData/chocolatey/bin:$PATH"
+# Local development
+mix ecto.migrate
+
+# Production (Caprover)
+# Migrations run automatically on deploy via Dockerfile
 ```
 
 ## Key Architectural Decisions
@@ -300,14 +505,10 @@ export PATH="/c/ProgramData/chocolatey/lib/elixir/tools/bin:/c/ProgramData/choco
 4. **Glob-based component discovery**: No manual imports needed for new components
 5. **CSS injection**: Svelte styles injected into JS bundle for simplicity
 6. **Bandit web server**: Modern HTTP server, default in Phoenix 1.8+
-
-## Example: Current Working Feature
-
-Visit http://localhost:4001/example to see the counter component:
-- Svelte component: `assets/svelte/Example.svelte`
-- LiveView: `lib/rzeczywiscie_web/live/example_live.ex`
-- Demonstrates bidirectional communication between Svelte and LiveView
-- Styled with Tailwind CSS
+7. **Oban for background jobs**: Reliable job processing with cron scheduling
+8. **Session-based favorites**: No authentication complexity, uses session/socket ID
+9. **Air Quality caching**: 1-hour TTL to minimize API calls
+10. **Automatic migrations**: Dockerfile runs migrations on every deploy
 
 ## Database Configuration
 
@@ -319,6 +520,26 @@ Visit http://localhost:4001/example to see the counter component:
 
 Update in `config/dev.exs` if your local PostgreSQL has different credentials.
 
+**Production**: Configured via `DATABASE_URL` environment variable in Caprover
+
+## Environment Variables
+
+Required for production:
+
+```bash
+# Google APIs (get from Google Cloud Console)
+GOOGLE_MAPS_API_KEY=your_api_key_here
+GOOGLE_GEOCODING_API_KEY=your_api_key_here
+GOOGLE_AIR_QUALITY_API_KEY=your_api_key_here
+
+# Database
+DATABASE_URL=ecto://user:pass@host/database
+
+# Phoenix
+SECRET_KEY_BASE=generate_with_mix_phx.gen.secret
+PHX_HOST=rzeka.live
+```
+
 ## Notes for Future Development
 
 - Always create Svelte components in `assets/svelte/` (they're auto-discovered)
@@ -327,3 +548,7 @@ Update in `config/dev.exs` if your local PostgreSQL has different credentials.
 - Props from LiveView use the `props={%{...}}` attribute in `<.svelte>` helper
 - The build process must complete successfully before starting the server
 - Both client and server builds are required for proper SSR functionality
+- Always wrap LiveView renders with `<.app flash={@flash}>` and `import RzeczywiscieWeb.Layouts`
+- Use Phoenix PubSub for real-time updates across LiveView processes
+- Background jobs should be idempotent (safe to run multiple times)
+- Respect scraping delays to avoid being blocked (2-3 seconds between requests)
