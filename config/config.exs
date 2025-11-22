@@ -42,9 +42,13 @@ config :rzeczywiscie, Oban,
        {"*/30 * * * *", Rzeczywiscie.Workers.OlxScraperWorker},
        # Mark stale properties inactive daily at 3 AM
        {"0 3 * * *", Rzeczywiscie.Workers.CleanupWorker}
-     ]}
+     ]},
+    # Lifeline plugin helps rescue long-running jobs from timeout
+    {Oban.Plugins.Lifeline, rescue_after: :timer.minutes(10)}
   ],
-  queues: [scraper: 10, default: 5]
+  queues: [scraper: 10, default: 5],
+  # Increase shutdown timeout for long-running jobs
+  shutdown_grace_period: :timer.minutes(5)
 
 # Configure tailwind (the version is required)
 config :tailwind,
