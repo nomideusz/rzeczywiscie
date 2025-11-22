@@ -240,11 +240,16 @@ defmodule RzeczywiscieWeb.RealEstateLive do
     favorited_ids = RealEstate.get_favorited_property_ids(user_id)
 
     # Serialize properties with is_favorited field
-    # Skip AQI for table view (faster)
-    serialized_properties = serialize_properties(properties, favorited_ids, include_aqi: false)
+    # Include AQI for table view (uses cache, so it's fast)
+    serialized_properties = serialize_properties(properties, favorited_ids, include_aqi: true)
+
+    # Always calculate global stats from database (not from loaded properties)
+    filter_keyword = Keyword.new(Map.to_list(filters))
+    with_coords = RealEstate.count_properties_with_coordinates(filter_keyword)
+    with_aqi = RealEstate.count_properties_with_aqi(filter_keyword)
 
     # Conditionally load map properties (deferred until user switches to map view)
-    {all_map_properties, serialized_map_properties, with_coords, with_aqi} = if load_map do
+    {all_map_properties, serialized_map_properties} = if load_map do
       # Get properties for map (limit to 500 for performance)
       # Only fetch properties with coordinates to avoid loading unnecessary data
       map_opts =
@@ -259,21 +264,10 @@ defmodule RzeczywiscieWeb.RealEstateLive do
       map_props = RealEstate.list_properties(map_opts)
       serialized_map = serialize_properties(map_props, favorited_ids, include_aqi: true)
 
-      # Calculate global stats
-      coords = Enum.count(map_props, fn p -> p.latitude && p.longitude end)
-      aqi = Enum.count(map_props, fn p ->
-        if p.latitude && p.longitude do
-          aqi_data = Rzeczywiscie.Services.AirQuality.get_property_aqi(p)
-          aqi_data && aqi_data.aqi
-        else
-          false
-        end
-      end)
-
-      {map_props, serialized_map, coords, aqi}
+      {map_props, serialized_map}
     else
       # Don't load map properties on initial mount
-      {[], [], 0, 0}
+      {[], []}
     end
 
     socket
