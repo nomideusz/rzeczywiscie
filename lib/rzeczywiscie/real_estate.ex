@@ -95,6 +95,9 @@ defmodule Rzeczywiscie.RealEstate do
       {:property_type, type}, query when is_binary(type) ->
         where(query, [p], p.property_type == ^type)
 
+      {:has_coordinates, true}, query ->
+        where(query, [p], not is_nil(p.latitude) and not is_nil(p.longitude))
+
       _other, query ->
         query
     end)
@@ -392,6 +395,19 @@ defmodule Rzeczywiscie.RealEstate do
       where: f.property_id == ^property_id and f.user_id == ^user_id
     )
     |> Repo.exists?()
+  end
+
+  @doc """
+  Get all favorited property IDs for a user as a MapSet (for efficient lookups).
+  This is much faster than calling is_favorited? for each property (avoids N+1 queries).
+  """
+  def get_favorited_property_ids(user_id) do
+    from(f in Favorite,
+      where: f.user_id == ^user_id,
+      select: f.property_id
+    )
+    |> Repo.all()
+    |> MapSet.new()
   end
 
   @doc """

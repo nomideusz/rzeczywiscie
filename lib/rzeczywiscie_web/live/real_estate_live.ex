@@ -209,21 +209,26 @@ defmodule RzeczywiscieWeb.RealEstateLive do
     # Get paginated properties for table (already sorted by DB)
     properties = RealEstate.list_properties(opts)
 
-    # Serialize properties with is_favorited field
-    user_id = socket.assigns.user_id
-    serialized_properties = serialize_properties(properties, user_id)
-
-    # Get ALL properties with coordinates for map (with same filters and sorting but no pagination)
+    # Get properties for map (limit to 500 for performance)
+    # Only fetch properties with coordinates to avoid loading unnecessary data
     map_opts =
       filters
       |> Map.to_list()
       |> Keyword.new()
+      |> Keyword.put(:has_coordinates, true)
       |> Keyword.put(:sort_by, sort_column)
       |> Keyword.put(:sort_direction, sort_direction)
-      |> Keyword.put(:limit, 10000)  # High limit to get all
+      |> Keyword.put(:limit, 500)  # Reduced from 10000 for better performance
 
     all_map_properties = RealEstate.list_properties(map_opts)
-    serialized_map_properties = serialize_properties(all_map_properties, user_id)
+
+    # Batch load favorites for this user (avoids N+1 queries)
+    user_id = socket.assigns.user_id
+    favorited_ids = RealEstate.get_favorited_property_ids(user_id)
+
+    # Serialize properties with is_favorited field
+    serialized_properties = serialize_properties(properties, favorited_ids)
+    serialized_map_properties = serialize_properties(all_map_properties, favorited_ids)
 
     # Calculate global stats
     with_coords = Enum.count(all_map_properties, fn p -> p.latitude && p.longitude end)
@@ -245,17 +250,13 @@ defmodule RzeczywiscieWeb.RealEstateLive do
     |> assign(:total_with_aqi, with_aqi)
   end
 
-  defp serialize_properties(properties, user_id) do
+  defp serialize_properties(properties, favorited_ids) do
     Enum.map(properties, fn property ->
       # Get air quality data if property has coordinates
       aqi_data = AirQuality.get_property_aqi(property)
 
-      # Check if property is favorited by user (handle case where table doesn't exist)
-      is_favorited = try do
-        RealEstate.is_favorited?(property.id, user_id)
-      rescue
-        _ -> false
-      end
+      # Check if property is favorited (O(1) lookup in Set)
+      is_favorited = MapSet.member?(favorited_ids, property.id)
 
       %{
         id: property.id,
