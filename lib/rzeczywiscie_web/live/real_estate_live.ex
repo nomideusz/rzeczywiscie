@@ -7,6 +7,8 @@ defmodule RzeczywiscieWeb.RealEstateLive do
   alias Rzeczywiscie.Workers.GeocodingWorker
   alias Rzeczywiscie.Services.AirQuality
 
+  # Temporary assigns: properties don't accumulate in LiveView state
+  # This saves memory as they're cleared after each render
   @impl true
   def mount(_params, session, socket) do
     # Subscribe to real-time updates
@@ -25,9 +27,11 @@ defmodule RzeczywiscieWeb.RealEstateLive do
       |> assign(:sort_direction, "desc")
       |> assign(:page, 1)
       |> assign(:page_size, 50)
+      |> assign(:properties, [])
+      |> assign(:all_map_properties, [])
       |> load_properties()
 
-    {:ok, socket}
+    {:ok, socket, temporary_assigns: [properties: [], all_map_properties: []]}
   end
 
   @impl true
@@ -231,8 +235,9 @@ defmodule RzeczywiscieWeb.RealEstateLive do
     favorited_ids = RealEstate.get_favorited_property_ids(user_id)
 
     # Serialize properties with is_favorited field
-    serialized_properties = serialize_properties(properties, favorited_ids)
-    serialized_map_properties = serialize_properties(all_map_properties, favorited_ids)
+    # Skip AQI for table view (faster), include AQI for map view (needed for heatmap)
+    serialized_properties = serialize_properties(properties, favorited_ids, include_aqi: false)
+    serialized_map_properties = serialize_properties(all_map_properties, favorited_ids, include_aqi: true)
 
     # Calculate global stats
     with_coords = Enum.count(all_map_properties, fn p -> p.latitude && p.longitude end)
@@ -254,10 +259,16 @@ defmodule RzeczywiscieWeb.RealEstateLive do
     |> assign(:total_with_aqi, with_aqi)
   end
 
-  defp serialize_properties(properties, favorited_ids) do
+  defp serialize_properties(properties, favorited_ids, opts \\ []) do
+    include_aqi = Keyword.get(opts, :include_aqi, false)
+
     Enum.map(properties, fn property ->
-      # Get air quality data if property has coordinates
-      aqi_data = AirQuality.get_property_aqi(property)
+      # Get air quality data only if requested (expensive operation)
+      aqi_data = if include_aqi do
+        AirQuality.get_property_aqi(property)
+      else
+        nil
+      end
 
       # Check if property is favorited (O(1) lookup in Set)
       is_favorited = MapSet.member?(favorited_ids, property.id)

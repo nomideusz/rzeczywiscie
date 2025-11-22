@@ -25,6 +25,22 @@
     })
   }
 
+  // Debounce timer for filters (prevents query spam)
+  let debounceTimer
+
+  // Reactive statement: auto-apply filters with 500ms debounce when any filter changes
+  $: {
+    if (live && live.pushEvent) {
+      clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(() => {
+        applyFilters()
+      }, 500)
+    }
+    // Dependencies that trigger this reactive statement:
+    filterCity, filterMinPrice, filterMaxPrice, filterMinArea, filterMaxArea,
+    filterSource, filterTransactionType, filterPropertyType
+  }
+
   // Format price
   function formatPrice(price) {
     if (!price) return 'N/A'
