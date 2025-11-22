@@ -31,6 +31,19 @@ import "leaflet.markercluster/dist/MarkerCluster.Default.css"
 
 const Hooks = {
     ...getHooks(Components),
+    FlashAutoClose: {
+        mounted() {
+            // Auto-dismiss flash messages after 4 seconds
+            this.timeout = setTimeout(() => {
+                this.el.click() // Trigger the phx-click event to dismiss
+            }, 4000)
+        },
+        destroyed() {
+            if (this.timeout) {
+                clearTimeout(this.timeout)
+            }
+        }
+    }
 }
 
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
