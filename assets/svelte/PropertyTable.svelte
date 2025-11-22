@@ -2,6 +2,7 @@
   export let properties = []
   export let pagination = { page: 1, page_size: 50, total_count: 0, total_pages: 1 }
   export let live
+  export let user_id = null
 
   let sortColumn = 'inserted_at'
   let sortDirection = 'desc'
@@ -141,6 +142,11 @@
     if (confirm('Start manual scrape? This will fetch new listings from OLX.')) {
       live.pushEvent('trigger_scrape', {})
     }
+  }
+
+  // Toggle favorite
+  function toggleFavorite(propertyId) {
+    live.pushEvent('toggle_favorite', { property_id: propertyId })
   }
 </script>
 
@@ -334,6 +340,7 @@
             </button>
           </th>
           <th>Link</th>
+          <th>Favorite</th>
         </tr>
       </thead>
       <tbody>
@@ -393,10 +400,23 @@
                 View
               </a>
             </td>
+            <td>
+              <button
+                onclick={() => toggleFavorite(property.id)}
+                class="btn btn-ghost btn-xs"
+                title={property.is_favorited ? 'Remove from favorites' : 'Add to favorites'}
+              >
+                {#if property.is_favorited}
+                  <span class="text-red-500">❤️</span>
+                {:else}
+                  <span class="opacity-50">🤍</span>
+                {/if}
+              </button>
+            </td>
           </tr>
         {:else}
           <tr>
-            <td colspan="11" class="text-center py-8">
+            <td colspan="12" class="text-center py-8">
               <p class="text-lg">No properties found</p>
               <p class="text-sm opacity-70">Try adjusting your filters or trigger a manual scrape</p>
             </td>

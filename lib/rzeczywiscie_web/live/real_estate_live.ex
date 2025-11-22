@@ -9,14 +9,17 @@ defmodule RzeczywiscieWeb.RealEstateLive do
   alias Rzeczywiscie.Services.AirQuality
 
   @impl true
-  def mount(_params, _session, socket) do
+  def mount(_params, session, socket) do
     # Subscribe to real-time updates
     if connected?(socket) do
       RealEstate.subscribe()
     end
 
+    user_id = get_user_id(session, socket)
+
     socket =
       socket
+      |> assign(:user_id, user_id)
       |> assign(:filters, %{})
       |> assign(:sort_column, "inserted_at")
       |> assign(:sort_direction, "desc")
@@ -34,8 +37,8 @@ defmodule RzeczywiscieWeb.RealEstateLive do
       <.svelte
         name="PropertyView"
         props={%{
-          properties: serialize_properties(@properties),
-          map_properties: serialize_properties(@all_map_properties),
+          properties: serialize_properties(@properties, @user_id),
+          map_properties: serialize_properties(@all_map_properties, @user_id),
           pagination: %{
             page: @page,
             page_size: @page_size,
@@ -46,7 +49,8 @@ defmodule RzeczywiscieWeb.RealEstateLive do
             total_count: @total_count,
             with_coords: @total_with_coords,
             with_aqi: @total_with_aqi
-          }
+          },
+          user_id: @user_id
         }}
         socket={@socket}
       />
@@ -149,6 +153,22 @@ defmodule RzeczywiscieWeb.RealEstateLive do
   end
 
   @impl true
+  def handle_event("toggle_favorite", %{"property_id" => property_id}, socket) do
+    property_id = if is_binary(property_id), do: String.to_integer(property_id), else: property_id
+    user_id = socket.assigns.user_id
+
+    case RealEstate.is_favorited?(property_id, user_id) do
+      true ->
+        RealEstate.remove_favorite(property_id, user_id)
+        {:noreply, put_flash(socket, :info, "Removed from favorites") |> load_properties()}
+
+      false ->
+        RealEstate.add_favorite(property_id, user_id)
+        {:noreply, put_flash(socket, :info, "Added to favorites") |> load_properties()}
+    end
+  end
+
+  @impl true
   def handle_info({:property_created, _property}, socket) do
     Logger.debug("New property created, reloading...")
     socket = load_properties(socket)
@@ -240,10 +260,13 @@ defmodule RzeczywiscieWeb.RealEstateLive do
       properties
   end
 
-  defp serialize_properties(properties) do
+  defp serialize_properties(properties, user_id) do
     Enum.map(properties, fn property ->
       # Get air quality data if property has coordinates
       aqi_data = AirQuality.get_property_aqi(property)
+
+      # Check if property is favorited by user
+      is_favorited = RealEstate.is_favorited?(property.id, user_id)
 
       %{
         id: property.id,
@@ -273,7 +296,8 @@ defmodule RzeczywiscieWeb.RealEstateLive do
         updated_at: serialize_datetime(property.updated_at),
         aqi: aqi_data && aqi_data.aqi,
         aqi_category: aqi_data && aqi_data.category,
-        dominant_pollutant: aqi_data && aqi_data.dominant_pollutant
+        dominant_pollutant: aqi_data && aqi_data.dominant_pollutant,
+        is_favorited: is_favorited
       }
     end)
   end
@@ -285,4 +309,10 @@ defmodule RzeczywiscieWeb.RealEstateLive do
   defp serialize_datetime(nil), do: nil
   defp serialize_datetime(%DateTime{} = dt), do: DateTime.to_iso8601(dt)
   defp serialize_datetime(value), do: value
+
+  defp get_user_id(session, socket) do
+    # For now, use session ID or generate a browser fingerprint
+    # In a real app, this would be the authenticated user ID
+    session["user_id"] || socket.id
+  end
 end
