@@ -3,10 +3,13 @@
 
   export let properties = []
   export let live
+  export let selectedPropertyId = null
 
   let mapContainer
   let map
   let markers = []
+  let markersByPropertyId = {} // Map of property ID to marker
+  let infoWindow = null
   let google
   let browser = false
   let mapLoaded = false
@@ -300,6 +303,7 @@
     // Clear existing markers
     markers.forEach(marker => marker.setMap(null))
     markers = []
+    markersByPropertyId = {}
 
     // Filter properties with valid coordinates
     const validProperties = properties.filter(p => p.latitude && p.longitude)
@@ -307,7 +311,11 @@
     if (validProperties.length === 0) return
 
     const bounds = new google.maps.LatLngBounds()
-    const infoWindow = new google.maps.InfoWindow()
+
+    // Create or reuse info window
+    if (!infoWindow) {
+      infoWindow = new google.maps.InfoWindow()
+    }
 
     // Add markers for each property
     validProperties.forEach(property => {
@@ -358,11 +366,12 @@
       })
 
       markers.push(marker)
+      markersByPropertyId[property.id] = marker
       bounds.extend(position)
     })
 
-    // Fit map to show all markers
-    if (validProperties.length > 0) {
+    // Fit map to show all markers (unless we're selecting a specific property)
+    if (validProperties.length > 0 && !selectedPropertyId) {
       map.fitBounds(bounds)
 
       // Don't zoom in too much for a single property
@@ -370,6 +379,36 @@
         if (map.getZoom() > 14) map.setZoom(14)
         google.maps.event.removeListener(listener)
       })
+    }
+  }
+
+  // Reactive statement: Center on selected property when it changes
+  $: if (map && google && selectedPropertyId && markersByPropertyId[selectedPropertyId]) {
+    const marker = markersByPropertyId[selectedPropertyId]
+    const property = properties.find(p => p.id === selectedPropertyId)
+
+    if (marker && property) {
+      // Center map on the selected property
+      map.setCenter(marker.getPosition())
+      map.setZoom(15) // Zoom in closer for individual property
+
+      // Open the info window for this property
+      infoWindow.setContent(createInfoWindowContent(property))
+      infoWindow.open(map, marker)
+
+      // Pan map to ensure popup is visible
+      setTimeout(() => {
+        const scale = Math.pow(2, map.getZoom())
+        const worldCoordinate = map.getProjection().fromLatLngToPoint(marker.getPosition())
+        const pixelOffset = new google.maps.Point(0, -150 / scale)
+        const newCenter = map.getProjection().fromPointToLatLng(
+          new google.maps.Point(
+            worldCoordinate.x + pixelOffset.x,
+            worldCoordinate.y + pixelOffset.y
+          )
+        )
+        map.panTo(newCenter)
+      }, 100)
     }
   }
 

@@ -10,6 +10,7 @@
   export let live
 
   let currentView = 'table' // 'table' or 'map'
+  let selectedPropertyId = null // Property to highlight on map
 
   function switchView(view) {
     currentView = view
@@ -17,6 +18,12 @@
     if (live && live.pushEvent) {
       live.pushEvent('view_changed', { view })
     }
+  }
+
+  function handleViewOnMap(event) {
+    const propertyId = event.detail.propertyId
+    selectedPropertyId = propertyId
+    switchView('map')
   }
 
   function triggerGeocode() {
@@ -101,8 +108,8 @@
 
   <!-- View Content -->
   {#if currentView === 'table'}
-    <PropertyTable {properties} {pagination} {user_id} {live} />
+    <PropertyTable {properties} {pagination} {user_id} {live} on:viewOnMap={handleViewOnMap} />
   {:else}
-    <PropertyMap properties={map_properties} {live} />
+    <PropertyMap properties={map_properties} {live} {selectedPropertyId} />
   {/if}
 </div>

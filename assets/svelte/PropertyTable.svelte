@@ -1,8 +1,12 @@
 <script>
+  import { createEventDispatcher } from 'svelte'
+
   export let properties = []
   export let pagination = { page: 1, page_size: 50, total_count: 0, total_pages: 1 }
   export let live
   export let user_id = null
+
+  const dispatch = createEventDispatcher()
 
   let sortColumn = 'inserted_at'
   let sortDirection = 'desc'
@@ -177,6 +181,11 @@
   // Toggle favorite
   function toggleFavorite(propertyId) {
     live.pushEvent('toggle_favorite', { property_id: propertyId })
+  }
+
+  // View property on map
+  function viewOnMap(propertyId) {
+    dispatch('viewOnMap', { propertyId })
   }
 </script>
 
@@ -472,6 +481,7 @@
             </button>
           </th>
           <th>Link</th>
+          <th>Map</th>
           <th>Favorite</th>
         </tr>
       </thead>
@@ -562,6 +572,19 @@
               </a>
             </td>
             <td>
+              {#if property.latitude && property.longitude}
+                <button
+                  onclick={() => viewOnMap(property.id)}
+                  class="btn btn-ghost btn-xs"
+                  title="View on map"
+                >
+                  🗺️
+                </button>
+              {:else}
+                <span class="text-xs opacity-50">—</span>
+              {/if}
+            </td>
+            <td>
               <button
                 onclick={() => toggleFavorite(property.id)}
                 class="btn btn-ghost btn-xs"
@@ -577,7 +600,7 @@
           </tr>
         {:else}
           <tr>
-            <td colspan="12" class="text-center py-8">
+            <td colspan="13" class="text-center py-8">
               <p class="text-lg">No properties found</p>
               <p class="text-sm opacity-70">Try adjusting your filters or trigger a manual scrape</p>
             </td>
