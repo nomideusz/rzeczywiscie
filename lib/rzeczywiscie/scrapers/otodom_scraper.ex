@@ -16,11 +16,11 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
 
   ## Options
     * `:pages` - Number of pages to scrape per transaction type (default: 1)
-    * `:delay` - Delay between requests in milliseconds (default: 2000)
+    * `:delay` - Delay between requests in milliseconds (default: 5000)
   """
   def scrape(opts \\ []) do
     pages = Keyword.get(opts, :pages, 1)
-    delay = Keyword.get(opts, :delay, 2000)
+    delay = Keyword.get(opts, :delay, 5000)
 
     Logger.info("Starting Otodom scrape for Malopolskie region, #{pages} page(s) per transaction type")
 
@@ -91,22 +91,32 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
   defp fetch_page(url) do
     Logger.info("Fetching: #{url}")
 
+    # More realistic browser headers to avoid bot detection
+    headers = [
+      {"user-agent",
+       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"},
+      {"accept",
+       "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"},
+      {"accept-language", "pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7"},
+      {"accept-encoding", "gzip, deflate, br, zstd"},
+      {"cache-control", "max-age=0"},
+      {"sec-ch-ua", "\"Google Chrome\";v=\"131\", \"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\""},
+      {"sec-ch-ua-mobile", "?0"},
+      {"sec-ch-ua-platform", "\"Windows\""},
+      {"sec-fetch-dest", "document"},
+      {"sec-fetch-mode", "navigate"},
+      {"sec-fetch-site", "none"},
+      {"sec-fetch-user", "?1"},
+      {"upgrade-insecure-requests", "1"},
+      {"referer", "https://www.google.com/"}
+    ]
+
     case Req.get(url,
-           headers: [
-             {"user-agent",
-              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
-             {"accept",
-              "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"},
-             {"accept-language", "pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7"},
-             {"accept-encoding", "gzip, deflate, br"},
-             {"cache-control", "max-age=0"},
-             {"sec-fetch-dest", "document"},
-             {"sec-fetch-mode", "navigate"},
-             {"sec-fetch-site", "none"},
-             {"upgrade-insecure-requests", "1"}
-           ],
+           headers: headers,
            max_redirects: 5,
-           receive_timeout: 30_000
+           receive_timeout: 30_000,
+           retry: :transient,
+           retry_delay: &(&1 * 1000)
          ) do
       {:ok, %{status: 200, body: body}} ->
         Logger.info("Successfully fetched #{String.length(body)} bytes")
