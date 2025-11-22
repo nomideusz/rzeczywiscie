@@ -383,11 +383,24 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
     |> String.replace(~r/[^\d,]/, "")
     |> String.replace(",", ".")
     |> case do
-      "" -> nil
+      "" ->
+        nil
+
       price_str ->
         case Decimal.parse(price_str) do
-          {decimal, _} -> decimal
-          :error -> nil
+          {decimal, _} ->
+            # Validate: price should be reasonable (1 to 99,999,999 PLN)
+            # Database constraint: precision 10, scale 2 = max 99,999,999.99
+            if Decimal.compare(decimal, Decimal.new("1")) != :lt and
+               Decimal.compare(decimal, Decimal.new("99999999")) != :gt do
+              decimal
+            else
+              Logger.warning("Price out of range: #{price_str} PLN - ignoring")
+              nil
+            end
+
+          :error ->
+            nil
         end
     end
   end
