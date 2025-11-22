@@ -14,6 +14,16 @@
   let aqHeatmapLayer = null
   let showHeatmap = true
 
+  // Listen for favorite updates from server (instant UI update)
+  if (live && live.handleEvent) {
+    live.handleEvent('favorite-updated', ({ property_id, is_favorited }) => {
+      // Update the property in the local properties array
+      properties = properties.map(p =>
+        p.id === property_id ? { ...p, is_favorited } : p
+      )
+    })
+  }
+
   // Default center: Kraków, Małopolskie
   const DEFAULT_CENTER = { lat: 50.0647, lng: 19.9450 }
   const DEFAULT_ZOOM = 11
