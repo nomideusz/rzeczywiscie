@@ -25,6 +25,17 @@ let optsClient = {
     logLevel: "info",
     sourcemap: watch ? "inline" : false,
     tsconfig: "./tsconfig.json",
+    loader: {
+        ".png": "dataurl",
+        ".jpg": "dataurl",
+        ".jpeg": "dataurl",
+        ".svg": "dataurl",
+        ".gif": "dataurl",
+        ".woff": "dataurl",
+        ".woff2": "dataurl",
+        ".ttf": "dataurl",
+        ".eot": "dataurl"
+    },
     plugins: [
         importGlobPlugin(),
         sveltePlugin({
