@@ -184,30 +184,6 @@ defmodule RzeczywiscieWeb.Layouts do
                   Real Estate Scraper
                 </a>
               </li>
-              <li>
-                <a
-                  href={~p"/favorites"}
-                  class="text-sm font-bold hover:underline hover:underline-offset-4 decoration-2 decoration-error"
-                >
-                  Favorites
-                </a>
-              </li>
-              <li>
-                <a
-                  href={~p"/stats"}
-                  class="text-sm font-bold hover:underline hover:underline-offset-4 decoration-2 decoration-info"
-                >
-                  Statistics
-                </a>
-              </li>
-              <li>
-                <a
-                  href={~p"/admin"}
-                  class="text-sm font-bold hover:underline hover:underline-offset-4 decoration-2 decoration-warning"
-                >
-                  Admin Panel
-                </a>
-              </li>
             </ul>
           </div>
           <!-- Tech Column -->
@@ -249,7 +225,7 @@ defmodule RzeczywiscieWeb.Layouts do
         </div>
         <!-- Copyright bar -->
         <div class="pt-8 border-t-2 border-base-content text-xs uppercase tracking-widest font-bold opacity-50">
-          © 2024 Rzeka.live
+          © <%= Date.utc_today().year %> Rzeka.live
         </div>
       </div>
     </footer>
