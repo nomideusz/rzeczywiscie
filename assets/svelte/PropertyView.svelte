@@ -3,7 +3,9 @@
   import PropertyMap from './PropertyMap.svelte'
 
   export let properties = []
+  export let map_properties = []
   export let pagination = { page: 1, page_size: 50, total_count: 0, total_pages: 1 }
+  export let stats = { total_count: 0, with_coords: 0, with_aqi: 0 }
   export let live
 
   let currentView = 'table' // 'table' or 'map'
@@ -66,22 +68,18 @@
     <div class="stats shadow mb-4 w-full">
       <div class="stat">
         <div class="stat-title">Total Listings</div>
-        <div class="stat-value text-primary">{pagination.total_count}</div>
-        <div class="stat-desc">Showing {properties.length} on this page</div>
+        <div class="stat-value text-primary">{stats.total_count}</div>
+        <div class="stat-desc">Showing {properties.length} on page {pagination.page}</div>
       </div>
       <div class="stat">
         <div class="stat-title">With Coordinates</div>
-        <div class="stat-value text-secondary">
-          {properties.filter(p => p.latitude && p.longitude).length}
-        </div>
-        <div class="stat-desc">On current page</div>
+        <div class="stat-value text-secondary">{stats.with_coords}</div>
+        <div class="stat-desc">Ready for mapping</div>
       </div>
       <div class="stat">
         <div class="stat-title">With AQI Data</div>
-        <div class="stat-value text-accent">
-          {properties.filter(p => p.aqi).length}
-        </div>
-        <div class="stat-desc">On current page</div>
+        <div class="stat-value text-accent">{stats.with_aqi}</div>
+        <div class="stat-desc">Air quality analyzed</div>
       </div>
     </div>
   </div>
@@ -90,6 +88,6 @@
   {#if currentView === 'table'}
     <PropertyTable {properties} {pagination} {live} />
   {:else}
-    <PropertyMap {properties} {live} />
+    <PropertyMap properties={map_properties} {live} />
   {/if}
 </div>
