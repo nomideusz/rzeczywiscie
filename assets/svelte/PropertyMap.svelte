@@ -11,6 +11,8 @@
   let browser = false
   let mapLoaded = false
   let loadError = null
+  let aqHeatmapLayer = null
+  let showHeatmap = true
 
   // Default center: Kraków, Małopolskie
   const DEFAULT_CENTER = { lat: 50.0647, lng: 19.9450 }
@@ -191,7 +193,7 @@
     console.log('Adding Air Quality heatmap...')
 
     // Define custom tile layer for Air Quality heatmap
-    const aqHeatmapType = new google.maps.ImageMapType({
+    aqHeatmapLayer = new google.maps.ImageMapType({
       getTileUrl: function(coord, zoom) {
         // Air Quality API heatmap tiles endpoint
         // Using US_AQI (works globally, including Europe)
@@ -208,13 +210,13 @@
       },
       tileSize: new google.maps.Size(256, 256),
       name: 'Air Quality',
-      opacity: 0.8, // Increased opacity to make it more visible
+      opacity: 0.4, // More transparent so map is more visible
       minZoom: 0,
       maxZoom: 16,
     })
 
     // Add heatmap as an overlay
-    map.overlayMapTypes.push(aqHeatmapType)
+    map.overlayMapTypes.push(aqHeatmapLayer)
 
     console.log('✓ Air Quality heatmap overlay added to map')
     console.log('Current overlay count:', map.overlayMapTypes.getLength())
@@ -234,6 +236,28 @@
       console.error('Visit: https://console.cloud.google.com/apis/library/airquality.googleapis.com')
     }
     testImg.src = testTileUrl
+  }
+
+  // Toggle heatmap visibility
+  function toggleHeatmap() {
+    showHeatmap = !showHeatmap
+  }
+
+  // Update heatmap visibility when toggle changes
+  $: if (map && aqHeatmapLayer) {
+    if (showHeatmap) {
+      // Check if heatmap is already in overlays
+      const index = map.overlayMapTypes.getArray().indexOf(aqHeatmapLayer)
+      if (index === -1) {
+        map.overlayMapTypes.push(aqHeatmapLayer)
+      }
+    } else {
+      // Remove heatmap from overlays
+      const index = map.overlayMapTypes.getArray().indexOf(aqHeatmapLayer)
+      if (index !== -1) {
+        map.overlayMapTypes.removeAt(index)
+      }
+    }
   }
 
   // Update markers when properties change
@@ -351,7 +375,17 @@
   {#if browser && mapLoaded}
     <div class="map-legend">
       <div class="legend-title">Air Quality</div>
-      <div class="text-xs opacity-70 mb-2">Heatmap shows regional AQ</div>
+
+      <!-- Heatmap Toggle -->
+      <label class="heatmap-toggle">
+        <input
+          type="checkbox"
+          bind:checked={showHeatmap}
+          class="checkbox checkbox-xs"
+        />
+        <span class="text-xs ml-2">Show Heatmap</span>
+      </label>
+
       <div class="legend-subtitle">Property Markers</div>
       <div class="legend-item">
         <span class="legend-dot" style="background-color: #10B981;"></span>
@@ -432,7 +466,20 @@
 
   .legend-title {
     font-weight: 600;
-    margin-bottom: 4px;
+    margin-bottom: 8px;
+    color: #1F2937;
+  }
+
+  .heatmap-toggle {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+    padding: 4px 0;
+    cursor: pointer;
+    color: #4B5563;
+  }
+
+  .heatmap-toggle:hover {
     color: #1F2937;
   }
 
