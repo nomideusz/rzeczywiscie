@@ -37,6 +37,8 @@ defmodule Rzeczywiscie.RealEstate do
     * `:min_area` - Minimum area in sqm
     * `:max_area` - Maximum area in sqm
     * `:source` - Filter by source (olx, otodom, etc.)
+    * `:transaction_type` - Filter by transaction type (sprzedaż, wynajem)
+    * `:property_type` - Filter by property type (mieszkanie, dom, etc.)
     * `:limit` - Limit results (default: 100)
     * `:offset` - Offset for pagination (default: 0)
   """
@@ -79,6 +81,12 @@ defmodule Rzeczywiscie.RealEstate do
 
       {:source, source}, query when is_binary(source) ->
         where(query, [p], p.source == ^source)
+
+      {:transaction_type, type}, query when is_binary(type) ->
+        where(query, [p], p.transaction_type == ^type)
+
+      {:property_type, type}, query when is_binary(type) ->
+        where(query, [p], p.property_type == ^type)
 
       _other, query ->
         query

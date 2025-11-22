@@ -9,6 +9,8 @@
   let markers = []
   let google
   let browser = false
+  let mapLoaded = false
+  let loadError = null
 
   // Default center: Kraków, Małopolskie
   const DEFAULT_CENTER = { lat: 50.0647, lng: 19.9450 }
@@ -130,23 +132,31 @@
     browser = true
 
     try {
+      console.log('Loading Google Maps...')
       google = await loadGoogleMaps()
+
       if (!google) {
-        console.error('Failed to load Google Maps')
+        loadError = 'Google Maps API key not configured'
+        console.error('Failed to load Google Maps - no API key')
         return
       }
+
+      console.log('Google Maps loaded, creating map...')
 
       // Create map
       map = new google.maps.Map(mapContainer, {
         center: DEFAULT_CENTER,
         zoom: DEFAULT_ZOOM,
-        mapId: 'real-estate-map', // Required for advanced markers
       })
+
+      console.log('Map created successfully')
+      mapLoaded = true
 
       // Add markers
       updateMarkers()
     } catch (error) {
       console.error('Error loading Google Maps:', error)
+      loadError = error.message || 'Failed to load map'
     }
   })
 
@@ -219,7 +229,20 @@
   })
 </script>
 
-{#if browser}
+{#if loadError}
+  <div class="map-wrapper flex items-center justify-center bg-base-200">
+    <div class="alert alert-error max-w-md">
+      <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      <div>
+        <h3 class="font-bold">Map Error</h3>
+        <div class="text-sm">{loadError}</div>
+        <div class="text-xs mt-2">Make sure GOOGLE_MAPS_API_KEY is configured.</div>
+      </div>
+    </div>
+  </div>
+{:else if browser && mapLoaded}
   <div class="map-wrapper">
     <div bind:this={mapContainer} class="map-container"></div>
 
