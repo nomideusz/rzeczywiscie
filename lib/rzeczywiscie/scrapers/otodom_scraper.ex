@@ -233,12 +233,16 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
     }
   end
 
-  defp parse_json_price(price) when is_number(price) do
-    Decimal.from_float(price * 1.0)
+  defp parse_json_price(price) when is_float(price) do
+    Decimal.from_float(price)
+  end
+  defp parse_json_price(price) when is_integer(price) do
+    Decimal.new(price)
   end
   defp parse_json_price(_), do: nil
 
-  defp parse_json_number(num) when is_number(num), do: Decimal.from_float(num * 1.0)
+  defp parse_json_number(num) when is_float(num), do: Decimal.from_float(num)
+  defp parse_json_number(num) when is_integer(num), do: Decimal.new(num)
   defp parse_json_number(_), do: nil
 
   defp try_find_listings(document) do
