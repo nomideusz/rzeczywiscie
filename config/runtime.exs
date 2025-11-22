@@ -76,7 +76,9 @@ if config_env() == :prod do
     http: [
       # Bind on all IPv4 interfaces for CapRover compatibility
       ip: {0, 0, 0, 0},
-      port: port
+      port: port,
+      # Enable compression for smaller payloads (10-50% size reduction)
+      compress: true
     ],
     secret_key_base: secret_key_base,
     check_origin: check_origin_config
