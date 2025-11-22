@@ -128,8 +128,13 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
       {:ok, document} ->
         Logger.info("HTML length: #{String.length(html)}")
 
+        # Save HTML for debugging
+        debug_filename = "/tmp/otodom_debug_#{:os.system_time(:second)}.html"
+        File.write(debug_filename, html)
+        Logger.info("Saved debug HTML to #{debug_filename}")
+
         # Check if we got blocked/captcha
-        if String.contains?(html, ["captcha", "robot", "blocked"]) do
+        if String.contains?(html, ["captcha", "robot", "blocked", "Verifying you are human"]) do
           Logger.warning("Possible bot detection - page contains captcha/robot keywords")
         end
 
@@ -149,14 +154,29 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
   end
 
   defp try_find_listings(document) do
-    # Otodom-specific selectors
+    # Otodom-specific selectors - trying many variations
     selectors = [
+      # Modern Otodom selectors
       "article[data-cy='listing-item']",
       "li[data-cy='listing-item']",
       "div[data-cy='listing-item']",
       "[data-cy='listing-item']",
+      "div[data-cy='search.listing']",
+      "article[data-cy='search.listing']",
+
+      # Generic article/list selectors
+      "article[class*='listing']",
+      "li[class*='listing']",
+      "div[class*='listing']",
       "article",
-      "li.css-p74l73"
+
+      # CSS class-based selectors (may change)
+      "li.css-p74l73",
+      "div.css-p74l73",
+      "article.css-p74l73",
+
+      # Link-based approach (find links to /pl/oferta/)
+      "a[href*='/pl/oferta/']"
     ]
 
     result =
@@ -164,16 +184,17 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
         cards = Floki.find(document, selector)
 
         if length(cards) > 0 do
-          Logger.info("✓ Found #{length(cards)} cards using selector: #{selector}")
+          Logger.info("✓ Found #{length(cards)} elements using selector: #{selector}")
           {:halt, cards}
         else
-          Logger.info("✗ Selector '#{selector}' found 0 cards")
+          Logger.info("✗ Selector '#{selector}' found 0 elements")
           {:cont, []}
         end
       end)
 
-    # If still nothing found, do some debugging
+    # If still nothing found, do extensive debugging
     if result == [] do
+      Logger.warning("⚠️  No listings found with any selector!")
       debug_document_structure(document)
     end
 
@@ -194,9 +215,39 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
       end)
       |> Enum.reject(&is_nil/1)
       |> Enum.uniq()
-      |> Enum.take(20)
+      |> Enum.take(30)
 
-    Logger.warning("⚠️  No listings found! Available data-cy values: #{inspect(data_cy_values)}")
+    Logger.warning("⚠️  No listings found! Available data-cy values (first 30): #{inspect(data_cy_values)}")
+
+    # Check for links to property pages
+    property_links = Floki.find(document, "a[href*='/oferta/']")
+    Logger.info("Found #{length(property_links)} links containing '/oferta/'")
+
+    # Check for common container elements
+    articles = Floki.find(document, "article")
+    Logger.info("Found #{length(articles)} article elements")
+
+    list_items = Floki.find(document, "li")
+    Logger.info("Found #{length(list_items)} li elements")
+
+    # Check page title to verify we're on the right page
+    title = Floki.find(document, "title") |> Floki.text()
+    Logger.info("Page title: #{title}")
+
+    # Look for any class names that might indicate listings
+    divs_with_class = Floki.find(document, "div[class]") |> Enum.take(10)
+
+    class_samples =
+      divs_with_class
+      |> Enum.map(fn {_tag, attrs, _children} ->
+        Enum.find_value(attrs, fn
+          {"class", value} -> value
+          _ -> nil
+        end)
+      end)
+      |> Enum.reject(&is_nil/1)
+
+    Logger.info("Sample div classes (first 10): #{inspect(class_samples)}")
   end
 
   defp parse_listing(card, transaction_type) do
