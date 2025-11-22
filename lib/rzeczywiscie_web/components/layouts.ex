@@ -44,10 +44,10 @@ defmodule RzeczywiscieWeb.Layouts do
               R
             </div>
             <span class="text-base sm:text-xl font-black uppercase tracking-tighter hidden sm:inline">
-              Rzeczywiscie
+              Rzeka
             </span>
             <span class="text-base font-black uppercase tracking-tighter sm:hidden">
-              RZY
+              RZK
             </span>
           </a>
 
@@ -184,7 +184,7 @@ defmodule RzeczywiscieWeb.Layouts do
                 R
               </div>
               <span class="text-2xl font-black uppercase tracking-tighter">
-                Rzeczywiscie
+                Rzeka
               </span>
             </div>
             <p class="text-sm opacity-70 leading-relaxed max-w-md mb-6">
@@ -297,7 +297,7 @@ defmodule RzeczywiscieWeb.Layouts do
         </div>
         <!-- Copyright bar -->
         <div class="pt-8 border-t-2 border-base-content text-xs uppercase tracking-widest font-bold opacity-50">
-          © 2024 Rzeczywiscie
+          © 2024 Rzeka.live
         </div>
       </div>
     </footer>
