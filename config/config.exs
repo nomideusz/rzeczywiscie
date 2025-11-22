@@ -41,7 +41,9 @@ config :rzeczywiscie, Oban,
        # Scrape OLX every 30 minutes
        {"*/30 * * * *", Rzeczywiscie.Workers.OlxScraperWorker},
        # Mark stale properties inactive daily at 3 AM
-       {"0 3 * * *", Rzeczywiscie.Workers.CleanupWorker}
+       {"0 3 * * *", Rzeczywiscie.Workers.CleanupWorker},
+       # Geocode properties every hour
+       {"0 * * * *", Rzeczywiscie.Workers.GeocodingWorker}
      ]},
     # Lifeline plugin helps rescue long-running jobs from timeout
     {Oban.Plugins.Lifeline, rescue_after: :timer.minutes(10)}

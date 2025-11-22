@@ -40,6 +40,17 @@
     }).format(date)
   }
 
+  // Get AQI badge color
+  function getAqiBadgeColor(category) {
+    if (!category) return 'badge-ghost'
+    const cat = category.toLowerCase()
+    if (cat === 'good') return 'badge-success'
+    if (cat === 'moderate') return 'badge-warning'
+    if (cat.includes('unhealthy')) return 'badge-error'
+    if (cat === 'hazardous') return 'badge-error'
+    return 'badge-ghost'
+  }
+
   // Handle sort
   function handleSort(column) {
     if (sortColumn === column) {
@@ -246,6 +257,11 @@
               Area {sortColumn === 'area_sqm' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
             </button>
           </th>
+          <th>
+            <button onclick={() => handleSort('aqi')} class="btn btn-ghost btn-xs">
+              Air Quality {sortColumn === 'aqi' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+            </button>
+          </th>
           <th>Rooms</th>
           <th>
             <button onclick={() => handleSort('inserted_at')} class="btn btn-ghost btn-xs">
@@ -274,6 +290,19 @@
             </td>
             <td class="font-semibold">{formatPrice(property.price)}</td>
             <td>{formatArea(property.area_sqm)}</td>
+            <td>
+              {#if property.aqi}
+                <div class="tooltip" data-tip="{property.aqi_category || 'N/A'} - {property.dominant_pollutant || ''}">
+                  <span class="badge badge-sm {getAqiBadgeColor(property.aqi_category)}">
+                    {property.aqi}
+                  </span>
+                </div>
+              {:else if property.latitude && property.longitude}
+                <span class="badge badge-sm badge-ghost">Pending</span>
+              {:else}
+                <span class="text-xs opacity-50">No coords</span>
+              {/if}
+            </td>
             <td>{property.rooms || 'N/A'}</td>
             <td class="text-xs">{formatDate(property.inserted_at)}</td>
             <td>
@@ -289,7 +318,7 @@
           </tr>
         {:else}
           <tr>
-            <td colspan="8" class="text-center py-8">
+            <td colspan="9" class="text-center py-8">
               <p class="text-lg">No properties found</p>
               <p class="text-sm opacity-70">Try adjusting your filters or trigger a manual scrape</p>
             </td>
