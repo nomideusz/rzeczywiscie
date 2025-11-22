@@ -1,5 +1,6 @@
 defmodule RzeczywiscieWeb.FavoritesLive do
   use RzeczywiscieWeb, :live_view
+  import RzeczywiscieWeb.Layouts
   alias Rzeczywiscie.RealEstate
 
   @impl true
@@ -18,6 +19,7 @@ defmodule RzeczywiscieWeb.FavoritesLive do
   @impl true
   def render(assigns) do
     ~H"""
+    <.app flash={@flash}>
     <div class="container mx-auto p-8">
       <!-- Sub-navigation tabs -->
       <div class="mb-6">
@@ -118,6 +120,7 @@ defmodule RzeczywiscieWeb.FavoritesLive do
         </div>
       <% end %>
     </div>
+    </.app>
     """
   end
 

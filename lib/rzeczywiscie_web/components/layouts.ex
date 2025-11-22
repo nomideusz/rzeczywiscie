@@ -36,7 +36,7 @@ defmodule RzeczywiscieWeb.Layouts do
   def app(assigns) do
     ~H"""
     <header class="sticky top-0 z-50 bg-base-100 border-b-4 border-base-content">
-      <nav class="container mx-auto px-4 sm:px-6 lg:px-8">
+      <nav class="container mx-auto">
         <div class="flex items-center justify-between h-16">
           <!-- Logo - Brutalist -->
           <a href={~p"/"} class="flex items-center gap-2 sm:gap-3 group">

@@ -1,5 +1,6 @@
 defmodule RzeczywiscieWeb.AdminLive do
   use RzeczywiscieWeb, :live_view
+  import RzeczywiscieWeb.Layouts
   require Logger
 
   @impl true
@@ -20,6 +21,7 @@ defmodule RzeczywiscieWeb.AdminLive do
   @impl true
   def render(assigns) do
     ~H"""
+    <.app flash={@flash}>
     <div class="container mx-auto p-8 max-w-2xl">
       <!-- Sub-navigation tabs -->
       <div class="mb-6">
@@ -162,6 +164,7 @@ defmodule RzeczywiscieWeb.AdminLive do
         </div>
       </div>
     </div>
+    </.app>
     """
   end
 

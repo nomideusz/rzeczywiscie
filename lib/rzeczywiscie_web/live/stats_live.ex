@@ -1,5 +1,6 @@
 defmodule RzeczywiscieWeb.StatsLive do
   use RzeczywiscieWeb, :live_view
+  import RzeczywiscieWeb.Layouts
   require Logger
   import Ecto.Query
   alias Rzeczywiscie.Repo
@@ -19,6 +20,7 @@ defmodule RzeczywiscieWeb.StatsLive do
   @impl true
   def render(assigns) do
     ~H"""
+    <.app flash={@flash}>
     <div class="container mx-auto p-8">
       <!-- Sub-navigation tabs -->
       <div class="mb-6">
@@ -267,6 +269,7 @@ defmodule RzeczywiscieWeb.StatsLive do
         </div>
       </div>
     </div>
+    </.app>
     """
   end
 
