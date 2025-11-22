@@ -1,0 +1,165 @@
+defmodule RzeczywiscieWeb.AdminLive do
+  use RzeczywiscieWeb, :live_view
+  require Logger
+
+  @impl true
+  def mount(_params, _session, socket) do
+    socket =
+      socket
+      |> assign(:backfill_status, nil)
+      |> assign(:backfill_running, false)
+      |> assign(:backfill_result, nil)
+
+    {:ok, socket}
+  end
+
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <div class="container mx-auto p-8 max-w-2xl">
+      <h1 class="text-3xl font-bold mb-6">Admin Tasks</h1>
+
+      <!-- Backfill Property Types -->
+      <div class="card bg-base-200 shadow-xl mb-6">
+        <div class="card-body">
+          <h2 class="card-title">Backfill Property Types</h2>
+          <p class="text-sm opacity-70 mb-4">
+            This task updates existing properties with transaction_type and property_type
+            by extracting them from the URL patterns. Run this once after deployment.
+          </p>
+
+          <%= if @backfill_running do %>
+            <div class="alert alert-info">
+              <div class="loading loading-spinner"></div>
+              <span>Running backfill task...</span>
+            </div>
+          <% end %>
+
+          <%= if @backfill_result do %>
+            <div class="alert alert-success">
+              <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div>
+                <h3 class="font-bold">Backfill completed!</h3>
+                <div class="text-sm"><%= @backfill_result %></div>
+              </div>
+            </div>
+          <% end %>
+
+          <div class="card-actions justify-end mt-4">
+            <button
+              phx-click="run_backfill"
+              class="btn btn-primary"
+              disabled={@backfill_running}
+            >
+              <%= if @backfill_running, do: "Running...", else: "Run Backfill" %>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  @impl true
+  def handle_event("run_backfill", _params, socket) do
+    Logger.info("Starting backfill from admin panel")
+
+    socket = assign(socket, :backfill_running, true)
+
+    # Run backfill in a task to avoid blocking
+    parent = self()
+    Task.start(fn ->
+      result = run_backfill_task()
+      send(parent, {:backfill_complete, result})
+    end)
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:backfill_complete, result}, socket) do
+    socket =
+      socket
+      |> assign(:backfill_running, false)
+      |> assign(:backfill_result, result)
+
+    {:noreply, socket}
+  end
+
+  defp run_backfill_task do
+    import Ecto.Query
+    alias Rzeczywiscie.Repo
+    alias Rzeczywiscie.RealEstate.Property
+    alias Rzeczywiscie.RealEstate
+
+    Logger.info("Starting property type backfill...")
+
+    # Get all properties without transaction_type or property_type
+    properties =
+      from(p in Property,
+        where: is_nil(p.transaction_type) or is_nil(p.property_type),
+        where: p.active == true
+      )
+      |> Repo.all()
+
+    Logger.info("Found #{length(properties)} properties to update")
+
+    if length(properties) == 0 do
+      Logger.info("✓ No properties need updating!")
+      "No properties needed updating (all already have types)"
+    else
+      # Update each property
+      updated =
+        Enum.reduce(properties, 0, fn property, count ->
+          transaction_type = extract_transaction_type(property.url)
+          property_type = extract_property_type(property.url)
+
+          changes = %{}
+          changes = if transaction_type, do: Map.put(changes, :transaction_type, transaction_type), else: changes
+          changes = if property_type, do: Map.put(changes, :property_type, property_type), else: changes
+
+          if map_size(changes) > 0 do
+            case RealEstate.update_property(property, changes) do
+              {:ok, _updated_property} ->
+                Logger.info("✓ Updated property #{property.id}: #{transaction_type} / #{property_type}")
+                count + 1
+
+              {:error, changeset} ->
+                Logger.error("✗ Failed to update property #{property.id}: #{inspect(changeset.errors)}")
+                count
+            end
+          else
+            Logger.info("- No type info found in URL for property #{property.id}")
+            count
+          end
+        end)
+
+      result = "Updated #{updated} out of #{length(properties)} properties"
+      Logger.info("✓ Backfill completed: #{result}")
+      result
+    end
+  end
+
+  defp extract_transaction_type(url) do
+    cond do
+      String.contains?(url, "/sprzedaz/") -> "sprzedaż"
+      String.contains?(url, "/wynajem/") -> "wynajem"
+      true -> nil
+    end
+  end
+
+  defp extract_property_type(url) do
+    cond do
+      String.contains?(url, "/mieszkania/") -> "mieszkanie"
+      String.contains?(url, "/domy/") -> "dom"
+      String.contains?(url, "/pokoje/") -> "pokój"
+      String.contains?(url, "/garaze/") -> "garaż"
+      String.contains?(url, "/dzialki/") -> "działka"
+      String.contains?(url, "/lokale/") -> "lokal użytkowy"
+      String.contains?(url, "/stancje/") -> "stancja"
+      true -> nil
+    end
+  end
+end

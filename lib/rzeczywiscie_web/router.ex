@@ -24,6 +24,7 @@ defmodule RzeczywiscieWeb.Router do
     live "/counter", PersistentCounterLive
     live "/world", LiveWorldLive
     live "/real-estate", RealEstateLive
+    live "/admin", AdminLive
   end
 
   # Other scopes may use custom stacks.
