@@ -102,7 +102,7 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
 
         # Save HTML for debugging if it's a short response (might be error/captcha)
         if String.length(body) < 50_000 do
-          Logger.warn("Response seems short (#{String.length(body)} bytes) - might be blocked")
+          Logger.warning("Response seems short (#{String.length(body)} bytes) - might be blocked")
           save_debug_html(body, url)
         end
 
@@ -129,7 +129,7 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
         Logger.info("Preview: #{String.slice(html, 0, 500)}")
 
       {:error, reason} ->
-        Logger.warn("Could not save debug HTML: #{inspect(reason)}")
+        Logger.warning("Could not save debug HTML: #{inspect(reason)}")
     end
   end
 
@@ -141,7 +141,7 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
 
         # Check if we got blocked/captcha
         if String.contains?(html, ["captcha", "robot", "blocked"]) do
-          Logger.warn("Possible bot detection - page contains captcha/robot keywords")
+          Logger.warning("Possible bot detection - page contains captcha/robot keywords")
         end
 
         # Try multiple selector strategies (OLX changes their HTML frequently)
@@ -207,7 +207,7 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
       |> Enum.uniq()
       |> Enum.take(20)
 
-    Logger.warn("⚠️  No listings found! Available data-cy values: #{inspect(data_cy_values)}")
+    Logger.warning("⚠️  No listings found! Available data-cy values: #{inspect(data_cy_values)}")
 
     # Check for common containers
     containers = [
@@ -234,7 +234,7 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
       external_id = extract_id_from_url(url)
 
       if is_nil(external_id) do
-        Logger.warn("Could not extract ID from URL: #{url}")
+        Logger.warning("Could not extract ID from URL: #{url}")
       end
 
       %{
