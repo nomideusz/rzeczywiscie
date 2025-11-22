@@ -633,27 +633,38 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
     url_lower = String.downcase(url <> " " <> title)
 
     cond do
+      # PRIORITY 1: URL patterns (most reliable)
+      # Commercial properties
+      String.contains?(url_lower, "/lokal-uzytkowy/") -> "lokal użytkowy"
+      String.contains?(url_lower, "/lokal/") -> "lokal użytkowy"
+      String.contains?(url_lower, "/biuro/") -> "lokal użytkowy"
+      String.contains?(url_lower, "/biura/") -> "lokal użytkowy"
+      String.contains?(url_lower, "-lokal-") -> "lokal użytkowy"
+
       # Apartment (mieszkanie)
-      String.contains?(url_lower, "mieszkanie") -> "mieszkanie"
-      String.contains?(url_lower, "mieszkania") -> "mieszkanie"
+      String.contains?(url_lower, "/mieszkanie/") -> "mieszkanie"
+      String.contains?(url_lower, "/mieszkania/") -> "mieszkanie"
+      String.contains?(url_lower, "-mieszkanie-") -> "mieszkanie"
 
       # House (dom)
-      String.contains?(url_lower, "-dom-") -> "dom"
       String.contains?(url_lower, "/dom/") -> "dom"
-      String.match?(url_lower, ~r/\bdom\b/) -> "dom"
-
-      # Room (pokój)
-      String.contains?(url_lower, "pokoj") -> "pokój"
-
-      # Garage (garaż)
-      String.contains?(url_lower, "garaz") -> "garaż"
+      String.contains?(url_lower, "/domy/") -> "dom"
+      String.contains?(url_lower, "-dom-") -> "dom"
 
       # Plot/land (działka)
-      String.contains?(url_lower, "dzialka") -> "działka"
+      String.contains?(url_lower, "/dzialka/") -> "działka"
+      String.contains?(url_lower, "/dzialki/") -> "działka"
 
-      # Commercial space (lokal użytkowy)
-      String.contains?(url_lower, "lokal-uzytkowy") -> "lokal użytkowy"
-      String.contains?(url_lower, "lokal") -> "lokal użytkowy"
+      # Garage (garaż)
+      String.contains?(url_lower, "/garaz/") -> "garaż"
+      String.contains?(url_lower, "/garaze/") -> "garaż"
+
+      # Room (pokój)
+      String.contains?(url_lower, "/pokoj/") -> "pokój"
+
+      # PRIORITY 2: Title/text keywords
+      String.match?(url_lower, ~r/\bdom\b/) -> "dom"
+      String.contains?(url_lower, "pokoj") -> "pokój"
 
       true -> nil
     end
@@ -664,6 +675,32 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
     text_lower = String.downcase(text)
 
     cond do
+      # PRIORITY 1: URL patterns (most reliable)
+      # Commercial properties
+      String.contains?(text_lower, "/lokal-uzytkowy/") -> "lokal użytkowy"
+      String.contains?(text_lower, "/lokal/") -> "lokal użytkowy"
+      String.contains?(text_lower, "/biuro/") -> "lokal użytkowy"
+      String.contains?(text_lower, "/biura/") -> "lokal użytkowy"
+
+      # Apartment URL patterns
+      String.contains?(text_lower, "/mieszkanie/") -> "mieszkanie"
+      String.contains?(text_lower, "/mieszkania/") -> "mieszkanie"
+      String.contains?(text_lower, "-mieszkanie-") -> "mieszkanie"
+
+      # House URL patterns
+      String.contains?(text_lower, "/dom/") -> "dom"
+      String.contains?(text_lower, "/domy/") -> "dom"
+      String.contains?(text_lower, "-dom-") -> "dom"
+
+      # Plot URL patterns
+      String.contains?(text_lower, "/dzialka/") -> "działka"
+      String.contains?(text_lower, "/dzialki/") -> "działka"
+
+      # Garage URL patterns
+      String.contains?(text_lower, "/garaz/") -> "garaż"
+      String.contains?(text_lower, "/garaze/") -> "garaż"
+
+      # PRIORITY 2: Text-based detection
       # Apartment (mieszkanie) - most common, check first
       String.contains?(text_lower, "mieszkan") -> "mieszkanie"
       String.contains?(text_lower, "m²") && String.contains?(text_lower, "pokój") -> "mieszkanie"
@@ -695,12 +732,17 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
       String.contains?(text_lower, "grunt") -> "działka"
       String.contains?(text_lower, "teren") -> "działka"
 
-      # Commercial space (lokal użytkowy)
+      # Commercial space (lokal użytkowy) - check text keywords
       String.contains?(text_lower, "lokal użytkowy") -> "lokal użytkowy"
+      String.contains?(text_lower, "biura i lokale") -> "lokal użytkowy"
       String.contains?(text_lower, "lokal") -> "lokal użytkowy"
       String.contains?(text_lower, "biuro") -> "lokal użytkowy"
+      String.contains?(text_lower, "biura") -> "lokal użytkowy"
       String.contains?(text_lower, "sklep") -> "lokal użytkowy"
       String.contains?(text_lower, "magazyn") -> "lokal użytkowy"
+      String.contains?(text_lower, "hala") -> "lokal użytkowy"
+      String.contains?(text_lower, "powierzchnia biurowa") -> "lokal użytkowy"
+      String.contains?(text_lower, "powierzchnia handlowa") -> "lokal użytkowy"
 
       true -> nil
     end
