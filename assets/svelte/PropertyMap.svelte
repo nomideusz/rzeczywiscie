@@ -164,6 +164,10 @@
       })
 
       console.log('Map created successfully')
+
+      // Add Air Quality heatmap overlay
+      addAirQualityHeatmap()
+
       mapLoaded = true
 
       // Add markers
@@ -173,6 +177,34 @@
       loadError = error.message || 'Failed to load map'
     }
   })
+
+  // Add Air Quality heatmap overlay
+  function addAirQualityHeatmap() {
+    if (!map || !google) return
+
+    const apiKey = getApiKey()
+    if (!apiKey) {
+      console.warn('Cannot add AQ heatmap: no API key')
+      return
+    }
+
+    // Define custom tile layer for Air Quality heatmap
+    const aqHeatmapType = new google.maps.ImageMapType({
+      getTileUrl: function(coord, zoom) {
+        // Air Quality API heatmap tiles endpoint
+        // Using UAQI (Universal Air Quality Index) which works globally
+        return `https://airquality.googleapis.com/v1/mapTypes/UAQI/heatmapTiles/${zoom}/${coord.x}/${coord.y}?key=${apiKey}`
+      },
+      tileSize: new google.maps.Size(256, 256),
+      name: 'Air Quality',
+      opacity: 0.6, // Make it semi-transparent so we can see the map underneath
+    })
+
+    // Add heatmap as an overlay
+    map.overlayMapTypes.push(aqHeatmapType)
+
+    console.log('Air Quality heatmap overlay added')
+  }
 
   // Update markers when properties change
   $: if (map && google && properties && browser) {
@@ -288,7 +320,9 @@
   <!-- Legend -->
   {#if browser && mapLoaded}
     <div class="map-legend">
-      <div class="legend-title">Air Quality Index</div>
+      <div class="legend-title">Air Quality</div>
+      <div class="text-xs opacity-70 mb-2">Heatmap shows regional AQ</div>
+      <div class="legend-subtitle">Property Markers</div>
       <div class="legend-item">
         <span class="legend-dot" style="background-color: #10B981;"></span>
         <span>Good (0-50)</span>
@@ -368,8 +402,16 @@
 
   .legend-title {
     font-weight: 600;
-    margin-bottom: 8px;
+    margin-bottom: 4px;
     color: #1F2937;
+  }
+
+  .legend-subtitle {
+    font-weight: 500;
+    font-size: 11px;
+    margin-top: 8px;
+    margin-bottom: 4px;
+    color: #4B5563;
   }
 
   .legend-item {
