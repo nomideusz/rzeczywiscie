@@ -393,24 +393,78 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
   end
 
   defp parse_price(text) do
-    text
-    |> String.replace(~r/[^\d,]/, "")
-    |> String.replace(",", ".")
-    |> case do
-      "" ->
-        nil
+    # Use regex to extract price pattern first, before stripping chars
+    # Matches patterns like: "1 200 zł", "1,200.50 PLN", "1200", "1 200,50"
+    regex = ~r/(\d{1,3}(?:[\s,.]\d{3})*(?:[,.]\d{1,2})?)\s*(?:zł|PLN)?/i
 
-      price_str ->
-        case Decimal.parse(price_str) do
-          {decimal, _} -> decimal
-          :error -> nil
+    case Regex.run(regex, text) do
+      [_, price_str] ->
+        # Clean up: remove spaces and normalize decimal separator
+        clean_price =
+          price_str
+          |> String.replace(~r/\s+/, "")
+          |> String.replace(",", ".")
+
+        case Decimal.parse(clean_price) do
+          {decimal, _} ->
+            # Validate: price should be reasonable (1 to 99,999,999 PLN)
+            # Database constraint: precision 10, scale 2 = max 99,999,999.99
+            if Decimal.compare(decimal, Decimal.new("1")) != :lt and
+                 Decimal.compare(decimal, Decimal.new("99999999")) != :gt do
+              decimal
+            else
+              Logger.warning("Price out of range: #{clean_price} PLN - ignoring")
+              nil
+            end
+
+          :error ->
+            nil
         end
+
+      _ ->
+        nil
     end
   end
 
   defp extract_area(card) do
+    # Otodom typically shows area in specific format: "75 m²" or "75m²"
+    # Get all text and look for m² pattern
     text = Floki.text(card)
-    extract_number_with_unit(text, "m²")
+
+    # Look for pattern: number + m² (with optional space/comma/dot)
+    # Examples: "75 m²", "75.5 m²", "1 200 m²", "5000m2", "1558 m^2"
+    # Use negative lookbehind to avoid matching years (2024, 2025, etc.)
+    # Allow up to 5 digits to match land plots but reject via validation if too large
+    regex = ~r/(?<![0-9-])(\d{1,5}(?:[\s,.]\d{3})*(?:[,.]\d{1,2})?)\s*m[\^²2]/iu
+
+    case Regex.run(regex, text) do
+      [_, number_str] ->
+        # Clean up the number: remove spaces and replace comma with dot
+        clean_number =
+          number_str
+          |> String.replace(~r/\s+/, "")  # Remove all spaces
+          |> String.replace(",", ".")     # Replace comma with dot
+
+        case Decimal.parse(clean_number) do
+          {decimal, _} ->
+            # Validate: area should be reasonable (10 to 50,000 m²)
+            # Residential: 20-500 m², Commercial: up to 5,000 m², Land: up to 50,000 m² (5 hectares)
+            if Decimal.compare(decimal, Decimal.new("10")) != :lt and
+                 Decimal.compare(decimal, Decimal.new("50000")) != :gt do
+              decimal
+            else
+              Logger.debug("Area out of range: #{clean_number} m² - ignoring")
+              nil
+            end
+
+          :error ->
+            Logger.debug("Could not parse area: #{clean_number}")
+            nil
+        end
+
+      _ ->
+        nil
+    end
   end
 
   defp extract_rooms(card) do
