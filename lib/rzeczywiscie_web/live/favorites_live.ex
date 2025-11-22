@@ -1,5 +1,6 @@
 defmodule RzeczywiscieWeb.FavoritesLive do
   use RzeczywiscieWeb, :live_view
+  import RzeczywiscieWeb.Layouts
   alias Rzeczywiscie.RealEstate
 
   @impl true
@@ -18,15 +19,23 @@ defmodule RzeczywiscieWeb.FavoritesLive do
   @impl true
   def render(assigns) do
     ~H"""
+    <.app flash={@flash}>
     <div class="container mx-auto p-8">
+      <!-- Sub-navigation tabs -->
+      <div class="mb-6">
+        <div class="tabs tabs-boxed bg-base-200 border-2 border-base-content">
+          <a href="/real-estate" class="tab font-bold">Properties</a>
+          <a href="/favorites" class="tab tab-active font-bold">Favorites</a>
+          <a href="/stats" class="tab font-bold">Stats</a>
+          <a href="/admin" class="tab font-bold">Admin</a>
+        </div>
+      </div>
+
       <div class="flex justify-between items-center mb-6">
         <div>
           <h1 class="text-3xl font-bold">My Favorites</h1>
           <p class="text-sm opacity-70"><%= length(@favorites) %> saved properties</p>
         </div>
-        <a href="/real-estate" class="btn btn-secondary btn-sm">
-          Back to Listings
-        </a>
       </div>
 
       <%= if length(@favorites) == 0 do %>
@@ -111,6 +120,7 @@ defmodule RzeczywiscieWeb.FavoritesLive do
         </div>
       <% end %>
     </div>
+    </.app>
     """
   end
 

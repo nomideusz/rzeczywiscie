@@ -36,7 +36,7 @@ defmodule RzeczywiscieWeb.Layouts do
   def app(assigns) do
     ~H"""
     <header class="sticky top-0 z-50 bg-base-100 border-b-4 border-base-content">
-      <nav class="container mx-auto px-4 sm:px-6 lg:px-8">
+      <nav class="container mx-auto">
         <div class="flex items-center justify-between h-16">
           <!-- Logo - Brutalist -->
           <a href={~p"/"} class="flex items-center gap-2 sm:gap-3 group">
@@ -44,21 +44,15 @@ defmodule RzeczywiscieWeb.Layouts do
               R
             </div>
             <span class="text-base sm:text-xl font-black uppercase tracking-tighter hidden sm:inline">
-              Rzeczywiscie
+              Rzeka
             </span>
             <span class="text-base font-black uppercase tracking-tighter sm:hidden">
-              RZY
+              RZK
             </span>
           </a>
 
           <!-- Desktop Navigation -->
           <div class="hidden md:flex items-center gap-1">
-            <a
-              href={~p"/"}
-              class="px-3 lg:px-4 py-2 text-xs lg:text-sm font-bold uppercase tracking-wide hover:bg-base-content hover:text-base-100 transition-colors"
-            >
-              Home
-            </a>
             <a
               href={~p"/draw"}
               class="px-3 lg:px-4 py-2 text-xs lg:text-sm font-bold uppercase tracking-wide hover:bg-base-content hover:text-base-100 transition-colors"
@@ -83,24 +77,6 @@ defmodule RzeczywiscieWeb.Layouts do
             >
               Properties
             </a>
-            <a
-              href={~p"/favorites"}
-              class="px-3 lg:px-4 py-2 text-xs lg:text-sm font-bold uppercase tracking-wide hover:bg-base-content hover:text-base-100 transition-colors"
-            >
-              Favorites
-            </a>
-            <a
-              href={~p"/stats"}
-              class="px-3 lg:px-4 py-2 text-xs lg:text-sm font-bold uppercase tracking-wide hover:bg-base-content hover:text-base-100 transition-colors"
-            >
-              Stats
-            </a>
-            <a
-              href={~p"/admin"}
-              class="px-3 lg:px-4 py-2 text-xs lg:text-sm font-bold uppercase tracking-wide hover:bg-base-content hover:text-base-100 transition-colors"
-            >
-              Admin
-            </a>
           </div>
 
           <!-- Mobile Menu Button -->
@@ -118,52 +94,28 @@ defmodule RzeczywiscieWeb.Layouts do
         <div id="mobile-menu" class="hidden md:hidden border-t-2 border-base-content py-4">
           <div class="flex flex-col space-y-2">
             <a
-              href={~p"/"}
-              class="px-4 py-3 text-sm font-bold uppercase tracking-wide border-2 border-transparent hover:border-base-content hover:bg-base-content hover:text-base-100 transition-colors"
-            >
-              Home
-            </a>
-            <a
               href={~p"/draw"}
               class="px-4 py-3 text-sm font-bold uppercase tracking-wide border-2 border-transparent hover:border-base-content hover:bg-base-content hover:text-base-100 transition-colors"
             >
-              Draw
+              ✏️ Draw
             </a>
             <a
               href={~p"/kanban"}
               class="px-4 py-3 text-sm font-bold uppercase tracking-wide border-2 border-transparent hover:border-base-content hover:bg-base-content hover:text-base-100 transition-colors"
             >
-              Kanban
+              📋 Kanban
             </a>
             <a
               href={~p"/world"}
               class="px-4 py-3 text-sm font-bold uppercase tracking-wide border-2 border-transparent hover:border-base-content hover:bg-base-content hover:text-base-100 transition-colors"
             >
-              🌍 World Map
+              🌍 World
             </a>
             <a
               href={~p"/real-estate"}
               class="px-4 py-3 text-sm font-bold uppercase tracking-wide border-2 border-transparent hover:border-base-content hover:bg-base-content hover:text-base-100 transition-colors"
             >
               🏠 Properties
-            </a>
-            <a
-              href={~p"/favorites"}
-              class="px-4 py-3 text-sm font-bold uppercase tracking-wide border-2 border-transparent hover:border-base-content hover:bg-base-content hover:text-base-100 transition-colors"
-            >
-              ❤️ Favorites
-            </a>
-            <a
-              href={~p"/stats"}
-              class="px-4 py-3 text-sm font-bold uppercase tracking-wide border-2 border-transparent hover:border-base-content hover:bg-base-content hover:text-base-100 transition-colors"
-            >
-              📊 Stats
-            </a>
-            <a
-              href={~p"/admin"}
-              class="px-4 py-3 text-sm font-bold uppercase tracking-wide border-2 border-transparent hover:border-base-content hover:bg-base-content hover:text-base-100 transition-colors"
-            >
-              ⚙️ Admin
             </a>
           </div>
         </div>
@@ -184,7 +136,7 @@ defmodule RzeczywiscieWeb.Layouts do
                 R
               </div>
               <span class="text-2xl font-black uppercase tracking-tighter">
-                Rzeczywiscie
+                Rzeka
               </span>
             </div>
             <p class="text-sm opacity-70 leading-relaxed max-w-md mb-6">
@@ -297,7 +249,7 @@ defmodule RzeczywiscieWeb.Layouts do
         </div>
         <!-- Copyright bar -->
         <div class="pt-8 border-t-2 border-base-content text-xs uppercase tracking-widest font-bold opacity-50">
-          © 2024 Rzeczywiscie
+          © 2024 Rzeka.live
         </div>
       </div>
     </footer>

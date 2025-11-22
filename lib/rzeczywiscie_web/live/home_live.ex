@@ -26,9 +26,9 @@ defmodule RzeczywiscieWeb.HomeLive do
         <div class="grid lg:grid-cols-12 gap-8 items-center">
           <div class="lg:col-span-7">
             <h1 class="text-6xl sm:text-7xl lg:text-8xl xl:text-9xl font-black leading-[0.9] tracking-tighter mb-8">
-              RZECZY
+              RZ
               <br />
-              <span class="text-primary">WISCIE</span>
+              <span class="text-primary">EKA</span>
             </h1>
 
             <div class="flex items-start gap-4 mb-12">
