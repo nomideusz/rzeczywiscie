@@ -25,14 +25,15 @@ defmodule Rzeczywiscie.Services.AirQuality do
 
     case get_from_cache(grid_lat, grid_lng) do
       {:ok, cached} ->
-        Logger.info("Using cached AQI for #{grid_lat}, #{grid_lng}")
+        Logger.debug("Using cached AQI for #{grid_lat}, #{grid_lng}")
         {:ok, cached}
 
       {:error, :not_found} ->
+        Logger.debug("No cache found for #{grid_lat}, #{grid_lng}, fetching")
         fetch_and_cache(grid_lat, grid_lng)
 
       {:error, :expired} ->
-        Logger.info("Cache expired for #{grid_lat}, #{grid_lng}, refetching")
+        Logger.debug("Cache expired for #{grid_lat}, #{grid_lng}, refetching")
         fetch_and_cache(grid_lat, grid_lng)
     end
   end
@@ -84,6 +85,7 @@ defmodule Rzeczywiscie.Services.AirQuality do
   defp fetch_and_cache(lat, lng) do
     case fetch_air_quality(lat, lng) do
       {:ok, aqi_data} ->
+        Logger.info("Fetched AQI for #{lat}, #{lng}: #{aqi_data.aqi} (#{aqi_data.category})")
         save_to_cache(lat, lng, aqi_data)
         {:ok, aqi_data}
 
