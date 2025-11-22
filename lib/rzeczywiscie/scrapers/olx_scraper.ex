@@ -417,38 +417,94 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
     # Get all text and look for m² pattern
     text = Floki.text(card)
 
-    # Look for pattern: number + m² (with optional space/comma/dot)
-    # Examples: "75 m²", "75.5 m²", "1 200 m²", "5000m2", "1558 m^2"
-    # Use negative lookbehind to avoid matching years (2024, 2025, etc.)
-    # Allow up to 5 digits to match land plots but reject via validation if too large
-    regex = ~r/(?<![0-9-])(\d{1,5}(?:[\s,.]\d{3})*(?:[,.]\d{1,2})?)\s*m[\^²2]/iu
+    # Strategy: Find ALL area mentions and filter intelligently
+    # 1. First try to find building area keywords (powierzchnia, pow., mieszkanie)
+    # 2. Avoid plot area keywords (działka, grunt, teren)
+    # 3. Validate size is reasonable for building (not plot)
+
+    # Try to find building area with specific keywords
+    building_area = extract_building_area(text)
+
+    if building_area do
+      building_area
+    else
+      # Fallback: find any area but validate it's reasonable for a building
+      extract_any_area(text)
+    end
+  end
+
+  defp extract_building_area(text) do
+    # Keywords that indicate building/usable area (not plot)
+    # "powierzchnia: 75 m²", "pow. użytkowa: 75m2", "mieszkanie 75 m²"
+    building_keywords = [
+      "powierzchnia użytkowa",
+      "pow\\. użytkowa",
+      "pow\\.użytkowa",
+      "powierzchnia",
+      "pow\\.",
+      "mieszkanie",
+      "dom",
+      "lokal",
+      "garaż"
+    ]
+
+    # Build regex that looks for keyword + number + m²
+    # Example: "powierzchnia: 75 m²" or "pow. 75m2"
+    regex_patterns =
+      Enum.map(building_keywords, fn keyword ->
+        ~r/#{keyword}[:\s]*(\d{1,4}(?:[,\.]\d{1,2})?)\s*m[\^²2]/iu
+      end)
+
+    # Try each pattern
+    result = Enum.find_value(regex_patterns, fn pattern ->
+      case Regex.run(pattern, text) do
+        [_, number_str] -> parse_area_number(number_str, max_area: 1000)
+        _ -> nil
+      end
+    end)
+
+    result
+  end
+
+  defp extract_any_area(text) do
+    # Negative keywords - skip if preceded by these (plot/land indicators)
+    # This avoids matching "działka 5000 m²" when we want building area
+    negative_lookbehind = "(?<!działka\\s)(?<!grunt\\s)(?<!teren\\s)(?<!ogród\\s)"
+
+    # Match number + m² but exclude very large values (likely plot area)
+    regex = ~r/#{negative_lookbehind}(?<![0-9-])(\d{1,3}(?:[,\.]\d{1,2})?)\s*m[\^²2]/iu
 
     case Regex.run(regex, text) do
       [_, number_str] ->
-        # Clean up the number: remove spaces and replace comma with dot
-        clean_number =
-          number_str
-          |> String.replace(~r/\s+/, "")  # Remove all spaces
-          |> String.replace(",", ".")     # Replace comma with dot
+        # For fallback, use stricter validation (max 1000 m² for buildings)
+        parse_area_number(number_str, max_area: 1000)
+      _ ->
+        nil
+    end
+  end
 
-        case Decimal.parse(clean_number) do
-          {decimal, _} ->
-            # Validate: area should be reasonable (10 to 50,000 m²)
-            # Residential: 20-500 m², Commercial: up to 5,000 m², Land: up to 50,000 m² (5 hectares)
-            if Decimal.compare(decimal, Decimal.new("10")) != :lt and
-                 Decimal.compare(decimal, Decimal.new("50000")) != :gt do
-              decimal
-            else
-              Logger.debug("Area out of range: #{clean_number} m² - ignoring")
-              nil
-            end
+  defp parse_area_number(number_str, opts \\ []) do
+    max_area = Keyword.get(opts, :max_area, 50000)
 
-          :error ->
-            Logger.debug("Could not parse area: #{clean_number}")
-            nil
+    # Clean up the number: remove spaces and replace comma with dot
+    clean_number =
+      number_str
+      |> String.replace(~r/\s+/, "")  # Remove all spaces
+      |> String.replace(",", ".")     # Replace comma with dot
+
+    case Decimal.parse(clean_number) do
+      {decimal, _} ->
+        # Validate: area should be reasonable
+        if Decimal.compare(decimal, Decimal.new("10")) != :lt and
+             Decimal.compare(decimal, Decimal.new(max_area)) != :gt do
+          decimal
+        else
+          Logger.debug("Area out of range: #{clean_number} m² (max: #{max_area}) - ignoring")
+          nil
         end
 
-      _ ->
+      :error ->
+        Logger.debug("Could not parse area: #{clean_number}")
         nil
     end
   end
