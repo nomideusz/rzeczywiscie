@@ -23,36 +23,36 @@ defmodule Mix.Tasks.BackfillPropertyTypes do
 
     if length(properties) == 0 do
       Logger.info("✓ No properties need updating!")
-      return
-    end
+      :ok
+    else
+      # Update each property
+      updated =
+        Enum.reduce(properties, 0, fn property, count ->
+          transaction_type = extract_transaction_type(property.url)
+          property_type = extract_property_type(property.url)
 
-    # Update each property
-    updated =
-      Enum.reduce(properties, 0, fn property, count ->
-        transaction_type = extract_transaction_type(property.url)
-        property_type = extract_property_type(property.url)
+          changes = %{}
+          changes = if transaction_type, do: Map.put(changes, :transaction_type, transaction_type), else: changes
+          changes = if property_type, do: Map.put(changes, :property_type, property_type), else: changes
 
-        changes = %{}
-        changes = if transaction_type, do: Map.put(changes, :transaction_type, transaction_type), else: changes
-        changes = if property_type, do: Map.put(changes, :property_type, property_type), else: changes
+          if map_size(changes) > 0 do
+            case Rzeczywiscie.RealEstate.update_property(property, changes) do
+              {:ok, _updated_property} ->
+                Logger.info("✓ Updated property #{property.id}: #{transaction_type} / #{property_type}")
+                count + 1
 
-        if map_size(changes) > 0 do
-          case Rzeczywiscie.RealEstate.update_property(property, changes) do
-            {:ok, updated_property} ->
-              Logger.info("✓ Updated property #{property.id}: #{transaction_type} / #{property_type}")
-              count + 1
-
-            {:error, changeset} ->
-              Logger.error("✗ Failed to update property #{property.id}: #{inspect(changeset.errors)}")
-              count
+              {:error, changeset} ->
+                Logger.error("✗ Failed to update property #{property.id}: #{inspect(changeset.errors)}")
+                count
+            end
+          else
+            Logger.info("- No type info found in URL for property #{property.id}")
+            count
           end
-        else
-          Logger.info("- No type info found in URL for property #{property.id}")
-          count
-        end
-      end)
+        end)
 
-    Logger.info("✓ Backfill completed: #{updated}/#{length(properties)} properties updated")
+      Logger.info("✓ Backfill completed: #{updated}/#{length(properties)} properties updated")
+    end
   end
 
   defp get_properties_to_update do

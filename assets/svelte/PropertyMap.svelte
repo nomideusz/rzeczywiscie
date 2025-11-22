@@ -243,38 +243,50 @@
   })
 </script>
 
-{#if loadError}
-  <div class="map-wrapper flex items-center justify-center bg-base-200">
-    <div class="alert alert-error max-w-md">
-      <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-      <div>
-        <h3 class="font-bold">Map Error</h3>
-        <div class="text-sm">{loadError}</div>
-        <div class="text-xs mt-2">Make sure GOOGLE_MAPS_API_KEY is configured.</div>
-      </div>
-    </div>
-  </div>
-{:else if browser && mapLoaded}
-  <div class="map-wrapper">
-    <div bind:this={mapContainer} class="map-container"></div>
+<div class="map-wrapper">
+  <!-- Map Container - Always present in DOM -->
+  <div bind:this={mapContainer} class="map-container"></div>
 
-    {#if properties.filter(p => p.latitude && p.longitude).length === 0}
-      <div class="map-overlay">
-        <div class="alert alert-info shadow-lg">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+  <!-- Loading/Error State Overlay -->
+  {#if !browser || !mapLoaded}
+    <div class="map-overlay-full">
+      {#if loadError}
+        <div class="alert alert-error max-w-md">
+          <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <div>
-            <h3 class="font-bold">No geocoded properties</h3>
-            <div class="text-xs">Properties need coordinates to appear on the map. Click "Geocode Now" to add them.</div>
+            <h3 class="font-bold">Map Error</h3>
+            <div class="text-sm">{loadError}</div>
+            <div class="text-xs mt-2">Make sure GOOGLE_MAPS_API_KEY is configured.</div>
           </div>
         </div>
-      </div>
-    {/if}
+      {:else}
+        <div class="text-center">
+          <div class="loading loading-spinner loading-lg"></div>
+          <p class="mt-4 text-gray-600">Loading map...</p>
+        </div>
+      {/if}
+    </div>
+  {/if}
 
-    <!-- Legend -->
+  <!-- No Properties Overlay -->
+  {#if browser && mapLoaded && properties.filter(p => p.latitude && p.longitude).length === 0}
+    <div class="map-overlay">
+      <div class="alert alert-info shadow-lg">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        <div>
+          <h3 class="font-bold">No geocoded properties</h3>
+          <div class="text-xs">Properties need coordinates to appear on the map. Click "Geocode Now" to add them.</div>
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  <!-- Legend -->
+  {#if browser && mapLoaded}
     <div class="map-legend">
       <div class="legend-title">Air Quality Index</div>
       <div class="legend-item">
@@ -298,15 +310,8 @@
         <span>No AQI data</span>
       </div>
     </div>
-  </div>
-{:else}
-  <div class="map-wrapper flex items-center justify-center">
-    <div class="text-center">
-      <div class="loading loading-spinner loading-lg"></div>
-      <p class="mt-4 text-gray-600">Loading map...</p>
-    </div>
-  </div>
-{/if}
+  {/if}
+</div>
 
 <style>
   .map-wrapper {
@@ -334,6 +339,19 @@
 
   .map-overlay .alert {
     pointer-events: auto;
+  }
+
+  .map-overlay-full {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #f3f4f6;
+    z-index: 2000;
   }
 
   .map-legend {
