@@ -35,11 +35,17 @@ defmodule RzeczywiscieWeb.RealEstateLive do
         name="PropertyView"
         props={%{
           properties: serialize_properties(@properties),
+          map_properties: serialize_properties(@all_map_properties),
           pagination: %{
             page: @page,
             page_size: @page_size,
             total_count: @total_count,
             total_pages: @total_pages
+          },
+          stats: %{
+            total_count: @total_count,
+            with_coords: @total_with_coords,
+            with_aqi: @total_with_aqi
           }
         }}
         socket={@socket}
@@ -166,7 +172,7 @@ defmodule RzeczywiscieWeb.RealEstateLive do
     # Calculate offset
     offset = (page - 1) * page_size
 
-    # Build query options
+    # Build query options for paginated list
     opts =
       filters
       |> Map.to_list()
@@ -177,15 +183,39 @@ defmodule RzeczywiscieWeb.RealEstateLive do
     # Get total count for pagination
     total_count = RealEstate.count_properties(Keyword.new(Map.to_list(filters)))
 
+    # Get paginated properties for table
     properties = RealEstate.list_properties(opts)
 
     # Sort in memory (could be moved to query for better performance)
     sorted_properties = sort_properties(properties, sort_column, sort_direction)
 
+    # Get ALL properties with coordinates for map (with same filters but no pagination)
+    map_opts =
+      filters
+      |> Map.to_list()
+      |> Keyword.new()
+      |> Keyword.put(:limit, 10000)  # High limit to get all
+
+    all_map_properties = RealEstate.list_properties(map_opts)
+
+    # Calculate global stats
+    with_coords = Enum.count(all_map_properties, fn p -> p.latitude && p.longitude end)
+    with_aqi = Enum.count(all_map_properties, fn p ->
+      if p.latitude && p.longitude do
+        aqi_data = Rzeczywiscie.Services.AirQuality.get_property_aqi(p)
+        aqi_data && aqi_data.aqi
+      else
+        false
+      end
+    end)
+
     socket
     |> assign(:properties, sorted_properties)
+    |> assign(:all_map_properties, all_map_properties)
     |> assign(:total_count, total_count)
     |> assign(:total_pages, ceil(total_count / page_size))
+    |> assign(:total_with_coords, with_coords)
+    |> assign(:total_with_aqi, with_aqi)
   end
 
   defp sort_properties(properties, column, direction) do
