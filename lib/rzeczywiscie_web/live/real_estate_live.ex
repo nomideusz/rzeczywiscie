@@ -29,7 +29,7 @@ defmodule RzeczywiscieWeb.RealEstateLive do
     ~H"""
     <.app flash={@flash}>
       <.svelte
-        name="PropertyTable"
+        name="PropertyView"
         props={%{properties: serialize_properties(@properties)}}
         socket={@socket}
       />

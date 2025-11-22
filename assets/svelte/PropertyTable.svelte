@@ -104,27 +104,24 @@
   }
 </script>
 
-<div class="container mx-auto p-4">
-  <div class="mb-6">
-    <div class="flex justify-between items-center mb-4">
-      <h1 class="text-3xl font-bold">Real Estate Listings - Małopolskie</h1>
-      <div class="flex gap-2">
-        <button
-          onclick={refreshData}
-          class="btn btn-primary btn-sm"
-        >
-          Refresh
-        </button>
-        <button
-          onclick={triggerScrape}
-          class="btn btn-secondary btn-sm"
-        >
-          Manual Scrape
-        </button>
-      </div>
-    </div>
+<div>
+  <!-- Action Buttons -->
+  <div class="flex justify-end gap-2 mb-4">
+    <button
+      onclick={refreshData}
+      class="btn btn-primary btn-sm"
+    >
+      Refresh
+    </button>
+    <button
+      onclick={triggerScrape}
+      class="btn btn-secondary btn-sm"
+    >
+      Manual Scrape
+    </button>
+  </div>
 
-    <!-- Filters -->
+  <!-- Filters -->
     <div class="card bg-base-200 shadow-xl mb-4">
       <div class="card-body">
         <h2 class="card-title">Filters</h2>
@@ -217,15 +214,6 @@
         </div>
       </div>
     </div>
-
-    <!-- Stats -->
-    <div class="stats shadow mb-4 w-full">
-      <div class="stat">
-        <div class="stat-title">Total Listings</div>
-        <div class="stat-value text-primary">{properties.length}</div>
-      </div>
-    </div>
-  </div>
 
   <!-- Table -->
   <div class="overflow-x-auto">
