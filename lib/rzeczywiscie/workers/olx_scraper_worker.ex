@@ -4,7 +4,8 @@ defmodule Rzeczywiscie.Workers.OlxScraperWorker do
   Scheduled to run every 30 minutes via cron.
   """
 
-  use Oban.Worker, queue: :scraper, max_attempts: 3
+  # Increase timeout to 5 minutes for large scrapes
+  use Oban.Worker, queue: :scraper, max_attempts: 3, max_run_time: 300_000
 
   require Logger
   alias Rzeczywiscie.Scrapers.OlxScraper
