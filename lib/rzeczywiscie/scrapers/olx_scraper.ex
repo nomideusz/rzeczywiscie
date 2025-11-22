@@ -393,9 +393,40 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
   end
 
   defp extract_area(card) do
-    card
-    |> Floki.text()
-    |> extract_number_with_unit("m²")
+    # OLX typically shows area in specific format: "75 m²" or "75m²"
+    # Get all text and look for m² pattern
+    text = Floki.text(card)
+
+    # Look for pattern: number + m² (with optional space/comma/dot)
+    # Example: "75 m²", "75.5 m²", "1 200 m²", "1,200 m²"
+    regex = ~r/(?<!\d)(\d{1,3}(?:[\s,.]?\d{3})*(?:[,.]\d{1,2})?)\s*m[²2]/i
+
+    case Regex.run(regex, text) do
+      [_, number_str] ->
+        # Clean up the number: remove spaces and replace comma with dot
+        clean_number =
+          number_str
+          |> String.replace(~r/\s+/, "")  # Remove all spaces
+          |> String.replace(",", ".")     # Replace comma with dot
+
+        case Decimal.new(clean_number) do
+          {:ok, decimal} ->
+            # Validate: area should be reasonable (0.1 to 100,000 m²)
+            if Decimal.compare(decimal, Decimal.new("0.1")) == :gt and
+               Decimal.compare(decimal, Decimal.new("100000")) == :lt do
+              decimal
+            else
+              Logger.warning("Area out of range: #{clean_number} m² - ignoring")
+              nil
+            end
+          :error ->
+            Logger.warning("Could not parse area: #{clean_number}")
+            nil
+        end
+
+      _ ->
+        nil
+    end
   end
 
   defp extract_rooms(card) do
