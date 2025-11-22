@@ -6,6 +6,8 @@ defmodule Rzeczywiscie.RealEstate do
   import Ecto.Query, warn: false
   alias Rzeczywiscie.Repo
   alias Rzeczywiscie.RealEstate.Property
+  alias Rzeczywiscie.RealEstate.PriceHistory
+  alias Rzeczywiscie.RealEstate.Favorite
 
   @topic "real_estate"
 
@@ -226,5 +228,150 @@ defmodule Rzeczywiscie.RealEstate do
       nil -> Decimal.new(0)
       avg -> avg
     end
+  end
+
+  # Price History functions
+
+  @doc """
+  Create a price history record for a property.
+  """
+  def create_price_history(attrs) do
+    %PriceHistory{}
+    |> PriceHistory.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc """
+  Get price history for a property.
+  """
+  def get_price_history(property_id, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 50)
+
+    from(ph in PriceHistory,
+      where: ph.property_id == ^property_id,
+      order_by: [desc: ph.detected_at],
+      limit: ^limit
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Get the latest price for a property.
+  """
+  def get_latest_price(property_id) do
+    from(ph in PriceHistory,
+      where: ph.property_id == ^property_id,
+      order_by: [desc: ph.detected_at],
+      limit: 1
+    )
+    |> Repo.one()
+  end
+
+  @doc """
+  Track price change for a property.
+  Called when a property is updated.
+  """
+  def track_price_change(%Property{} = property, new_price) do
+    if property.price && new_price && property.price != new_price do
+      old_price = Decimal.to_float(property.price)
+      new_price_float = Decimal.to_float(new_price)
+      change_pct = ((new_price_float - old_price) / old_price * 100) |> Decimal.from_float()
+
+      price_per_sqm =
+        if property.area_sqm && Decimal.compare(property.area_sqm, 0) == :gt do
+          Decimal.div(new_price, property.area_sqm)
+        else
+          nil
+        end
+
+      create_price_history(%{
+        property_id: property.id,
+        price: new_price,
+        price_per_sqm: price_per_sqm,
+        currency: property.currency || "PLN",
+        change_percentage: change_pct,
+        detected_at: DateTime.utc_now()
+      })
+    else
+      {:ok, :no_change}
+    end
+  end
+
+  @doc """
+  Get properties with recent price drops.
+  """
+  def get_properties_with_price_drops(days_ago \\ 7) do
+    cutoff = DateTime.utc_now() |> DateTime.add(-days_ago * 24 * 3600, :second)
+
+    from(ph in PriceHistory,
+      join: p in Property,
+      on: ph.property_id == p.id,
+      where: ph.detected_at >= ^cutoff and ph.change_percentage < 0,
+      order_by: [asc: ph.change_percentage],
+      select: {p, ph}
+    )
+    |> Repo.all()
+  end
+
+  # Favorites functions
+
+  @doc """
+  Add a property to favorites.
+  """
+  def add_favorite(property_id, user_id, opts \\ []) do
+    attrs = %{
+      property_id: property_id,
+      user_id: user_id,
+      notes: Keyword.get(opts, :notes),
+      alert_on_price_drop: Keyword.get(opts, :alert_on_price_drop, true)
+    }
+
+    %Favorite{}
+    |> Favorite.changeset(attrs)
+    |> Repo.insert(on_conflict: :nothing)
+  end
+
+  @doc """
+  Remove a property from favorites.
+  """
+  def remove_favorite(property_id, user_id) do
+    from(f in Favorite,
+      where: f.property_id == ^property_id and f.user_id == ^user_id
+    )
+    |> Repo.delete_all()
+  end
+
+  @doc """
+  Get all favorites for a user.
+  """
+  def list_favorites(user_id) do
+    from(f in Favorite,
+      join: p in Property,
+      on: f.property_id == p.id,
+      where: f.user_id == ^user_id and p.active == true,
+      order_by: [desc: f.inserted_at],
+      preload: [property: p]
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Check if a property is favorited by a user.
+  """
+  def is_favorited?(property_id, user_id) do
+    from(f in Favorite,
+      where: f.property_id == ^property_id and f.user_id == ^user_id
+    )
+    |> Repo.exists?()
+  end
+
+  @doc """
+  Get count of favorites for a user.
+  """
+  def count_favorites(user_id) do
+    from(f in Favorite,
+      where: f.user_id == ^user_id
+    )
+    |> Repo.aggregate(:count)
   end
 end
