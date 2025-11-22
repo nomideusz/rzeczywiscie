@@ -610,6 +610,20 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
     text_lower = String.downcase(text)
 
     cond do
+      # PRIORITY 1: Check URL patterns first (most reliable)
+      # OLX URL patterns: /sprzedam/, /sprzedaz/, /na-sprzedaz/
+      String.contains?(text_lower, "/sprzedam/") -> "sprzedaż"
+      String.contains?(text_lower, "/sprzedaz/") -> "sprzedaż"
+      String.contains?(text_lower, "/na-sprzedaz/") -> "sprzedaż"
+      String.contains?(text_lower, "-sprzedam-") -> "sprzedaż"
+      String.contains?(text_lower, "-sprzedaz-") -> "sprzedaż"
+
+      # URL patterns for rent
+      String.contains?(text_lower, "/wynajem/") -> "wynajem"
+      String.contains?(text_lower, "/do-wynajecia/") -> "wynajem"
+      String.contains?(text_lower, "-wynajem-") -> "wynajem"
+
+      # PRIORITY 2: Keywords in text (title, description)
       # Keywords for sale (sprzedaż) - check most specific first
       String.contains?(text_lower, "na sprzedaż") -> "sprzedaż"
       String.contains?(text_lower, "na-sprzedaz") -> "sprzedaż"
@@ -617,6 +631,8 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
       String.contains?(text_lower, "sprzedaż") -> "sprzedaż"
       String.contains?(text_lower, "sprzedaz") -> "sprzedaż"
       String.contains?(text_lower, "do kupienia") -> "sprzedaż"
+      String.contains?(text_lower, "kupno") -> "sprzedaż"
+      String.contains?(text_lower, "na własność") -> "sprzedaż"
 
       # Keywords for rent (wynajem)
       String.contains?(text_lower, "na wynajem") -> "wynajem"
@@ -627,6 +643,12 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
       String.contains?(text_lower, "wynajem") -> "wynajem"
       String.contains?(text_lower, "na-wynajem") -> "wynajem"
 
+      # PRIORITY 3: Price indicators - monthly prices usually indicate rent
+      # This is a fallback for ambiguous cases
+      String.contains?(text_lower, "zł/mies") -> "wynajem"
+      String.contains?(text_lower, "zł / mies") -> "wynajem"
+      String.contains?(text_lower, "miesięcznie") -> "wynajem"
+
       true -> nil
     end
   end
@@ -635,7 +657,33 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
     text_lower = String.downcase(text)
 
     cond do
-      # Apartment (mieszkanie) - most common, check first
+      # PRIORITY 1: Check URL patterns first (most reliable)
+      # Commercial properties - check URL patterns for "biura-i-lokale"
+      String.contains?(text_lower, "/biura-i-lokale/") -> "lokal użytkowy"
+      String.contains?(text_lower, "/biura-lokale/") -> "lokal użytkowy"
+      String.contains?(text_lower, "/lokal-uzytkowy/") -> "lokal użytkowy"
+      String.contains?(text_lower, "-biuro-") -> "lokal użytkowy"
+
+      # Apartment URL patterns
+      String.contains?(text_lower, "/mieszkania/") -> "mieszkanie"
+      String.contains?(text_lower, "/mieszkanie/") -> "mieszkanie"
+      String.contains?(text_lower, "-mieszkanie-") -> "mieszkanie"
+
+      # House URL patterns
+      String.contains?(text_lower, "/domy/") -> "dom"
+      String.contains?(text_lower, "-dom-") -> "dom"
+      String.contains?(text_lower, "/dom-") -> "dom"
+
+      # Plot URL patterns
+      String.contains?(text_lower, "/dzialki/") -> "działka"
+      String.contains?(text_lower, "/dzialka/") -> "działka"
+
+      # Garage URL patterns
+      String.contains?(text_lower, "/garaze/") -> "garaż"
+      String.contains?(text_lower, "/garaz/") -> "garaż"
+
+      # PRIORITY 2: Text-based detection (title, description)
+      # Apartment (mieszkanie) - most common
       String.contains?(text_lower, "mieszkan") -> "mieszkanie"
       String.contains?(text_lower, "kawalerka") -> "mieszkanie"
       String.contains?(text_lower, "apartament") -> "mieszkanie"
@@ -644,8 +692,6 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
       # House (dom)
       String.contains?(text_lower, "dom ") -> "dom"
       String.contains?(text_lower, " dom") -> "dom"
-      String.contains?(text_lower, "-dom-") -> "dom"
-      String.contains?(text_lower, "/dom-") -> "dom"
       String.match?(text_lower, ~r/\bdom\b/) -> "dom"
       String.contains?(text_lower, "willa") -> "dom"
       String.contains?(text_lower, "bliźniak") -> "dom"
@@ -667,15 +713,20 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
       String.contains?(text_lower, "grunt") -> "działka"
       String.contains?(text_lower, "teren") -> "działka"
 
-      # Commercial space (lokal użytkowy)
+      # Commercial space (lokal użytkowy) - check text keywords
       String.contains?(text_lower, "lokal użytkowy") -> "lokal użytkowy"
       String.contains?(text_lower, "lokal-uzytkowy") -> "lokal użytkowy"
       String.contains?(text_lower, "lokal-biurowo") -> "lokal użytkowy"
       String.contains?(text_lower, "lokal-handlowy") -> "lokal użytkowy"
-      String.contains?(text_lower, "lokal") -> "lokal użytkowy"
+      String.contains?(text_lower, "biura i lokale") -> "lokal użytkowy"
       String.contains?(text_lower, "biuro") -> "lokal użytkowy"
+      String.contains?(text_lower, "biura") -> "lokal użytkowy"
+      String.contains?(text_lower, "lokal") -> "lokal użytkowy"
       String.contains?(text_lower, "sklep") -> "lokal użytkowy"
       String.contains?(text_lower, "magazyn") -> "lokal użytkowy"
+      String.contains?(text_lower, "hala") -> "lokal użytkowy"
+      String.contains?(text_lower, "powierzchnia biurowa") -> "lokal użytkowy"
+      String.contains?(text_lower, "powierzchnia handlowa") -> "lokal użytkowy"
 
       true -> nil
     end
