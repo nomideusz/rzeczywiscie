@@ -3,10 +3,13 @@
 
   export let properties = []
   export let live
+  export let selectedPropertyId = null
 
   let mapContainer
   let map
   let markers = []
+  let markersByPropertyId = {} // Map of property ID to marker
+  let infoWindow = null
   let google
   let browser = false
   let mapLoaded = false
@@ -65,66 +68,69 @@
       : '#9CA3AF'
 
     return `
-      <div style="min-width: 250px; max-width: 300px; font-family: system-ui, sans-serif; padding: 8px;">
+      <div style="min-width: 280px; max-width: 350px; font-family: system-ui, sans-serif; padding: 8px;">
         ${property.image_url ? `
-          <div style="margin-bottom: 12px;">
+          <div style="margin-bottom: 12px; margin: -8px -8px 12px -8px;">
             <img
               src="${property.image_url}"
               alt="${property.title || 'Property'}"
               style="
                 width: 100%;
                 height: auto;
-                max-height: 200px;
+                max-height: 250px;
                 object-fit: cover;
-                border-radius: 8px;
+                border-radius: 8px 8px 0 0;
+                display: block;
               "
-              onerror="this.style.display='none'"
+              onerror="this.parentElement.style.display='none'"
             />
           </div>
         ` : ''}
-        <div style="font-weight: bold; font-size: 14px; margin-bottom: 8px; color: #1F2937;">
-          ${property.title || 'N/A'}
-        </div>
-        <div style="margin-bottom: 4px; color: #6B7280; font-size: 13px;">
-          📍 ${property.city || 'N/A'}${property.district ? ', ' + property.district : ''}
-        </div>
-        <div style="margin-bottom: 4px; color: #1F2937; font-size: 14px; font-weight: 600;">
-          💰 ${formatPrice(property.price)}
-        </div>
-        ${property.area_sqm ? `<div style="margin-bottom: 4px; color: #6B7280; font-size: 13px;">📐 ${property.area_sqm} m²</div>` : ''}
-        ${property.rooms ? `<div style="margin-bottom: 4px; color: #6B7280; font-size: 13px;">🛏️ ${property.rooms} rooms</div>` : ''}
-        ${property.aqi ? `
-          <div style="margin-bottom: 8px; margin-top: 8px;">
-            <span style="
-              background-color: ${aqiBadgeColor};
-              color: white;
-              padding: 4px 8px;
-              border-radius: 4px;
-              font-size: 12px;
-              font-weight: 600;
-            ">
-              AQI: ${property.aqi} - ${property.aqi_category || 'N/A'}
-            </span>
+        <div style="padding: 0 8px;">
+          <div style="font-weight: bold; font-size: 14px; margin-bottom: 8px; color: #1F2937; line-height: 1.4;">
+            ${property.title || 'N/A'}
           </div>
-        ` : ''}
-        <div style="margin-top: 12px;">
-          <a
-            href="${property.url}"
-            target="_blank"
-            rel="noopener noreferrer"
-            style="
-              display: inline-block;
-              background-color: #3B82F6;
-              color: white;
-              padding: 6px 12px;
-              border-radius: 4px;
-              text-decoration: none;
-              font-size: 12px;
-              font-weight: 500;
-            "
-          >
-            View Listing →
-          </a>
+          <div style="margin-bottom: 4px; color: #6B7280; font-size: 13px;">
+            📍 ${property.city || 'N/A'}${property.district ? ', ' + property.district : ''}
+          </div>
+          <div style="margin-bottom: 4px; color: #1F2937; font-size: 14px; font-weight: 600;">
+            💰 ${formatPrice(property.price)}
+          </div>
+          ${property.area_sqm ? `<div style="margin-bottom: 4px; color: #6B7280; font-size: 13px;">📐 ${property.area_sqm} m²</div>` : ''}
+          ${property.rooms ? `<div style="margin-bottom: 4px; color: #6B7280; font-size: 13px;">🛏️ ${property.rooms} rooms</div>` : ''}
+          ${property.aqi ? `
+            <div style="margin-bottom: 8px; margin-top: 8px;">
+              <span style="
+                background-color: ${aqiBadgeColor};
+                color: white;
+                padding: 4px 8px;
+                border-radius: 4px;
+                font-size: 12px;
+                font-weight: 600;
+              ">
+                AQI: ${property.aqi} - ${property.aqi_category || 'N/A'}
+              </span>
+            </div>
+          ` : ''}
+          <div style="margin-top: 12px;">
+            <a
+              href="${property.url}"
+              target="_blank"
+              rel="noopener noreferrer"
+              style="
+                display: inline-block;
+                background-color: #3B82F6;
+                color: white;
+                padding: 6px 12px;
+                border-radius: 4px;
+                text-decoration: none;
+                font-size: 12px;
+                font-weight: 500;
+              "
+            >
+              View Listing →
+            </a>
+          </div>
         </div>
       </div>
     `
@@ -297,6 +303,7 @@
     // Clear existing markers
     markers.forEach(marker => marker.setMap(null))
     markers = []
+    markersByPropertyId = {}
 
     // Filter properties with valid coordinates
     const validProperties = properties.filter(p => p.latitude && p.longitude)
@@ -304,7 +311,11 @@
     if (validProperties.length === 0) return
 
     const bounds = new google.maps.LatLngBounds()
-    const infoWindow = new google.maps.InfoWindow()
+
+    // Create or reuse info window
+    if (!infoWindow) {
+      infoWindow = new google.maps.InfoWindow()
+    }
 
     // Add markers for each property
     validProperties.forEach(property => {
@@ -330,14 +341,37 @@
       marker.addListener('click', () => {
         infoWindow.setContent(createInfoWindowContent(property))
         infoWindow.open(map, marker)
+
+        // Pan map to ensure popup is visible (with some offset for popup height)
+        // Wait a bit for InfoWindow to render and get its size
+        setTimeout(() => {
+          const currentCenter = map.getCenter()
+          const markerPosition = marker.getPosition()
+
+          // Calculate offset to move map down slightly so popup fits above marker
+          const scale = Math.pow(2, map.getZoom())
+          const worldCoordinate = map.getProjection().fromLatLngToPoint(markerPosition)
+
+          // Offset by ~150 pixels upward (adjust for popup height)
+          const pixelOffset = new google.maps.Point(0, -150 / scale)
+          const newCenter = map.getProjection().fromPointToLatLng(
+            new google.maps.Point(
+              worldCoordinate.x + pixelOffset.x,
+              worldCoordinate.y + pixelOffset.y
+            )
+          )
+
+          map.panTo(newCenter)
+        }, 100)
       })
 
       markers.push(marker)
+      markersByPropertyId[property.id] = marker
       bounds.extend(position)
     })
 
-    // Fit map to show all markers
-    if (validProperties.length > 0) {
+    // Fit map to show all markers (unless we're selecting a specific property)
+    if (validProperties.length > 0 && !selectedPropertyId) {
       map.fitBounds(bounds)
 
       // Don't zoom in too much for a single property
@@ -345,6 +379,36 @@
         if (map.getZoom() > 14) map.setZoom(14)
         google.maps.event.removeListener(listener)
       })
+    }
+  }
+
+  // Reactive statement: Center on selected property when it changes
+  $: if (map && google && selectedPropertyId && markersByPropertyId[selectedPropertyId]) {
+    const marker = markersByPropertyId[selectedPropertyId]
+    const property = properties.find(p => p.id === selectedPropertyId)
+
+    if (marker && property) {
+      // Center map on the selected property
+      map.setCenter(marker.getPosition())
+      map.setZoom(15) // Zoom in closer for individual property
+
+      // Open the info window for this property
+      infoWindow.setContent(createInfoWindowContent(property))
+      infoWindow.open(map, marker)
+
+      // Pan map to ensure popup is visible
+      setTimeout(() => {
+        const scale = Math.pow(2, map.getZoom())
+        const worldCoordinate = map.getProjection().fromLatLngToPoint(marker.getPosition())
+        const pixelOffset = new google.maps.Point(0, -150 / scale)
+        const newCenter = map.getProjection().fromPointToLatLng(
+          new google.maps.Point(
+            worldCoordinate.x + pixelOffset.x,
+            worldCoordinate.y + pixelOffset.y
+          )
+        )
+        map.panTo(newCenter)
+      }, 100)
     }
   }
 
@@ -441,7 +505,7 @@
   .map-wrapper {
     position: relative;
     width: 100%;
-    height: 600px;
+    height: 800px;
     border-radius: 8px;
     overflow: hidden;
     box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
@@ -536,7 +600,7 @@
   /* Make map responsive */
   @media (max-width: 768px) {
     .map-wrapper {
-      height: 400px;
+      height: 500px;
     }
 
     .map-legend {
