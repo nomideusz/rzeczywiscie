@@ -148,20 +148,102 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
           Logger.warning("Possible bot detection - page contains captcha/robot keywords")
         end
 
-        # Try multiple selector strategies for Otodom
-        cards = try_find_listings(document)
+        # Extract JSON-LD structured data instead of HTML scraping
+        properties = extract_from_json_ld(document, transaction_type)
 
-        Logger.info("Found #{length(cards)} listing cards")
+        if length(properties) > 0 do
+          Logger.info("Found #{length(properties)} properties from JSON-LD data")
+          properties
+        else
+          Logger.warning("No properties found in JSON-LD, falling back to HTML scraping")
+          # Fallback to HTML scraping if JSON-LD fails
+          cards = try_find_listings(document)
+          Logger.info("Found #{length(cards)} listing cards")
 
-        cards
-        |> Enum.map(&parse_listing(&1, transaction_type))
-        |> Enum.reject(&is_nil/1)
+          cards
+          |> Enum.map(&parse_listing(&1, transaction_type))
+          |> Enum.reject(&is_nil/1)
+        end
 
       {:error, reason} ->
         Logger.error("Failed to parse HTML: #{inspect(reason)}")
         []
     end
   end
+
+  defp extract_from_json_ld(document, transaction_type) do
+    # Find all JSON-LD script tags
+    json_ld_scripts = Floki.find(document, "script[type='application/ld+json']")
+
+    json_ld_scripts
+    |> Enum.flat_map(fn {_tag, _attrs, [content]} ->
+      case Jason.decode(content) do
+        {:ok, json_data} -> extract_offers_from_json(json_data, transaction_type)
+        {:error, _} -> []
+      end
+    end)
+  end
+
+  defp extract_offers_from_json(json_data, transaction_type) when is_map(json_data) do
+    # Handle @graph structure (array of structured data objects)
+    case json_data do
+      %{"@graph" => graph} when is_list(graph) ->
+        Enum.flat_map(graph, &extract_offers_from_json(&1, transaction_type))
+
+      %{"@type" => "Product", "offers" => %{"offers" => offers}} when is_list(offers) ->
+        Enum.map(offers, fn offer -> parse_json_offer(offer, transaction_type) end)
+
+      %{"@type" => "Product", "offers" => %{"offers" => offers}} when is_map(offers) ->
+        [parse_json_offer(offers, transaction_type)]
+
+      _ ->
+        []
+    end
+  end
+
+  defp extract_offers_from_json(_, _), do: []
+
+  defp parse_json_offer(offer, transaction_type) do
+    item = offer["itemOffered"] || %{}
+    address = item["address"] || %{}
+    floor_size = item["floorSize"] || %{}
+
+    # Extract ID from URL
+    url = offer["url"] || ""
+    external_id = extract_id_from_url(url)
+
+    %{
+      source: "otodom",
+      external_id: external_id || generate_id_from_url(url),
+      title: String.trim(offer["name"] || ""),
+      url: url,
+      price: parse_json_price(offer["price"]),
+      currency: offer["priceCurrency"] || "PLN",
+      area_sqm: parse_json_number(floor_size["value"]),
+      rooms: parse_json_number(item["numberOfRooms"]),
+      transaction_type: transaction_type,
+      property_type: nil,  # Not in JSON-LD, could extract from title
+      city: address["addressLocality"],
+      voivodeship: address["addressRegion"] || "małopolskie",
+      image_url: offer["image"],
+      raw_data: %{
+        scraped_at: DateTime.utc_now() |> DateTime.to_iso8601(),
+        from_json_ld: true
+      }
+    }
+  end
+
+  defp parse_json_price(price) when is_float(price) do
+    Decimal.from_float(price)
+  end
+  defp parse_json_price(price) when is_integer(price) do
+    Decimal.new(price)
+  end
+  defp parse_json_price(_), do: nil
+
+  defp parse_json_number(num) when is_float(num), do: Decimal.from_float(num)
+  defp parse_json_number(num) when is_integer(num), do: Decimal.new(num)
+  defp parse_json_number(_), do: nil
 
   defp try_find_listings(document) do
     # Otodom-specific selectors - trying many variations
