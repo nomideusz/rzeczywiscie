@@ -610,8 +610,13 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
     text_lower = String.downcase(text)
 
     cond do
-      # PRIORITY 1: Check URL patterns first (most reliable)
-      # OLX URL patterns: /sprzedam/, /sprzedaz/, /na-sprzedaz/
+      # PRIORITY 1: Parse URL path structure (same info as breadcrumbs)
+      # OLX URL structure: /nieruchomosci/{property_type}/{transaction_type}/...
+      # Extract from URL path segments
+      String.match?(text_lower, ~r{/nieruchomosci/[^/]+/sprzedaz/}) -> "sprzedaż"
+      String.match?(text_lower, ~r{/nieruchomosci/[^/]+/wynajem/}) -> "wynajem"
+
+      # PRIORITY 2: Check URL patterns (direct keywords in path)
       String.contains?(text_lower, "/sprzedam/") -> "sprzedaż"
       String.contains?(text_lower, "/sprzedaz/") -> "sprzedaż"
       String.contains?(text_lower, "/na-sprzedaz/") -> "sprzedaż"
@@ -623,7 +628,7 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
       String.contains?(text_lower, "/do-wynajecia/") -> "wynajem"
       String.contains?(text_lower, "-wynajem-") -> "wynajem"
 
-      # PRIORITY 2: Keywords in text (title, description)
+      # PRIORITY 3: Keywords in text (title, description)
       # Keywords for sale (sprzedaż) - check most specific first
       String.contains?(text_lower, "na sprzedaż") -> "sprzedaż"
       String.contains?(text_lower, "na-sprzedaz") -> "sprzedaż"
@@ -643,7 +648,7 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
       String.contains?(text_lower, "wynajem") -> "wynajem"
       String.contains?(text_lower, "na-wynajem") -> "wynajem"
 
-      # PRIORITY 3: Price indicators - monthly prices usually indicate rent
+      # PRIORITY 4: Price indicators - monthly prices usually indicate rent
       # This is a fallback for ambiguous cases
       String.contains?(text_lower, "zł/mies") -> "wynajem"
       String.contains?(text_lower, "zł / mies") -> "wynajem"
@@ -657,8 +662,19 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
     text_lower = String.downcase(text)
 
     cond do
-      # PRIORITY 1: Check URL patterns first (most reliable)
-      # Commercial properties - check URL patterns for "biura-i-lokale"
+      # PRIORITY 1: Parse URL path structure (same info as breadcrumbs)
+      # OLX URL structure: /nieruchomosci/{property_type}/{transaction_type}/...
+      # This extracts categories exactly like breadcrumbs would show
+      String.match?(text_lower, ~r{/nieruchomosci/mieszkania/}) -> "mieszkanie"
+      String.match?(text_lower, ~r{/nieruchomosci/domy/}) -> "dom"
+      String.match?(text_lower, ~r{/nieruchomosci/biura-i-lokale/}) -> "lokal użytkowy"
+      String.match?(text_lower, ~r{/nieruchomosci/stancje-pokoje/}) -> "pokój"
+      String.match?(text_lower, ~r{/nieruchomosci/dzialki/}) -> "działka"
+      String.match?(text_lower, ~r{/nieruchomosci/garaze/}) -> "garaż"
+      String.match?(text_lower, ~r{/nieruchomosci/hale-magazyny/}) -> "lokal użytkowy"
+
+      # PRIORITY 2: Check URL patterns (direct keywords)
+      # Commercial properties
       String.contains?(text_lower, "/biura-i-lokale/") -> "lokal użytkowy"
       String.contains?(text_lower, "/biura-lokale/") -> "lokal użytkowy"
       String.contains?(text_lower, "/lokal-uzytkowy/") -> "lokal użytkowy"
@@ -682,7 +698,7 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
       String.contains?(text_lower, "/garaze/") -> "garaż"
       String.contains?(text_lower, "/garaz/") -> "garaż"
 
-      # PRIORITY 2: Text-based detection (title, description)
+      # PRIORITY 3: Text-based detection (title, description)
       # Apartment (mieszkanie) - most common
       String.contains?(text_lower, "mieszkan") -> "mieszkanie"
       String.contains?(text_lower, "kawalerka") -> "mieszkanie"
