@@ -19,7 +19,10 @@
   // Get Google Maps API key from meta tag
   function getApiKey() {
     const meta = document.querySelector('meta[name="google-maps-api-key"]')
-    return meta ? meta.getAttribute('content') : ''
+    const apiKey = meta ? meta.getAttribute('content') : ''
+    console.log('API key from meta tag:', apiKey ? `${apiKey.substring(0, 10)}...` : 'EMPTY')
+    console.log('Meta tag found:', !!meta)
+    return apiKey
   }
 
   // Format price
@@ -126,10 +129,21 @@
 
   // Initialize map (client-side only)
   onMount(async () => {
-    if (!mapContainer) return
-    if (typeof window === 'undefined') return
+    console.log('PropertyMap onMount called')
+    console.log('mapContainer exists:', !!mapContainer)
+    console.log('window exists:', typeof window !== 'undefined')
+
+    if (!mapContainer) {
+      console.error('mapContainer not found')
+      return
+    }
+    if (typeof window === 'undefined') {
+      console.error('window is undefined')
+      return
+    }
 
     browser = true
+    console.log('Browser flag set to true')
 
     try {
       console.log('Loading Google Maps...')
