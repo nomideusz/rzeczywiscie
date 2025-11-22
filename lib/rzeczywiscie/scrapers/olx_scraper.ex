@@ -610,6 +610,20 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
     text_lower = String.downcase(text)
 
     cond do
+      # PRIORITY 1: Check URL patterns first (most reliable)
+      # OLX URL patterns: /sprzedam/, /sprzedaz/, /na-sprzedaz/
+      String.contains?(text_lower, "/sprzedam/") -> "sprzedaż"
+      String.contains?(text_lower, "/sprzedaz/") -> "sprzedaż"
+      String.contains?(text_lower, "/na-sprzedaz/") -> "sprzedaż"
+      String.contains?(text_lower, "-sprzedam-") -> "sprzedaż"
+      String.contains?(text_lower, "-sprzedaz-") -> "sprzedaż"
+
+      # URL patterns for rent
+      String.contains?(text_lower, "/wynajem/") -> "wynajem"
+      String.contains?(text_lower, "/do-wynajecia/") -> "wynajem"
+      String.contains?(text_lower, "-wynajem-") -> "wynajem"
+
+      # PRIORITY 2: Keywords in text (title, description)
       # Keywords for sale (sprzedaż) - check most specific first
       String.contains?(text_lower, "na sprzedaż") -> "sprzedaż"
       String.contains?(text_lower, "na-sprzedaz") -> "sprzedaż"
@@ -617,6 +631,8 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
       String.contains?(text_lower, "sprzedaż") -> "sprzedaż"
       String.contains?(text_lower, "sprzedaz") -> "sprzedaż"
       String.contains?(text_lower, "do kupienia") -> "sprzedaż"
+      String.contains?(text_lower, "kupno") -> "sprzedaż"
+      String.contains?(text_lower, "na własność") -> "sprzedaż"
 
       # Keywords for rent (wynajem)
       String.contains?(text_lower, "na wynajem") -> "wynajem"
@@ -626,6 +642,12 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
       String.contains?(text_lower, "wynajme") -> "wynajem"
       String.contains?(text_lower, "wynajem") -> "wynajem"
       String.contains?(text_lower, "na-wynajem") -> "wynajem"
+
+      # PRIORITY 3: Price indicators - monthly prices usually indicate rent
+      # This is a fallback for ambiguous cases
+      String.contains?(text_lower, "zł/mies") -> "wynajem"
+      String.contains?(text_lower, "zł / mies") -> "wynajem"
+      String.contains?(text_lower, "miesięcznie") -> "wynajem"
 
       true -> nil
     end
