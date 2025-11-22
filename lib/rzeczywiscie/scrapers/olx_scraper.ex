@@ -379,29 +379,36 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
   end
 
   defp parse_price(text) do
-    text
-    |> String.replace(~r/[^\d,]/, "")
-    |> String.replace(",", ".")
-    |> case do
-      "" ->
-        nil
+    # Use regex to extract price pattern first, before stripping chars
+    # Matches patterns like: "1 200 zł", "1,200.50 PLN", "1200", "1 200,50"
+    regex = ~r/(\d{1,3}(?:[\s,.]\d{3})*(?:[,.]\d{1,2})?)\s*(?:zł|PLN)?/i
 
-      price_str ->
-        case Decimal.parse(price_str) do
+    case Regex.run(regex, text) do
+      [_, price_str] ->
+        # Clean up: remove spaces and normalize decimal separator
+        clean_price =
+          price_str
+          |> String.replace(~r/\s+/, "")
+          |> String.replace(",", ".")
+
+        case Decimal.parse(clean_price) do
           {decimal, _} ->
             # Validate: price should be reasonable (1 to 99,999,999 PLN)
             # Database constraint: precision 10, scale 2 = max 99,999,999.99
             if Decimal.compare(decimal, Decimal.new("1")) != :lt and
-               Decimal.compare(decimal, Decimal.new("99999999")) != :gt do
+                 Decimal.compare(decimal, Decimal.new("99999999")) != :gt do
               decimal
             else
-              Logger.warning("Price out of range: #{price_str} PLN - ignoring")
+              Logger.warning("Price out of range: #{clean_price} PLN - ignoring")
               nil
             end
 
           :error ->
             nil
         end
+
+      _ ->
+        nil
     end
   end
 
@@ -411,8 +418,10 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
     text = Floki.text(card)
 
     # Look for pattern: number + m² (with optional space/comma/dot)
-    # Example: "75 m²", "75.5 m²", "1 200 m²", "1,200 m²"
-    regex = ~r/(?<!\d)(\d{1,3}(?:[\s,.]?\d{3})*(?:[,.]\d{1,2})?)\s*m[²2]/i
+    # Limit to max 5 digits to avoid matching dates (2025...) or other large numbers
+    # Example: "75 m²", "75.5 m²", "1 200 m²", "1,200 m²", "9999.99 m²"
+    # Use negative lookbehind to avoid matching if preceded by digit (avoid dates like "2025 32 m²")
+    regex = ~r/(?<![0-9-])(\d{1,2}(?:[\s,.]\d{3})?(?:[,.]\d{1,2})?)\s*m[²2]/iu
 
     case Regex.run(regex, text) do
       [_, number_str] ->
@@ -424,16 +433,18 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
 
         case Decimal.parse(clean_number) do
           {decimal, _} ->
-            # Validate: area should be reasonable (0.1 to 100,000 m²)
-            if Decimal.compare(decimal, Decimal.new("0.1")) == :gt and
-               Decimal.compare(decimal, Decimal.new("100000")) == :lt do
+            # Validate: area should be reasonable (10 to 10,000 m²)
+            # Most residential properties are 20-500 m², but allow wider range
+            if Decimal.compare(decimal, Decimal.new("10")) != :lt and
+                 Decimal.compare(decimal, Decimal.new("10000")) != :gt do
               decimal
             else
-              Logger.warning("Area out of range: #{clean_number} m² - ignoring")
+              Logger.debug("Area out of range: #{clean_number} m² - ignoring")
               nil
             end
+
           :error ->
-            Logger.warning("Could not parse area: #{clean_number}")
+            Logger.debug("Could not parse area: #{clean_number}")
             nil
         end
 
