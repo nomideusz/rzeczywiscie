@@ -15,6 +15,22 @@
   let filterTransactionType = ''
   let filterPropertyType = ''
 
+  // UI state for collapsible filters
+  let filtersExpanded = false
+
+  // Computed: Check if any filters are active
+  $: hasActiveFilters = !!(
+    filterCity || filterMinPrice || filterMaxPrice ||
+    filterMinArea || filterMaxArea || filterSource ||
+    filterTransactionType || filterPropertyType
+  )
+
+  // Computed: Count active filters
+  $: activeFilterCount = [
+    filterCity, filterMinPrice, filterMaxPrice, filterMinArea,
+    filterMaxArea, filterSource, filterTransactionType, filterPropertyType
+  ].filter(Boolean).length
+
   // Listen for favorite updates from server (instant UI update)
   if (live && live.handleEvent) {
     live.handleEvent('favorite-updated', ({ property_id, is_favorited }) => {
@@ -165,53 +181,163 @@
 </script>
 
 <div>
-  <!-- Filters -->
-    <div class="card bg-base-200 shadow-xl mb-4">
-      <div class="card-body">
-        <h2 class="card-title">Filters</h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+  <!-- Modern Collapsible Filters -->
+  <div class="card bg-base-200 shadow-lg mb-4 border-2 {hasActiveFilters ? 'border-primary' : 'border-transparent'}">
+    <div class="card-body p-4">
+      <!-- Filter Header -->
+      <div class="flex items-center justify-between">
+        <button
+          onclick={() => filtersExpanded = !filtersExpanded}
+          class="flex items-center gap-2 hover:text-primary transition-colors flex-1"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+          </svg>
+          <h2 class="text-lg font-bold">
+            Filters
+            {#if activeFilterCount > 0}
+              <span class="badge badge-primary badge-sm ml-2">{activeFilterCount}</span>
+            {/if}
+          </h2>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="h-4 w-4 transition-transform {filtersExpanded ? 'rotate-180' : ''}"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+
+        {#if hasActiveFilters}
+          <button
+            onclick={resetFilters}
+            class="btn btn-ghost btn-sm gap-2"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            Clear all
+          </button>
+        {/if}
+      </div>
+
+      <!-- Active Filters Badges (Always Visible) -->
+      {#if hasActiveFilters && !filtersExpanded}
+        <div class="flex flex-wrap gap-2 mt-3">
+          {#if filterCity}
+            <div class="badge badge-primary gap-2">
+              City: {filterCity}
+              <button onclick={() => filterCity = ''} class="hover:text-error">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          {/if}
+          {#if filterMinPrice || filterMaxPrice}
+            <div class="badge badge-primary gap-2">
+              Price: {filterMinPrice || '0'} - {filterMaxPrice || '∞'}
+              <button onclick={() => { filterMinPrice = ''; filterMaxPrice = ''; }} class="hover:text-error">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          {/if}
+          {#if filterMinArea || filterMaxArea}
+            <div class="badge badge-primary gap-2">
+              Area: {filterMinArea || '0'} - {filterMaxArea || '∞'} m²
+              <button onclick={() => { filterMinArea = ''; filterMaxArea = ''; }} class="hover:text-error">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          {/if}
+          {#if filterSource}
+            <div class="badge badge-primary gap-2">
+              Source: {filterSource.toUpperCase()}
+              <button onclick={() => filterSource = ''} class="hover:text-error">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          {/if}
+          {#if filterTransactionType}
+            <div class="badge badge-primary gap-2">
+              {filterTransactionType}
+              <button onclick={() => filterTransactionType = ''} class="hover:text-error">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          {/if}
+          {#if filterPropertyType}
+            <div class="badge badge-primary gap-2">
+              {filterPropertyType}
+              <button onclick={() => filterPropertyType = ''} class="hover:text-error">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          {/if}
+        </div>
+      {/if}
+
+      <!-- Expandable Filter Inputs -->
+      {#if filtersExpanded}
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mt-4 animate-fadeIn">
+          <!-- City -->
           <div class="form-control">
-            <label class="label" for="filter-city">
-              <span class="label-text">City</span>
+            <label class="label py-1" for="filter-city">
+              <span class="label-text text-xs font-semibold">🏙️ City</span>
             </label>
             <input
               id="filter-city"
               type="text"
-              placeholder="Kraków"
+              placeholder="e.g. Kraków"
               class="input input-bordered input-sm"
               bind:value={filterCity}
             />
           </div>
 
+          <!-- Min Price -->
           <div class="form-control">
-            <label class="label" for="filter-min-price">
-              <span class="label-text">Min Price</span>
+            <label class="label py-1" for="filter-min-price">
+              <span class="label-text text-xs font-semibold">💰 Min Price (PLN)</span>
             </label>
             <input
               id="filter-min-price"
               type="number"
-              placeholder="100000"
+              placeholder="100,000"
               class="input input-bordered input-sm"
               bind:value={filterMinPrice}
             />
           </div>
 
+          <!-- Max Price -->
           <div class="form-control">
-            <label class="label" for="filter-max-price">
-              <span class="label-text">Max Price</span>
+            <label class="label py-1" for="filter-max-price">
+              <span class="label-text text-xs font-semibold">💰 Max Price (PLN)</span>
             </label>
             <input
               id="filter-max-price"
               type="number"
-              placeholder="500000"
+              placeholder="500,000"
               class="input input-bordered input-sm"
               bind:value={filterMaxPrice}
             />
           </div>
 
+          <!-- Min Area -->
           <div class="form-control">
-            <label class="label" for="filter-min-area">
-              <span class="label-text">Min Area (m²)</span>
+            <label class="label py-1" for="filter-min-area">
+              <span class="label-text text-xs font-semibold">📐 Min Area (m²)</span>
             </label>
             <input
               id="filter-min-area"
@@ -222,9 +348,10 @@
             />
           </div>
 
+          <!-- Max Area -->
           <div class="form-control">
-            <label class="label" for="filter-max-area">
-              <span class="label-text">Max Area (m²)</span>
+            <label class="label py-1" for="filter-max-area">
+              <span class="label-text text-xs font-semibold">📐 Max Area (m²)</span>
             </label>
             <input
               id="filter-max-area"
@@ -235,47 +362,50 @@
             />
           </div>
 
+          <!-- Source -->
           <div class="form-control">
-            <label class="label" for="filter-source">
-              <span class="label-text">Source</span>
+            <label class="label py-1" for="filter-source">
+              <span class="label-text text-xs font-semibold">🌐 Source</span>
             </label>
             <select
               id="filter-source"
               class="select select-bordered select-sm"
               bind:value={filterSource}
             >
-              <option value="">All</option>
+              <option value="">All Sources</option>
               <option value="olx">OLX</option>
               <option value="otodom">Otodom</option>
               <option value="gratka">Gratka</option>
             </select>
           </div>
 
+          <!-- Transaction Type -->
           <div class="form-control">
-            <label class="label" for="filter-transaction-type">
-              <span class="label-text">Transaction Type</span>
+            <label class="label py-1" for="filter-transaction-type">
+              <span class="label-text text-xs font-semibold">🏷️ Transaction</span>
             </label>
             <select
               id="filter-transaction-type"
               class="select select-bordered select-sm"
               bind:value={filterTransactionType}
             >
-              <option value="">All</option>
+              <option value="">All Types</option>
               <option value="sprzedaż">Sprzedaż</option>
               <option value="wynajem">Wynajem</option>
             </select>
           </div>
 
+          <!-- Property Type -->
           <div class="form-control">
-            <label class="label" for="filter-property-type">
-              <span class="label-text">Property Type</span>
+            <label class="label py-1" for="filter-property-type">
+              <span class="label-text text-xs font-semibold">🏠 Property Type</span>
             </label>
             <select
               id="filter-property-type"
               class="select select-bordered select-sm"
               bind:value={filterPropertyType}
             >
-              <option value="">All</option>
+              <option value="">All Properties</option>
               <option value="mieszkanie">Mieszkanie</option>
               <option value="dom">Dom</option>
               <option value="pokój">Pokój</option>
@@ -287,12 +417,16 @@
           </div>
         </div>
 
-        <div class="card-actions justify-end mt-4">
-          <button onclick={resetFilters} class="btn btn-ghost btn-sm">Reset</button>
-          <button onclick={applyFilters} class="btn btn-primary btn-sm">Apply Filters</button>
+        <!-- Info Text -->
+        <div class="alert alert-info mt-3 py-2">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-5 h-5">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+          <span class="text-xs">Filters apply automatically as you type (500ms delay)</span>
         </div>
-      </div>
+      {/if}
     </div>
+  </div>
 
   <!-- Table -->
   <div class="overflow-x-auto">
