@@ -40,6 +40,8 @@ config :rzeczywiscie, Oban,
      crontab: [
        # Scrape OLX every 30 minutes
        {"*/30 * * * *", Rzeczywiscie.Workers.OlxScraperWorker},
+       # Scrape Otodom every 30 minutes (offset by 15 minutes from OLX)
+       {"15,45 * * * *", Rzeczywiscie.Workers.OtodomScraperWorker},
        # Mark stale properties inactive daily at 3 AM
        {"0 3 * * *", Rzeczywiscie.Workers.CleanupWorker},
        # Geocode properties every hour
