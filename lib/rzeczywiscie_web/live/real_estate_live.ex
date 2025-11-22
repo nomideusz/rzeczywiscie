@@ -157,14 +157,29 @@ defmodule RzeczywiscieWeb.RealEstateLive do
     property_id = if is_binary(property_id), do: String.to_integer(property_id), else: property_id
     user_id = socket.assigns.user_id
 
-    case RealEstate.is_favorited?(property_id, user_id) do
-      true ->
-        RealEstate.remove_favorite(property_id, user_id)
-        {:noreply, put_flash(socket, :info, "Removed from favorites") |> load_properties()}
+    try do
+      is_favorited = RealEstate.is_favorited?(property_id, user_id)
 
-      false ->
-        RealEstate.add_favorite(property_id, user_id)
-        {:noreply, put_flash(socket, :info, "Added to favorites") |> load_properties()}
+      result = if is_favorited do
+        RealEstate.remove_favorite(property_id, user_id)
+        "Removed from favorites"
+      else
+        case RealEstate.add_favorite(property_id, user_id) do
+          {:ok, _favorite} -> "Added to favorites"
+          {:error, _changeset} -> "Already in favorites"
+        end
+      end
+
+      socket =
+        socket
+        |> put_flash(:info, result)
+        |> load_properties()
+
+      {:noreply, socket}
+    rescue
+      e ->
+        Logger.error("Error toggling favorite: #{inspect(e)}")
+        {:noreply, put_flash(socket, :error, "Failed to update favorites. Please run database migrations: mix ecto.migrate")}
     end
   end
 
@@ -265,8 +280,12 @@ defmodule RzeczywiscieWeb.RealEstateLive do
       # Get air quality data if property has coordinates
       aqi_data = AirQuality.get_property_aqi(property)
 
-      # Check if property is favorited by user
-      is_favorited = RealEstate.is_favorited?(property.id, user_id)
+      # Check if property is favorited by user (handle case where table doesn't exist)
+      is_favorited = try do
+        RealEstate.is_favorited?(property.id, user_id)
+      rescue
+        _ -> false
+      end
 
       %{
         id: property.id,

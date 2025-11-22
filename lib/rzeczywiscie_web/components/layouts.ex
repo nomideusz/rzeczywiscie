@@ -83,6 +83,24 @@ defmodule RzeczywiscieWeb.Layouts do
             >
               Properties
             </a>
+            <a
+              href={~p"/favorites"}
+              class="px-3 lg:px-4 py-2 text-xs lg:text-sm font-bold uppercase tracking-wide hover:bg-base-content hover:text-base-100 transition-colors"
+            >
+              Favorites
+            </a>
+            <a
+              href={~p"/stats"}
+              class="px-3 lg:px-4 py-2 text-xs lg:text-sm font-bold uppercase tracking-wide hover:bg-base-content hover:text-base-100 transition-colors"
+            >
+              Stats
+            </a>
+            <a
+              href={~p"/admin"}
+              class="px-3 lg:px-4 py-2 text-xs lg:text-sm font-bold uppercase tracking-wide hover:bg-base-content hover:text-base-100 transition-colors"
+            >
+              Admin
+            </a>
           </div>
 
           <!-- Mobile Menu Button -->
@@ -128,6 +146,24 @@ defmodule RzeczywiscieWeb.Layouts do
               class="px-4 py-3 text-sm font-bold uppercase tracking-wide border-2 border-transparent hover:border-base-content hover:bg-base-content hover:text-base-100 transition-colors"
             >
               🏠 Properties
+            </a>
+            <a
+              href={~p"/favorites"}
+              class="px-4 py-3 text-sm font-bold uppercase tracking-wide border-2 border-transparent hover:border-base-content hover:bg-base-content hover:text-base-100 transition-colors"
+            >
+              ❤️ Favorites
+            </a>
+            <a
+              href={~p"/stats"}
+              class="px-4 py-3 text-sm font-bold uppercase tracking-wide border-2 border-transparent hover:border-base-content hover:bg-base-content hover:text-base-100 transition-colors"
+            >
+              📊 Stats
+            </a>
+            <a
+              href={~p"/admin"}
+              class="px-4 py-3 text-sm font-bold uppercase tracking-wide border-2 border-transparent hover:border-base-content hover:bg-base-content hover:text-base-100 transition-colors"
+            >
+              ⚙️ Admin
             </a>
           </div>
         </div>
@@ -194,6 +230,30 @@ defmodule RzeczywiscieWeb.Layouts do
                   class="text-sm font-bold hover:underline hover:underline-offset-4 decoration-2 decoration-success"
                 >
                   Real Estate Scraper
+                </a>
+              </li>
+              <li>
+                <a
+                  href={~p"/favorites"}
+                  class="text-sm font-bold hover:underline hover:underline-offset-4 decoration-2 decoration-error"
+                >
+                  Favorites
+                </a>
+              </li>
+              <li>
+                <a
+                  href={~p"/stats"}
+                  class="text-sm font-bold hover:underline hover:underline-offset-4 decoration-2 decoration-info"
+                >
+                  Statistics
+                </a>
+              </li>
+              <li>
+                <a
+                  href={~p"/admin"}
+                  class="text-sm font-bold hover:underline hover:underline-offset-4 decoration-2 decoration-warning"
+                >
+                  Admin Panel
                 </a>
               </li>
             </ul>
