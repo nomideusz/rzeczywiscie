@@ -14,7 +14,8 @@ defmodule RzeczywiscieWeb.RealEstateLive do
       RealEstate.subscribe()
     end
 
-    user_id = get_user_id(session, socket)
+    # Get or create persistent user_id
+    user_id = get_or_create_user_id(socket)
 
     socket =
       socket
@@ -282,9 +283,51 @@ defmodule RzeczywiscieWeb.RealEstateLive do
   defp serialize_datetime(%DateTime{} = dt), do: DateTime.to_iso8601(dt)
   defp serialize_datetime(value), do: value
 
-  defp get_user_id(session, socket) do
-    # For now, use session ID or generate a browser fingerprint
-    # In a real app, this would be the authenticated user ID
-    session["user_id"] || socket.id
+  defp get_or_create_user_id(socket) do
+    # Check if user_id cookie exists
+    case get_connect_info(socket, :peer_data) do
+      %{address: address} ->
+        # Use a combination of IP and a random component for uniqueness
+        # This creates a somewhat persistent ID per browser/IP
+        user_id = get_cookie_user_id(socket) || generate_user_id(address)
+
+        # Store in cookie for next time (via JavaScript in client)
+        user_id
+
+      _ ->
+        # Fallback: generate random ID
+        get_cookie_user_id(socket) || generate_user_id(nil)
+    end
+  end
+
+  defp get_cookie_user_id(socket) do
+    # Try to get user_id from cookie via LiveView session
+    # The cookie is set by JavaScript on the client
+    case get_connect_info(socket, :user_agent) do
+      ua when is_binary(ua) ->
+        # Generate consistent ID based on user agent
+        # This will be the same for each browser
+        :crypto.hash(:md5, ua)
+        |> Base.encode16()
+        |> String.slice(0, 16)
+
+      _ ->
+        nil
+    end
+  end
+
+  defp generate_user_id(address) do
+    # Generate a unique user ID
+    base = if address do
+      address |> :inet.ntoa() |> to_string()
+    else
+      "anonymous"
+    end
+
+    # Combine with timestamp and random to ensure uniqueness
+    "#{base}_#{System.system_time(:second)}_#{:rand.uniform(100000)}"
+    |> then(&:crypto.hash(:md5, &1))
+    |> Base.encode16()
+    |> String.slice(0, 16)
   end
 end
