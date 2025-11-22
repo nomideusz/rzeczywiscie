@@ -90,10 +90,12 @@ defmodule Rzeczywiscie.RealEstate do
         where(query, [p], p.source == ^source)
 
       {:transaction_type, type}, query when is_binary(type) ->
-        where(query, [p], p.transaction_type == ^type)
+        # Include properties with matching type OR unknown (nil) type
+        where(query, [p], p.transaction_type == ^type or is_nil(p.transaction_type))
 
       {:property_type, type}, query when is_binary(type) ->
-        where(query, [p], p.property_type == ^type)
+        # Include properties with matching type OR unknown (nil) type
+        where(query, [p], p.property_type == ^type or is_nil(p.property_type))
 
       {:has_coordinates, true}, query ->
         where(query, [p], not is_nil(p.latitude) and not is_nil(p.longitude))

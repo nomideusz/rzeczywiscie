@@ -489,9 +489,15 @@
                   <span class="badge badge-xs {property.transaction_type === 'sprzedaż' ? 'badge-info' : 'badge-warning'}">
                     {property.transaction_type}
                   </span>
+                {:else}
+                  <span class="badge badge-xs badge-ghost opacity-50" title="Transaction type unknown">
+                    ?
+                  </span>
                 {/if}
                 {#if property.property_type}
                   <div class="opacity-70 mt-1">{property.property_type}</div>
+                {:else}
+                  <div class="opacity-50 mt-1 text-[10px]" title="Property type unknown">Unknown</div>
                 {/if}
               </div>
             </td>
