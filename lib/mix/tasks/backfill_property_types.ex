@@ -68,22 +68,54 @@ defmodule Mix.Tasks.BackfillPropertyTypes do
   end
 
   defp extract_transaction_type(url) do
+    url_lower = String.downcase(url)
+
     cond do
-      String.contains?(url, "/sprzedaz/") -> "sprzedaż"
-      String.contains?(url, "/wynajem/") -> "wynajem"
+      # Keywords for sale (sprzedaż)
+      String.contains?(url_lower, "sprzedam") -> "sprzedaż"
+      String.contains?(url_lower, "sprzedaz") -> "sprzedaż"
+      String.contains?(url_lower, "na-sprzedaz") -> "sprzedaż"
+
+      # Keywords for rent (wynajem)
+      String.contains?(url_lower, "wynajme") -> "wynajem"
+      String.contains?(url_lower, "wynajem") -> "wynajem"
+      String.contains?(url_lower, "do-wynajecia") -> "wynajem"
+      String.contains?(url_lower, "na-wynajem") -> "wynajem"
+
       true -> nil
     end
   end
 
   defp extract_property_type(url) do
+    url_lower = String.downcase(url)
+
     cond do
-      String.contains?(url, "/mieszkania/") -> "mieszkanie"
-      String.contains?(url, "/domy/") -> "dom"
-      String.contains?(url, "/pokoje/") -> "pokój"
-      String.contains?(url, "/garaze/") -> "garaż"
-      String.contains?(url, "/dzialki/") -> "działka"
-      String.contains?(url, "/lokale/") -> "lokal użytkowy"
-      String.contains?(url, "/stancje/") -> "stancja"
+      # Apartment (mieszkanie)
+      String.contains?(url_lower, "mieszkanie") -> "mieszkanie"
+      String.contains?(url_lower, "mieszkania") -> "mieszkanie"
+
+      # House (dom)
+      String.contains?(url_lower, "-dom-") -> "dom"
+      String.contains?(url_lower, "/dom-") -> "dom"
+      String.match?(url_lower, ~r/\bdom\b/) -> "dom"
+
+      # Room (pokój)
+      String.contains?(url_lower, "pokoj") -> "pokój"
+
+      # Garage (garaż)
+      String.contains?(url_lower, "garaz") -> "garaż"
+
+      # Plot/land (działka)
+      String.contains?(url_lower, "dzialka") -> "działka"
+
+      # Commercial space (lokal użytkowy)
+      String.contains?(url_lower, "lokal-uzytkowy") -> "lokal użytkowy"
+      String.contains?(url_lower, "lokal-biurowo") -> "lokal użytkowy"
+      String.contains?(url_lower, "lokal-handlowy") -> "lokal użytkowy"
+
+      # Student accommodation (stancja)
+      String.contains?(url_lower, "stancja") -> "stancja"
+
       true -> nil
     end
   end
