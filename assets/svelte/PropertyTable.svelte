@@ -1,5 +1,6 @@
 <script>
   export let properties = []
+  export let pagination = { page: 1, page_size: 50, total_count: 0, total_pages: 1 }
   export let live
 
   let sortColumn = 'inserted_at'
@@ -10,6 +11,8 @@
   let filterMinArea = ''
   let filterMaxArea = ''
   let filterSource = ''
+  let filterTransactionType = ''
+  let filterPropertyType = ''
 
   // Format price
   function formatPrice(price) {
@@ -76,6 +79,8 @@
     if (filterMinArea) filters.min_area = parseFloat(filterMinArea)
     if (filterMaxArea) filters.max_area = parseFloat(filterMaxArea)
     if (filterSource) filters.source = filterSource
+    if (filterTransactionType) filters.transaction_type = filterTransactionType
+    if (filterPropertyType) filters.property_type = filterPropertyType
 
     live.pushEvent('filters_changed', filters)
   }
@@ -88,7 +93,24 @@
     filterMinArea = ''
     filterMaxArea = ''
     filterSource = ''
+    filterTransactionType = ''
+    filterPropertyType = ''
     applyFilters()
+  }
+
+  // Pagination handlers
+  function goToPage(page) {
+    if (page >= 1 && page <= pagination.total_pages) {
+      live.pushEvent('page_changed', { page })
+    }
+  }
+
+  function nextPage() {
+    goToPage(pagination.page + 1)
+  }
+
+  function prevPage() {
+    goToPage(pagination.page - 1)
   }
 
   // Manual refresh
@@ -125,7 +147,7 @@
     <div class="card bg-base-200 shadow-xl mb-4">
       <div class="card-body">
         <h2 class="card-title">Filters</h2>
-        <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div class="form-control">
             <label class="label" for="filter-city">
               <span class="label-text">City</span>
@@ -206,6 +228,41 @@
               <option value="gratka">Gratka</option>
             </select>
           </div>
+
+          <div class="form-control">
+            <label class="label" for="filter-transaction-type">
+              <span class="label-text">Transaction Type</span>
+            </label>
+            <select
+              id="filter-transaction-type"
+              class="select select-bordered select-sm"
+              bind:value={filterTransactionType}
+            >
+              <option value="">All</option>
+              <option value="sprzedaż">Sprzedaż</option>
+              <option value="wynajem">Wynajem</option>
+            </select>
+          </div>
+
+          <div class="form-control">
+            <label class="label" for="filter-property-type">
+              <span class="label-text">Property Type</span>
+            </label>
+            <select
+              id="filter-property-type"
+              class="select select-bordered select-sm"
+              bind:value={filterPropertyType}
+            >
+              <option value="">All</option>
+              <option value="mieszkanie">Mieszkanie</option>
+              <option value="dom">Dom</option>
+              <option value="pokój">Pokój</option>
+              <option value="garaż">Garaż</option>
+              <option value="działka">Działka</option>
+              <option value="lokal użytkowy">Lokal użytkowy</option>
+              <option value="stancja">Stancja</option>
+            </select>
+          </div>
         </div>
 
         <div class="card-actions justify-end mt-4">
@@ -225,6 +282,7 @@
               Source {sortColumn === 'source' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
             </button>
           </th>
+          <th>Type</th>
           <th>
             <button onclick={() => handleSort('title')} class="btn btn-ghost btn-xs">
               Title {sortColumn === 'title' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
@@ -267,6 +325,18 @@
                 {property.source.toUpperCase()}
               </span>
             </td>
+            <td>
+              <div class="text-xs">
+                {#if property.transaction_type}
+                  <span class="badge badge-xs {property.transaction_type === 'sprzedaż' ? 'badge-info' : 'badge-warning'}">
+                    {property.transaction_type}
+                  </span>
+                {/if}
+                {#if property.property_type}
+                  <div class="opacity-70 mt-1">{property.property_type}</div>
+                {/if}
+              </div>
+            </td>
             <td class="max-w-xs truncate" title={property.title}>
               {property.title}
             </td>
@@ -306,7 +376,7 @@
           </tr>
         {:else}
           <tr>
-            <td colspan="9" class="text-center py-8">
+            <td colspan="10" class="text-center py-8">
               <p class="text-lg">No properties found</p>
               <p class="text-sm opacity-70">Try adjusting your filters or trigger a manual scrape</p>
             </td>
@@ -315,4 +385,65 @@
       </tbody>
     </table>
   </div>
+
+  <!-- Pagination Controls -->
+  {#if pagination.total_pages > 1}
+    <div class="flex justify-between items-center mt-4">
+      <div class="text-sm">
+        Showing {((pagination.page - 1) * pagination.page_size) + 1} to {Math.min(pagination.page * pagination.page_size, pagination.total_count)} of {pagination.total_count} results
+      </div>
+
+      <div class="btn-group">
+        <button
+          class="btn btn-sm"
+          onclick={prevPage}
+          disabled={pagination.page === 1}
+        >
+          «
+        </button>
+
+        {#if pagination.page > 2}
+          <button class="btn btn-sm" onclick={() => goToPage(1)}>1</button>
+        {/if}
+
+        {#if pagination.page > 3}
+          <button class="btn btn-sm btn-disabled">...</button>
+        {/if}
+
+        {#if pagination.page > 1}
+          <button class="btn btn-sm" onclick={() => goToPage(pagination.page - 1)}>
+            {pagination.page - 1}
+          </button>
+        {/if}
+
+        <button class="btn btn-sm btn-active">
+          {pagination.page}
+        </button>
+
+        {#if pagination.page < pagination.total_pages}
+          <button class="btn btn-sm" onclick={() => goToPage(pagination.page + 1)}>
+            {pagination.page + 1}
+          </button>
+        {/if}
+
+        {#if pagination.page < pagination.total_pages - 2}
+          <button class="btn btn-sm btn-disabled">...</button>
+        {/if}
+
+        {#if pagination.page < pagination.total_pages - 1}
+          <button class="btn btn-sm" onclick={() => goToPage(pagination.total_pages)}>
+            {pagination.total_pages}
+          </button>
+        {/if}
+
+        <button
+          class="btn btn-sm"
+          onclick={nextPage}
+          disabled={pagination.page === pagination.total_pages}
+        >
+          »
+        </button>
+      </div>
+    </div>
+  {/if}
 </div>
