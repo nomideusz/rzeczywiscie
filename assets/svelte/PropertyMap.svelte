@@ -55,7 +55,23 @@
       : '#9CA3AF'
 
     return `
-      <div style="min-width: 250px; font-family: system-ui, sans-serif; padding: 8px;">
+      <div style="min-width: 250px; max-width: 300px; font-family: system-ui, sans-serif; padding: 8px;">
+        ${property.image_url ? `
+          <div style="margin-bottom: 12px;">
+            <img
+              src="${property.image_url}"
+              alt="${property.title || 'Property'}"
+              style="
+                width: 100%;
+                height: auto;
+                max-height: 200px;
+                object-fit: cover;
+                border-radius: 8px;
+              "
+              onerror="this.style.display='none'"
+            />
+          </div>
+        ` : ''}
         <div style="font-weight: bold; font-size: 14px; margin-bottom: 8px; color: #1F2937;">
           ${property.title || 'N/A'}
         </div>

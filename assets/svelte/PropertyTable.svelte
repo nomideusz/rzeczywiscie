@@ -335,8 +335,28 @@
                 {/if}
               </div>
             </td>
-            <td class="max-w-xs truncate" title={property.title}>
-              {property.title}
+            <td class="max-w-xs">
+              <div class="flex items-center gap-2">
+                {#if property.image_url}
+                  <div class="dropdown dropdown-hover dropdown-right">
+                    <div tabindex="0" role="button" class="cursor-pointer text-primary">
+                      📷
+                    </div>
+                    <div tabindex="0" class="dropdown-content z-[1] card card-compact w-64 p-2 shadow bg-base-100">
+                      <div class="card-body">
+                        <img
+                          src={property.image_url}
+                          alt={property.title}
+                          class="w-full h-auto rounded-lg"
+                          loading="lazy"
+                          onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27200%27 height=%27150%27%3E%3Crect fill=%27%23ddd%27 width=%27200%27 height=%27150%27/%3E%3Ctext x=%2750%25%27 y=%2750%25%27 dominant-baseline=%27middle%27 text-anchor=%27middle%27 fill=%27%23999%27%3ENo Image%3C/text%3E%3C/svg%3E'"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                {/if}
+                <span class="truncate" title={property.title}>{property.title}</span>
+              </div>
             </td>
             <td>
               {property.city || 'N/A'}
