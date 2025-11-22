@@ -4,7 +4,6 @@ defmodule RzeczywiscieWeb.RealEstateLive do
 
   require Logger
   alias Rzeczywiscie.RealEstate
-  alias Rzeczywiscie.Workers.OlxScraperWorker
   alias Rzeczywiscie.Workers.GeocodingWorker
   alias Rzeczywiscie.Services.AirQuality
 
@@ -88,31 +87,6 @@ defmodule RzeczywiscieWeb.RealEstateLive do
       |> load_properties()
 
     {:noreply, socket}
-  end
-
-  @impl true
-  def handle_event("refresh_data", _params, socket) do
-    Logger.info("Manual refresh requested")
-    socket = load_properties(socket)
-    {:noreply, put_flash(socket, :info, "Data refreshed")}
-  end
-
-  @impl true
-  def handle_event("trigger_scrape", _params, socket) do
-    Logger.info("Manual scrape triggered")
-
-    case OlxScraperWorker.trigger(pages: 3) do
-      {:ok, _job} ->
-        {:noreply,
-         put_flash(
-           socket,
-           :info,
-           "Scrape job started. New listings will appear automatically."
-         )}
-
-      {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Failed to start scrape: #{inspect(reason)}")}
-    end
   end
 
   @impl true

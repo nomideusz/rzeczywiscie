@@ -132,18 +132,6 @@
     goToPage(pagination.page - 1)
   }
 
-  // Manual refresh
-  function refreshData() {
-    live.pushEvent('refresh_data', {})
-  }
-
-  // Trigger manual scrape
-  function triggerScrape() {
-    if (confirm('Start manual scrape? This will fetch new listings from OLX.')) {
-      live.pushEvent('trigger_scrape', {})
-    }
-  }
-
   // Toggle favorite
   function toggleFavorite(propertyId) {
     live.pushEvent('toggle_favorite', { property_id: propertyId })
@@ -151,22 +139,6 @@
 </script>
 
 <div>
-  <!-- Action Buttons -->
-  <div class="flex justify-end gap-2 mb-4">
-    <button
-      onclick={refreshData}
-      class="btn btn-primary btn-sm"
-    >
-      Refresh
-    </button>
-    <button
-      onclick={triggerScrape}
-      class="btn btn-secondary btn-sm"
-    >
-      Manual Scrape
-    </button>
-  </div>
-
   <!-- Filters -->
     <div class="card bg-base-200 shadow-xl mb-4">
       <div class="card-body">
