@@ -13,6 +13,10 @@
 
   function switchView(view) {
     currentView = view
+    // Notify server about view change (triggers lazy loading of map data)
+    if (live && live.pushEvent) {
+      live.pushEvent('view_changed', { view })
+    }
   }
 
   function triggerGeocode() {

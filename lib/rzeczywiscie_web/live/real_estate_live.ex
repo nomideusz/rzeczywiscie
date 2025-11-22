@@ -29,7 +29,8 @@ defmodule RzeczywiscieWeb.RealEstateLive do
       |> assign(:page_size, 50)
       |> assign(:properties, [])
       |> assign(:all_map_properties, [])
-      |> load_properties()
+      |> assign(:map_loaded, false)
+      |> load_properties(load_map: false)  # Don't load map on initial mount
 
     {:ok, socket, temporary_assigns: [properties: [], all_map_properties: []]}
   end
@@ -76,7 +77,23 @@ defmodule RzeczywiscieWeb.RealEstateLive do
       socket
       |> assign(:filters, parsed_filters)
       |> assign(:page, 1)  # Reset to first page when filters change
-      |> load_properties()
+      |> load_properties(load_map: socket.assigns.map_loaded)
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("view_changed", %{"view" => view}, socket) do
+    Logger.debug("View changed to: #{view}")
+
+    socket = if view == "map" and not socket.assigns.map_loaded do
+      # Lazy load map properties when switching to map view for the first time
+      socket
+      |> assign(:map_loaded, true)
+      |> load_map_properties()
+    else
+      socket
+    end
 
     {:noreply, socket}
   end
@@ -89,7 +106,7 @@ defmodule RzeczywiscieWeb.RealEstateLive do
       socket
       |> assign(:sort_column, column)
       |> assign(:sort_direction, direction)
-      |> load_properties()
+      |> load_properties(load_map: socket.assigns.map_loaded)
 
     {:noreply, socket}
   end
@@ -119,7 +136,7 @@ defmodule RzeczywiscieWeb.RealEstateLive do
     socket =
       socket
       |> assign(:page, max(1, page))
-      |> load_properties()
+      |> load_properties(load_map: socket.assigns.map_loaded)
 
     {:noreply, socket}
   end
@@ -180,18 +197,19 @@ defmodule RzeczywiscieWeb.RealEstateLive do
   @impl true
   def handle_info({:property_created, _property}, socket) do
     Logger.debug("New property created, reloading...")
-    socket = load_properties(socket)
+    socket = load_properties(socket, load_map: socket.assigns.map_loaded)
     {:noreply, socket}
   end
 
   @impl true
   def handle_info({:property_updated, _property}, socket) do
     Logger.debug("Property updated, reloading...")
-    socket = load_properties(socket)
+    socket = load_properties(socket, load_map: socket.assigns.map_loaded)
     {:noreply, socket}
   end
 
-  defp load_properties(socket) do
+  defp load_properties(socket, opts \\ []) do
+    load_map = Keyword.get(opts, :load_map, true)
     filters = Map.get(socket.assigns, :filters, %{})
     sort_column = Map.get(socket.assigns, :sort_column, "inserted_at")
     sort_direction = Map.get(socket.assigns, :sort_direction, "desc")
@@ -217,38 +235,46 @@ defmodule RzeczywiscieWeb.RealEstateLive do
     # Get paginated properties for table (already sorted by DB)
     properties = RealEstate.list_properties(opts)
 
-    # Get properties for map (limit to 500 for performance)
-    # Only fetch properties with coordinates to avoid loading unnecessary data
-    map_opts =
-      filters
-      |> Map.to_list()
-      |> Keyword.new()
-      |> Keyword.put(:has_coordinates, true)
-      |> Keyword.put(:sort_by, sort_column)
-      |> Keyword.put(:sort_direction, sort_direction)
-      |> Keyword.put(:limit, 500)  # Reduced from 10000 for better performance
-
-    all_map_properties = RealEstate.list_properties(map_opts)
-
     # Batch load favorites for this user (avoids N+1 queries)
     user_id = socket.assigns.user_id
     favorited_ids = RealEstate.get_favorited_property_ids(user_id)
 
     # Serialize properties with is_favorited field
-    # Skip AQI for table view (faster), include AQI for map view (needed for heatmap)
+    # Skip AQI for table view (faster)
     serialized_properties = serialize_properties(properties, favorited_ids, include_aqi: false)
-    serialized_map_properties = serialize_properties(all_map_properties, favorited_ids, include_aqi: true)
 
-    # Calculate global stats
-    with_coords = Enum.count(all_map_properties, fn p -> p.latitude && p.longitude end)
-    with_aqi = Enum.count(all_map_properties, fn p ->
-      if p.latitude && p.longitude do
-        aqi_data = Rzeczywiscie.Services.AirQuality.get_property_aqi(p)
-        aqi_data && aqi_data.aqi
-      else
-        false
-      end
-    end)
+    # Conditionally load map properties (deferred until user switches to map view)
+    {all_map_properties, serialized_map_properties, with_coords, with_aqi} = if load_map do
+      # Get properties for map (limit to 500 for performance)
+      # Only fetch properties with coordinates to avoid loading unnecessary data
+      map_opts =
+        filters
+        |> Map.to_list()
+        |> Keyword.new()
+        |> Keyword.put(:has_coordinates, true)
+        |> Keyword.put(:sort_by, sort_column)
+        |> Keyword.put(:sort_direction, sort_direction)
+        |> Keyword.put(:limit, 500)  # Reduced from 10000 for better performance
+
+      map_props = RealEstate.list_properties(map_opts)
+      serialized_map = serialize_properties(map_props, favorited_ids, include_aqi: true)
+
+      # Calculate global stats
+      coords = Enum.count(map_props, fn p -> p.latitude && p.longitude end)
+      aqi = Enum.count(map_props, fn p ->
+        if p.latitude && p.longitude do
+          aqi_data = Rzeczywiscie.Services.AirQuality.get_property_aqi(p)
+          aqi_data && aqi_data.aqi
+        else
+          false
+        end
+      end)
+
+      {map_props, serialized_map, coords, aqi}
+    else
+      # Don't load map properties on initial mount
+      {[], [], 0, 0}
+    end
 
     socket
     |> assign(:properties, serialized_properties)
@@ -257,6 +283,11 @@ defmodule RzeczywiscieWeb.RealEstateLive do
     |> assign(:total_pages, ceil(total_count / page_size))
     |> assign(:total_with_coords, with_coords)
     |> assign(:total_with_aqi, with_aqi)
+  end
+
+  defp load_map_properties(socket) do
+    # This is called when user switches to map view for the first time
+    load_properties(socket, load_map: true)
   end
 
   defp serialize_properties(properties, favorited_ids, opts \\ []) do
