@@ -237,15 +237,19 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
         Logger.warning("Could not extract ID from URL: #{url}")
       end
 
+      full_url = ensure_absolute_url(url)
+
       %{
         source: "olx",
         external_id: external_id || generate_id_from_url(url),
         title: String.trim(title),
-        url: ensure_absolute_url(url),
+        url: full_url,
         price: extract_price(card),
         currency: "PLN",
         area_sqm: extract_area(card),
         rooms: extract_rooms(card),
+        transaction_type: extract_transaction_type(full_url),
+        property_type: extract_property_type(full_url),
         city: extract_city(card),
         district: extract_district(card),
         voivodeship: "małopolskie",
@@ -487,6 +491,29 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
     |> Enum.map(&Floki.text/1)
     |> Enum.join(" ")
     |> String.slice(0, 500)
+  end
+
+  defp extract_transaction_type(url) do
+    # OLX URLs contain transaction type: /sprzedaz/ or /wynajem/
+    cond do
+      String.contains?(url, "/sprzedaz/") -> "sprzedaż"
+      String.contains?(url, "/wynajem/") -> "wynajem"
+      true -> nil
+    end
+  end
+
+  defp extract_property_type(url) do
+    # OLX URLs contain property type: /mieszkania/, /domy/, /pokoje/, /garaze/
+    cond do
+      String.contains?(url, "/mieszkania/") -> "mieszkanie"
+      String.contains?(url, "/domy/") -> "dom"
+      String.contains?(url, "/pokoje/") -> "pokój"
+      String.contains?(url, "/garaze/") -> "garaż"
+      String.contains?(url, "/dzialki/") -> "działka"
+      String.contains?(url, "/lokale/") -> "lokal użytkowy"
+      String.contains?(url, "/stancje/") -> "stancja"
+      true -> nil
+    end
   end
 
   defp ensure_absolute_url(url) do
