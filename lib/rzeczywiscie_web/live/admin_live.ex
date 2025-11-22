@@ -21,14 +21,18 @@ defmodule RzeczywiscieWeb.AdminLive do
   def render(assigns) do
     ~H"""
     <div class="container mx-auto p-8 max-w-2xl">
+      <!-- Sub-navigation tabs -->
+      <div class="mb-6">
+        <div class="tabs tabs-boxed bg-base-200 border-2 border-base-content">
+          <a href="/real-estate" class="tab font-bold">Properties</a>
+          <a href="/favorites" class="tab font-bold">Favorites</a>
+          <a href="/stats" class="tab font-bold">Stats</a>
+          <a href="/admin" class="tab tab-active font-bold">Admin</a>
+        </div>
+      </div>
+
       <div class="flex justify-between items-center mb-6">
         <h1 class="text-3xl font-bold">Admin Tasks</h1>
-        <a href="/stats" class="btn btn-secondary btn-sm">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-          </svg>
-          View Dashboard
-        </a>
       </div>
 
       <div class="alert alert-info mb-6">

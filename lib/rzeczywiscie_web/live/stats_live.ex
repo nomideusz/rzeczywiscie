@@ -20,6 +20,16 @@ defmodule RzeczywiscieWeb.StatsLive do
   def render(assigns) do
     ~H"""
     <div class="container mx-auto p-8">
+      <!-- Sub-navigation tabs -->
+      <div class="mb-6">
+        <div class="tabs tabs-boxed bg-base-200 border-2 border-base-content">
+          <a href="/real-estate" class="tab font-bold">Properties</a>
+          <a href="/favorites" class="tab font-bold">Favorites</a>
+          <a href="/stats" class="tab tab-active font-bold">Stats</a>
+          <a href="/admin" class="tab font-bold">Admin</a>
+        </div>
+      </div>
+
       <div class="flex justify-between items-center mb-6">
         <h1 class="text-3xl font-bold">Data Monitoring Dashboard</h1>
         <button

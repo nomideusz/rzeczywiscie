@@ -23,6 +23,16 @@
 </script>
 
 <div class="container mx-auto p-4">
+  <!-- Sub-navigation tabs -->
+  <div class="mb-6">
+    <div class="tabs tabs-boxed bg-base-200 border-2 border-base-content">
+      <a href="/real-estate" class="tab tab-active font-bold">Properties</a>
+      <a href="/favorites" class="tab font-bold">Favorites</a>
+      <a href="/stats" class="tab font-bold">Stats</a>
+      <a href="/admin" class="tab font-bold">Admin</a>
+    </div>
+  </div>
+
   <!-- Header with view toggle -->
   <div class="mb-6">
     <div class="flex justify-between items-center mb-4">
