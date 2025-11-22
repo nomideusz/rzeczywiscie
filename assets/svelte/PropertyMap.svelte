@@ -194,8 +194,9 @@
     const aqHeatmapType = new google.maps.ImageMapType({
       getTileUrl: function(coord, zoom) {
         // Air Quality API heatmap tiles endpoint
-        // Using UAQI (Universal Air Quality Index) which works globally
-        const tileUrl = `https://airquality.googleapis.com/v1/mapTypes/UAQI/heatmapTiles/${zoom}/${coord.x}/${coord.y}?key=${apiKey}`
+        // Using US_AQI (works globally, including Europe)
+        // Alternative: EUROPEAN_AQI for European-specific scale
+        const tileUrl = `https://airquality.googleapis.com/v1/mapTypes/US_AQI/heatmapTiles/${zoom}/${coord.x}/${coord.y}?key=${apiKey}`
 
         // Log first few tile requests for debugging
         if (Math.random() < 0.1) { // Log ~10% of requests to avoid spam
@@ -219,7 +220,7 @@
     console.log('Current overlay count:', map.overlayMapTypes.getLength())
 
     // Test if a tile loads by creating an image element
-    const testTileUrl = `https://airquality.googleapis.com/v1/mapTypes/UAQI/heatmapTiles/11/1099/671?key=${apiKey}`
+    const testTileUrl = `https://airquality.googleapis.com/v1/mapTypes/US_AQI/heatmapTiles/11/1099/671?key=${apiKey}`
     const testImg = new Image()
     testImg.onload = () => {
       console.log('✓ Test AQ tile loaded successfully')
