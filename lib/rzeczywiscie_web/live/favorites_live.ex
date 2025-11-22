@@ -3,9 +3,11 @@ defmodule RzeczywiscieWeb.FavoritesLive do
   import RzeczywiscieWeb.Layouts
   alias Rzeczywiscie.RealEstate
 
+  require Logger
+
   @impl true
   def mount(_params, session, socket) do
-    user_id = get_user_id(session, socket)
+    user_id = get_or_create_user_id(socket)
 
     socket =
       socket
@@ -141,10 +143,50 @@ defmodule RzeczywiscieWeb.FavoritesLive do
     RealEstate.list_favorites(user_id)
   end
 
-  defp get_user_id(session, socket) do
-    # For now, use session ID or generate a browser fingerprint
-    # In a real app, this would be the authenticated user ID
-    session["user_id"] || socket.id
+  defp get_or_create_user_id(socket) do
+    # Priority: user_agent (most persistent) > peer IP > fallback
+    user_id = get_user_agent_id(socket) || get_peer_ip_id(socket) || get_fallback_id()
+    Logger.debug("Favorites page - Generated user_id: #{user_id}")
+    user_id
+  end
+
+  defp get_user_agent_id(socket) do
+    case get_connect_info(socket, :user_agent) do
+      ua when is_binary(ua) and byte_size(ua) > 0 ->
+        user_id = :crypto.hash(:md5, ua)
+          |> Base.encode16()
+          |> String.slice(0, 16)
+        Logger.debug("Favorites page - Using user_agent ID: #{user_id}")
+        user_id
+      _ ->
+        Logger.debug("Favorites page - No user_agent available")
+        nil
+    end
+  end
+
+  defp get_peer_ip_id(socket) do
+    case get_connect_info(socket, :peer_data) do
+      %{address: address} when is_tuple(address) ->
+        user_id = address
+          |> :inet.ntoa()
+          |> to_string()
+          |> then(&:crypto.hash(:md5, &1))
+          |> Base.encode16()
+          |> String.slice(0, 16)
+        Logger.debug("Favorites page - Using peer IP ID: #{user_id}")
+        user_id
+      _ ->
+        Logger.debug("Favorites page - No peer data available")
+        nil
+    end
+  end
+
+  defp get_fallback_id do
+    # Pure random - will NOT persist across sessions
+    user_id = :crypto.strong_rand_bytes(8)
+      |> Base.encode16()
+    Logger.debug("Favorites page - Using fallback random ID: #{user_id}")
+    user_id
   end
 
   defp format_price(nil), do: "N/A"
