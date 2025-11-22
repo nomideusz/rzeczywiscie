@@ -27,7 +27,25 @@
   // Format area
   function formatArea(area) {
     if (!area) return 'N/A'
-    return `${area} m²`
+    // Convert to number and round to 2 decimal places
+    const numArea = typeof area === 'number' ? area : parseFloat(area)
+    if (isNaN(numArea)) return 'N/A'
+    return `${numArea.toFixed(2)} m²`
+  }
+
+  // Calculate price per square meter
+  function formatPricePerSqm(price, area) {
+    if (!price || !area) return 'N/A'
+    const numPrice = typeof price === 'number' ? price : parseFloat(price)
+    const numArea = typeof area === 'number' ? area : parseFloat(area)
+    if (isNaN(numPrice) || isNaN(numArea) || numArea === 0) return 'N/A'
+
+    const pricePerSqm = numPrice / numArea
+    return new Intl.NumberFormat('pl-PL', {
+      style: 'currency',
+      currency: 'PLN',
+      maximumFractionDigits: 0
+    }).format(pricePerSqm)
   }
 
   // Format date
@@ -303,6 +321,7 @@
               Area {sortColumn === 'area_sqm' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
             </button>
           </th>
+          <th>Price/m²</th>
           <th>
             <button onclick={() => handleSort('aqi')} class="btn btn-ghost btn-xs">
               Air Quality {sortColumn === 'aqi' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
@@ -348,6 +367,7 @@
             </td>
             <td class="font-semibold">{formatPrice(property.price)}</td>
             <td>{formatArea(property.area_sqm)}</td>
+            <td class="text-sm opacity-80">{formatPricePerSqm(property.price, property.area_sqm)}</td>
             <td>
               {#if property.aqi}
                 <div class="tooltip" data-tip="{property.aqi_category || 'N/A'} - {property.dominant_pollutant || ''}">
@@ -376,7 +396,7 @@
           </tr>
         {:else}
           <tr>
-            <td colspan="10" class="text-center py-8">
+            <td colspan="11" class="text-center py-8">
               <p class="text-lg">No properties found</p>
               <p class="text-sm opacity-70">Try adjusting your filters or trigger a manual scrape</p>
             </td>
