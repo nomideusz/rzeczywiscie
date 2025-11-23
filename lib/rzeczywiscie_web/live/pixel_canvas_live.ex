@@ -62,13 +62,6 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
 
     case PixelCanvas.place_pixel(x, y, color, user_id) do
       {:ok, pixel} ->
-        # Broadcast to all connected clients
-        Phoenix.PubSub.broadcast(
-          Rzeczywiscie.PubSub,
-          @topic,
-          {:pixel_placed, x, y, color, user_id}
-        )
-
         # Update pixels map with the newly placed pixel
         pixels = Map.put(socket.assigns.pixels, {x, y}, %{
           color: color,
@@ -77,6 +70,13 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
         })
 
         stats = PixelCanvas.stats()
+
+        # Broadcast to all connected clients (including stats)
+        Phoenix.PubSub.broadcast(
+          Rzeczywiscie.PubSub,
+          @topic,
+          {:pixel_placed, x, y, color, user_id, stats}
+        )
 
         # Schedule cooldown update
         Process.send_after(self(), :update_cooldown, 1000)
@@ -120,7 +120,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
   end
 
   # Handle pixel placed by other users
-  def handle_info({:pixel_placed, x, y, color, user_id}, socket) do
+  def handle_info({:pixel_placed, x, y, color, user_id, stats}, socket) do
     # Don't update if this was our own pixel (already updated)
     if user_id != socket.assigns.user_id do
       pixels = Map.put(socket.assigns.pixels, {x, y}, %{
@@ -128,8 +128,6 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
         user_id: user_id,
         updated_at: DateTime.utc_now()
       })
-
-      stats = PixelCanvas.stats()
 
       {:noreply, assign(socket, pixels: pixels, stats: stats)}
     else

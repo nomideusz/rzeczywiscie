@@ -259,11 +259,11 @@
       </div>
     </div>
 
-    <!-- Progress Bar -->
+    <!-- Cooldown Progress Bar -->
     {#if !canPlace}
-      <div class="h-0.5 bg-gray-100">
+      <div class="h-1 bg-gray-100 relative overflow-hidden">
         <div
-          class="h-full bg-blue-500 transition-all duration-1000"
+          class="h-full bg-gradient-to-r from-orange-400 to-amber-500 transition-all duration-1000 ease-linear"
           style="width: {((60 - secondsRemaining) / 60) * 100}%"
         ></div>
       </div>
