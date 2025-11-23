@@ -1,4 +1,6 @@
 <script>
+  import { onMount } from 'svelte'
+
   export let width = 500
   export let height = 500
   export let pixels = []
@@ -18,9 +20,9 @@
   $: canvasWidth = width * pixelSize
   $: canvasHeight = height * pixelSize
 
-  // Draw canvas when pixels change
+  // Draw canvas when pixels change - explicitly depend on pixels
   $: if (ctx && pixels) {
-    drawCanvas()
+    requestAnimationFrame(() => drawCanvas())
   }
 
   function initCanvas(node) {
