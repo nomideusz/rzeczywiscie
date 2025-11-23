@@ -72,6 +72,12 @@ defmodule RzeczywiscieWeb.Layouts do
               World
             </a>
             <a
+              href={~p"/pixels"}
+              class="px-3 lg:px-4 py-2 text-xs lg:text-sm font-bold uppercase tracking-wide hover:bg-base-content hover:text-base-100 transition-colors"
+            >
+              Pixels
+            </a>
+            <a
               href={~p"/real-estate"}
               class="px-3 lg:px-4 py-2 text-xs lg:text-sm font-bold uppercase tracking-wide hover:bg-base-content hover:text-base-100 transition-colors"
             >
@@ -110,6 +116,12 @@ defmodule RzeczywiscieWeb.Layouts do
               class="px-4 py-3 text-sm font-bold uppercase tracking-wide border-2 border-transparent hover:border-base-content hover:bg-base-content hover:text-base-100 transition-colors"
             >
               🌍 World
+            </a>
+            <a
+              href={~p"/pixels"}
+              class="px-4 py-3 text-sm font-bold uppercase tracking-wide border-2 border-transparent hover:border-base-content hover:bg-base-content hover:text-base-100 transition-colors"
+            >
+              🎨 Pixels
             </a>
             <a
               href={~p"/real-estate"}
