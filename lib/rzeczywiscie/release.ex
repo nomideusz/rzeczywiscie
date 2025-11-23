@@ -39,6 +39,21 @@ defmodule Rzeczywiscie.Release do
     )
   end
 
+  def fix_tasks_migration do
+    load_app()
+    {:ok, _, _} = Ecto.Migrator.with_repo(
+      List.first(repos()),
+      fn repo ->
+        IO.puts("Marking migration 20251123120001 as complete...")
+        repo.query!(
+          "INSERT INTO schema_migrations (version, inserted_at) VALUES (20251123120001, NOW()) ON CONFLICT DO NOTHING"
+        )
+        IO.puts("✓ Migration marked as complete")
+        IO.puts("Now run: Rzeczywiscie.Release.seed()")
+      end
+    )
+  end
+
   defp repos do
     Application.fetch_env!(@app, :ecto_repos)
   end
