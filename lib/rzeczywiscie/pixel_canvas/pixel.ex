@@ -7,6 +7,7 @@ defmodule Rzeczywiscie.PixelCanvas.Pixel do
     field :y, :integer
     field :color, :string
     field :user_id, :string
+    field :ip_address, :string
 
     timestamps(type: :utc_datetime)
   end
@@ -14,7 +15,7 @@ defmodule Rzeczywiscie.PixelCanvas.Pixel do
   @doc false
   def changeset(pixel, attrs) do
     pixel
-    |> cast(attrs, [:x, :y, :color, :user_id])
+    |> cast(attrs, [:x, :y, :color, :user_id, :ip_address])
     |> validate_required([:x, :y, :color, :user_id])
     |> validate_number(:x, greater_than_or_equal_to: 0, less_than: 500)
     |> validate_number(:y, greater_than_or_equal_to: 0, less_than: 500)

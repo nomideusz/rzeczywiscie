@@ -12,7 +12,7 @@
   export let live
 
   let hoveredPixel = null
-  let pixelSize = 10 // Each pixel is 10x10 on screen
+  let pixelSize = 4 // 500x500 grid = 2000x2000px canvas
   let canvasElement
   let ctx
 
@@ -38,8 +38,8 @@
     ctx.fillStyle = '#FFFFFF'
     ctx.fillRect(0, 0, canvasWidth, canvasHeight)
 
-    // Draw grid
-    ctx.strokeStyle = '#EEEEEE'
+    // Draw grid (lighter, less prominent)
+    ctx.strokeStyle = '#F5F5F5'
     ctx.lineWidth = 1
 
     for (let x = 0; x <= width; x++) {
@@ -115,118 +115,78 @@
   }
 </script>
 
-<div class="container mx-auto p-4">
-  <!-- Header -->
-  <div class="mb-8">
-    <h1 class="text-5xl font-black tracking-tight uppercase mb-4">
-      Pixel<br /><span class="text-primary">Canvas</span>
-    </h1>
-    <p class="text-lg opacity-70">
-      500×500 collaborative pixel art. Place one pixel every minute.
-    </p>
-  </div>
+<!-- Full screen layout -->
+<div class="fixed inset-0 bg-white flex flex-col">
+  <!-- Compact header with all controls -->
+  <div class="flex-none border-b-2 border-black bg-white z-10">
+    <!-- Top row: Back link + Stats + Cooldown -->
+    <div class="flex items-center justify-between gap-4 px-3 py-2 border-b border-gray-200">
+      <a href="/" class="text-xs font-bold hover:text-primary transition-colors whitespace-nowrap">
+        ← Kruk.live
+      </a>
 
-  <div class="grid lg:grid-cols-[1fr_300px] gap-8">
-    <!-- Canvas Section -->
-    <div class="border-4 border-base-content bg-base-100 p-6">
-      <div class="mb-4 flex items-center justify-between">
-        <div class="flex items-center gap-4">
-          <div class="w-3 h-3 bg-primary rounded-none animate-pulse"></div>
-          <span class="text-xs uppercase tracking-widest font-bold opacity-70">
-            Live Canvas
-          </span>
+      <div class="flex items-center gap-3 text-xs">
+        <div class="flex items-center gap-1.5">
+          <div class="w-1.5 h-1.5 bg-primary rounded-none animate-pulse"></div>
+          <span class="hidden sm:inline opacity-60">Live</span>
         </div>
-        <div class="text-xs font-bold opacity-50">
-          {stats.total_pixels} pixels · {stats.unique_users} artists
-        </div>
+        <span class="opacity-60">{stats.total_pixels.toLocaleString()}px</span>
+        <span class="opacity-60">{stats.unique_users} artists</span>
       </div>
 
-      <!-- Canvas -->
-      <div class="overflow-auto border-2 border-base-content bg-white">
-        <canvas
-          use:initCanvas
-          width={canvasWidth}
-          height={canvasHeight}
-          class="cursor-crosshair"
-          class:cursor-not-allowed={!canPlace}
-          on:click={handleCanvasClick}
-          on:mousemove={handleCanvasMove}
-          on:mouseleave={handleCanvasLeave}
-        ></canvas>
-      </div>
-
-      <!-- Instructions -->
-      <div class="mt-4 text-sm opacity-70">
-        Click any pixel to place your color. {#if !canPlace}Wait {secondsRemaining}s to place again.{/if}
-      </div>
-    </div>
-
-    <!-- Controls Sidebar -->
-    <div class="space-y-6">
-      <!-- Color Picker -->
-      <div class="border-4 border-base-content bg-base-100 p-6">
-        <h3 class="text-xl font-black uppercase mb-4 tracking-tight">Palette</h3>
-        <div class="grid grid-cols-4 gap-2">
-          {#each colors as color}
-            <button
-              on:click={() => selectColor(color)}
-              class="w-full aspect-square border-4 transition-all hover:scale-110"
-              class:border-base-content={selectedColor === color}
-              class:border-transparent={selectedColor !== color}
-              style="background-color: {color}"
-              title={color}
-            ></button>
-          {/each}
-        </div>
-
-        <div class="mt-4 p-3 bg-base-200 border-2 border-base-content">
-          <div class="text-xs uppercase tracking-wider font-bold opacity-50 mb-2">Selected</div>
-          <div class="flex items-center gap-3">
-            <div class="w-12 h-12 border-2 border-base-content" style="background-color: {selectedColor}"></div>
-            <div class="text-sm font-mono">{selectedColor}</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Cooldown Timer -->
-      <div class="border-4 border-base-content bg-base-100 p-6">
-        <h3 class="text-xl font-black uppercase mb-4 tracking-tight">Cooldown</h3>
-
+      <div class="flex items-center gap-2">
         {#if canPlace}
-          <div class="text-center py-8">
-            <div class="text-6xl font-black mb-2">✓</div>
-            <div class="text-sm font-bold uppercase tracking-wide text-primary">Ready!</div>
-          </div>
+          <span class="text-xs font-bold text-primary">Ready!</span>
         {:else}
-          <div class="text-center py-8">
-            <div class="text-6xl font-black mb-2">{secondsRemaining}</div>
-            <div class="text-xs uppercase tracking-wider font-bold opacity-50">seconds</div>
-          </div>
+          <span class="text-xs font-bold">{secondsRemaining}s</span>
         {/if}
-
-        <!-- Progress bar -->
-        <div class="mt-4 h-2 bg-base-200 border-2 border-base-content overflow-hidden">
+        <div class="w-12 h-1.5 bg-gray-200 border border-black hidden sm:block">
           <div
             class="h-full bg-primary transition-all duration-1000"
             style="width: {canPlace ? 100 : ((60 - secondsRemaining) / 60) * 100}%"
           ></div>
         </div>
       </div>
+    </div>
 
-      <!-- Stats -->
-      <div class="border-4 border-base-content bg-base-100 p-6">
-        <h3 class="text-xl font-black uppercase mb-4 tracking-tight">Stats</h3>
-        <div class="space-y-3">
-          <div>
-            <div class="text-xs uppercase tracking-wider font-bold opacity-50">Total Pixels</div>
-            <div class="text-3xl font-black">{stats.total_pixels.toLocaleString()}</div>
-          </div>
-          <div>
-            <div class="text-xs uppercase tracking-wider font-bold opacity-50">Artists</div>
-            <div class="text-3xl font-black">{stats.unique_users.toLocaleString()}</div>
-          </div>
-        </div>
+    <!-- Bottom row: Color palette + Selected color -->
+    <div class="flex items-center gap-3 px-3 py-2">
+      <span class="text-xs font-bold uppercase opacity-50 hidden sm:inline">Palette</span>
+
+      <div class="flex gap-1.5 flex-wrap">
+        {#each colors as color}
+          <button
+            on:click={() => selectColor(color)}
+            class="w-6 h-6 border transition-all hover:scale-110"
+            class:border-black={selectedColor === color}
+            class:border-2={selectedColor === color}
+            class:border-gray-300={selectedColor !== color}
+            style="background-color: {color}"
+            title={color}
+          ></button>
+        {/each}
       </div>
+
+      <div class="ml-auto flex items-center gap-2">
+        <div class="w-6 h-6 border-2 border-black" style="background-color: {selectedColor}"></div>
+        <span class="text-xs font-mono opacity-60 hidden sm:inline">{selectedColor}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Canvas area - scrollable with visible scrollbars -->
+  <div class="flex-1 overflow-auto bg-neutral-100" style="overflow: auto; -webkit-overflow-scrolling: touch;">
+    <div class="inline-block min-w-full min-h-full p-4">
+      <canvas
+        use:initCanvas
+        width={canvasWidth}
+        height={canvasHeight}
+        class="cursor-crosshair border-2 border-black shadow-[8px_8px_0_0_rgba(0,0,0,1)] mx-auto"
+        class:cursor-not-allowed={!canPlace}
+        on:click={handleCanvasClick}
+        on:mousemove={handleCanvasMove}
+        on:mouseleave={handleCanvasLeave}
+      ></canvas>
     </div>
   </div>
 </div>
