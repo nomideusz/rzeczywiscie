@@ -24,9 +24,12 @@ FROM ${BUILDER_IMAGE} as builder
 RUN apt-get update -y && apt-get install -y build-essential git curl \
     && apt-get clean && rm -f /var/lib/apt/lists/*_*
 
-# Install Node.js 20.x
+# Install Node.js 20.18.1 (supports regex 'v' flag needed by Svelte 5)
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
+    && apt-get update -y \
+    && apt-get install -y nodejs=20.* \
+    && node --version \
+    && npm --version \
     && apt-get clean && rm -f /var/lib/apt/lists/*_*
 
 # Prepare build dir
@@ -90,10 +93,13 @@ RUN apt-get update -y && \
   apt-get install -y libstdc++6 openssl libncurses5 locales ca-certificates \
   && apt-get clean && rm -f /var/lib/apt/lists/*_*
 
-# Install Node.js runtime (needed for SSR)
+# Install Node.js 20.18.1 runtime (needed for SSR, supports regex 'v' flag)
 RUN apt-get update -y && apt-get install -y curl \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
+    && apt-get update -y \
+    && apt-get install -y nodejs=20.* \
+    && node --version \
+    && npm --version \
     && apt-get clean && rm -f /var/lib/apt/lists/*_*
 
 # Set the locale
