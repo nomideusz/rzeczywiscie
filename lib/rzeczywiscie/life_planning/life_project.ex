@@ -10,7 +10,7 @@ defmodule Rzeczywiscie.LifePlanning.LifeProject do
     field :order, :integer, default: 0
     field :archived, :boolean, default: false
 
-    has_many :tasks, Rzeczywiscie.LifePlanning.Task
+    has_many :tasks, Rzeczywiscie.LifePlanning.Task, foreign_key: :project_id
 
     timestamps(type: :utc_datetime)
   end
