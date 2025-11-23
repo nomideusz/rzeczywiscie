@@ -3,7 +3,7 @@
   export let height = 500
   export let pixels = []
   export let colors = []
-  export let selectedColor = "#000000"
+  export let selectedColor = "#1a1a1a"
   export let canPlace = true
   export let secondsRemaining = 0
   export let stats = { total_pixels: 0, unique_users: 0 }
@@ -168,41 +168,69 @@
       <!-- Color Picker Button (Mobile) -->
       <div class="relative sm:hidden">
         <button
-          class="w-8 h-8 border border-gray-300 rounded-md shadow-sm hover:shadow transition-shadow"
+          class="w-9 h-9 rounded-lg border-2 border-gray-200 shadow-sm hover:shadow-md transition-all hover:scale-105 active:scale-95 relative group"
           style="background-color: {selectedColor}"
           on:click={() => showColorPicker = !showColorPicker}
-        ></button>
+        >
+          <div class="absolute inset-0 rounded-lg ring-2 ring-blue-400 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+        </button>
 
         {#if showColorPicker}
-          <div class="absolute top-full left-0 mt-2 p-2 bg-white border border-gray-200 rounded-lg shadow-xl z-50 w-56">
-            <div class="grid grid-cols-4 gap-1.5">
+          <div class="absolute top-full left-0 mt-2 p-3 bg-white border border-gray-200 rounded-xl shadow-2xl z-50 w-64 backdrop-blur-sm">
+            <div class="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Pick a color</div>
+            <div class="grid grid-cols-4 gap-2">
               {#each colors as color}
                 <button
-                  class="aspect-square rounded hover:scale-110 active:scale-95 transition-transform shadow-sm"
+                  class="aspect-square rounded-lg hover:scale-110 active:scale-95 transition-all relative group shadow-sm hover:shadow-md"
                   class:ring-2={selectedColor === color}
                   class:ring-blue-500={selectedColor === color}
-                  class:ring-offset-1={selectedColor === color}
+                  class:ring-offset-2={selectedColor === color}
                   style="background-color: {color}"
                   on:click={() => selectColor(color)}
-                ></button>
+                >
+                  {#if selectedColor === color}
+                    <div class="absolute inset-0 flex items-center justify-center">
+                      <svg class="w-4 h-4 text-white drop-shadow-lg" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                      </svg>
+                    </div>
+                  {/if}
+                </button>
               {/each}
+            </div>
+            <div class="mt-3 pt-3 border-t border-gray-100">
+              <div class="flex items-center gap-2">
+                <div class="w-10 h-10 rounded-lg border-2 border-gray-200 shadow-inner" style="background-color: {selectedColor}"></div>
+                <div class="flex-1">
+                  <div class="text-xs text-gray-500 font-medium">Selected</div>
+                  <div class="text-xs font-mono text-gray-700">{selectedColor.toUpperCase()}</div>
+                </div>
+              </div>
             </div>
           </div>
         {/if}
       </div>
 
       <!-- Color Palette (Desktop) -->
-      <div class="hidden sm:flex items-center gap-1">
+      <div class="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-gray-50 rounded-lg border border-gray-200">
         {#each colors as color}
           <button
-            class="w-7 h-7 rounded hover:scale-110 active:scale-95 transition-transform shadow-sm"
+            class="w-7 h-7 rounded-md hover:scale-110 active:scale-95 transition-all relative group shadow-sm hover:shadow-md"
             class:ring-2={selectedColor === color}
             class:ring-blue-500={selectedColor === color}
-            class:ring-offset-1={selectedColor === color}
+            class:ring-offset-2={selectedColor === color}
             style="background-color: {color}"
             on:click={() => selectColor(color)}
-            title={color}
-          ></button>
+            title={color.toUpperCase()}
+          >
+            {#if selectedColor === color}
+              <div class="absolute inset-0 flex items-center justify-center">
+                <svg class="w-3.5 h-3.5 text-white drop-shadow-lg" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                </svg>
+              </div>
+            {/if}
+          </button>
         {/each}
       </div>
 

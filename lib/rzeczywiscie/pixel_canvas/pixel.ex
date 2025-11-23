@@ -22,25 +22,25 @@ defmodule Rzeczywiscie.PixelCanvas.Pixel do
     |> unique_constraint([:x, :y])
   end
 
-  # 16-color palette (retro/brutalist aesthetic)
+  # Modern 16-color palette (curated for aesthetics)
   defp valid_colors do
     [
-      "#000000",  # Black
-      "#FFFFFF",  # White
-      "#FF0000",  # Red
-      "#00FF00",  # Green
-      "#0000FF",  # Blue
-      "#FFFF00",  # Yellow
-      "#FF00FF",  # Magenta
-      "#00FFFF",  # Cyan
-      "#FF8800",  # Orange
-      "#8800FF",  # Purple
-      "#00FF88",  # Mint
-      "#FF0088",  # Hot Pink
-      "#888888",  # Gray
-      "#444444",  # Dark Gray
-      "#CCCCCC",  # Light Gray
-      "#88FF00"   # Lime
+      "#1a1a1a",  # Rich Black
+      "#ffffff",  # Pure White
+      "#ef4444",  # Soft Red
+      "#10b981",  # Emerald
+      "#3b82f6",  # Blue
+      "#f59e0b",  # Amber
+      "#8b5cf6",  # Purple
+      "#ec4899",  # Pink
+      "#14b8a6",  # Teal
+      "#f97316",  # Orange
+      "#6366f1",  # Indigo
+      "#84cc16",  # Lime
+      "#06b6d4",  # Cyan
+      "#a855f7",  # Violet
+      "#64748b",  # Slate
+      "#fbbf24"   # Yellow
     ]
   end
 
