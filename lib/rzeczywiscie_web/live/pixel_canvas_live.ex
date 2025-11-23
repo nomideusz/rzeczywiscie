@@ -59,8 +59,9 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
   def handle_event("place_pixel", %{"x" => x, "y" => y}, socket) do
     color = socket.assigns.selected_color
     user_id = socket.assigns.user_id
+    ip_address = get_peer_ip(socket)
 
-    case PixelCanvas.place_pixel(x, y, color, user_id) do
+    case PixelCanvas.place_pixel(x, y, color, user_id, ip_address) do
       {:ok, _pixel} ->
         # Broadcast to all connected clients
         Phoenix.PubSub.broadcast(
@@ -91,6 +92,9 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
 
       {:error, {:cooldown, seconds}} ->
         {:noreply, put_flash(socket, :error, "Cooldown: #{seconds}s remaining")}
+
+      {:error, {:ip_rate_limit, count, window_minutes}} ->
+        {:noreply, put_flash(socket, :error, "Rate limit: max #{count} pixels per #{window_minutes} minutes")}
 
       {:error, changeset} ->
         error_msg = format_error(changeset)
@@ -190,5 +194,13 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
 
   defp get_fallback_id do
     :crypto.strong_rand_bytes(8) |> Base.encode16(case: :lower)
+  end
+
+  # Get peer IP address for rate limiting
+  defp get_peer_ip(socket) do
+    case get_connect_info(socket, :peer_data) do
+      %{address: address} -> :inet.ntoa(address) |> to_string()
+      _ -> nil
+    end
   end
 end
