@@ -24,12 +24,15 @@ FROM ${BUILDER_IMAGE} as builder
 RUN apt-get update -y && apt-get install -y build-essential git curl \
     && apt-get clean && rm -f /var/lib/apt/lists/*_*
 
-# Install Node.js 20.18.1 (supports regex 'v' flag needed by Svelte 5)
+# Install Node.js 20.x (minimum 20.6.0 required for regex 'v' flag used by Svelte 5)
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get update -y \
-    && apt-get install -y nodejs=20.* \
+    && apt-get install -y nodejs \
+    && echo "=== Verifying Node.js version ===" \
     && node --version \
     && npm --version \
+    && node -p "process.versions.node" \
+    && node -e "const v = process.versions.node.split('.'); if (parseInt(v[0]) < 20 || (parseInt(v[0]) === 20 && parseInt(v[1]) < 6)) { console.error('ERROR: Node.js 20.6.0+ required, got', process.versions.node); process.exit(1); } else { console.log('✓ Node.js version check passed'); }" \
     && apt-get clean && rm -f /var/lib/apt/lists/*_*
 
 # Prepare build dir
@@ -93,13 +96,16 @@ RUN apt-get update -y && \
   apt-get install -y libstdc++6 openssl libncurses5 locales ca-certificates \
   && apt-get clean && rm -f /var/lib/apt/lists/*_*
 
-# Install Node.js 20.18.1 runtime (needed for SSR, supports regex 'v' flag)
+# Install Node.js 20.x runtime (minimum 20.6.0 required for SSR with Svelte 5)
 RUN apt-get update -y && apt-get install -y curl \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get update -y \
-    && apt-get install -y nodejs=20.* \
+    && apt-get install -y nodejs \
+    && echo "=== Verifying Node.js runtime version ===" \
     && node --version \
     && npm --version \
+    && node -p "process.versions.node" \
+    && node -e "const v = process.versions.node.split('.'); if (parseInt(v[0]) < 20 || (parseInt(v[0]) === 20 && parseInt(v[1]) < 6)) { console.error('ERROR: Node.js 20.6.0+ required, got', process.versions.node); process.exit(1); } else { console.log('✓ Node.js runtime version check passed'); }" \
     && apt-get clean && rm -f /var/lib/apt/lists/*_*
 
 # Set the locale
