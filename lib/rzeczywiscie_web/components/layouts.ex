@@ -190,6 +190,14 @@ defmodule RzeczywiscieWeb.Layouts do
               </li>
               <li>
                 <a
+                  href={~p"/pixels"}
+                  class="text-sm font-bold hover:underline hover:underline-offset-4 decoration-2 decoration-primary"
+                >
+                  Pixel Canvas
+                </a>
+              </li>
+              <li>
+                <a
                   href={~p"/real-estate"}
                   class="text-sm font-bold hover:underline hover:underline-offset-4 decoration-2 decoration-success"
                 >
