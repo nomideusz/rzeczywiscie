@@ -21,20 +21,22 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
       Process.send_after(self(), :update_cooldown, 1000)
     end
 
-    {:ok,
-     assign(socket,
-       user_id: user_id,
-       canvas_width: width,
-       canvas_height: height,
-       pixels: pixels,
-       colors: PixelCanvas.available_colors(),
-       selected_color: List.first(PixelCanvas.available_colors()),
-       cooldown_seconds: PixelCanvas.cooldown_seconds(),
-       can_place: cooldown == :ok,
-       seconds_remaining: seconds_remaining,
-       stats: stats,
-       page_title: "Pixel Canvas"
-     )}
+    socket =
+      socket
+      |> assign(:user_id, user_id)
+      |> assign(:canvas_width, width)
+      |> assign(:canvas_height, height)
+      |> assign(:pixels, pixels)
+      |> assign(:colors, PixelCanvas.available_colors())
+      |> assign(:selected_color, List.first(PixelCanvas.available_colors()))
+      |> assign(:cooldown_seconds, PixelCanvas.cooldown_seconds())
+      |> assign(:can_place, cooldown == :ok)
+      |> assign(:seconds_remaining, seconds_remaining)
+      |> assign(:stats, stats)
+      |> assign(:page_title, "Pixel Canvas")
+      |> assign(:pixels_version, 0)  # Add version counter to force Svelte updates
+
+    {:ok, socket}
   end
 
   def render(assigns) do
@@ -45,6 +47,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
         width: @canvas_width,
         height: @canvas_height,
         pixels: serialize_pixels(@pixels),
+        pixelsVersion: @pixels_version,
         colors: @colors,
         selectedColor: @selected_color,
         canPlace: @can_place,
@@ -72,6 +75,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
         stats = PixelCanvas.stats()
 
         # Broadcast to all connected clients (including stats)
+        IO.inspect("Broadcasting pixel placement: x=#{x}, y=#{y}, color=#{color}")
         Phoenix.PubSub.broadcast(
           Rzeczywiscie.PubSub,
           @topic,
@@ -84,6 +88,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
         {:noreply,
          socket
          |> assign(:pixels, pixels)
+         |> assign(:pixels_version, socket.assigns.pixels_version + 1)
          |> assign(:can_place, false)
          |> assign(:seconds_remaining, PixelCanvas.cooldown_seconds())
          |> assign(:stats, stats)}
@@ -121,16 +126,24 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
 
   # Handle pixel placed by other users
   def handle_info({:pixel_placed, x, y, color, user_id, stats}, socket) do
+    IO.inspect("Received pixel_placed event: x=#{x}, y=#{y}, my_user_id=#{socket.assigns.user_id}, sender_user_id=#{user_id}")
+
     # Don't update if this was our own pixel (already updated)
     if user_id != socket.assigns.user_id do
+      IO.inspect("Updating pixels for other user's placement")
       pixels = Map.put(socket.assigns.pixels, {x, y}, %{
         color: color,
         user_id: user_id,
         updated_at: DateTime.utc_now()
       })
 
-      {:noreply, assign(socket, pixels: pixels, stats: stats)}
+      {:noreply,
+       socket
+       |> assign(:pixels, pixels)
+       |> assign(:pixels_version, socket.assigns.pixels_version + 1)
+       |> assign(:stats, stats)}
     else
+      IO.inspect("Ignoring own pixel placement")
       {:noreply, socket}
     end
   end

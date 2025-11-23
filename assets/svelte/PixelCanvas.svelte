@@ -2,6 +2,7 @@
   export let width = 500
   export let height = 500
   export let pixels = []
+  export let pixelsVersion = 0
   export let colors = []
   export let selectedColor = "#1a1a1a"
   export let canPlace = true
@@ -18,8 +19,8 @@
   $: canvasWidth = width * pixelSize
   $: canvasHeight = height * pixelSize
 
-  // Draw canvas when pixels change
-  $: if (ctx && pixels) {
+  // Draw canvas when pixels change (using version to force reactivity)
+  $: if (ctx && pixelsVersion >= 0) {
     requestAnimationFrame(() => drawCanvas())
   }
 
