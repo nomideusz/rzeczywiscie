@@ -72,6 +72,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
         stats = PixelCanvas.stats()
 
         # Broadcast to all connected clients (including stats)
+        IO.inspect("Broadcasting pixel placement: x=#{x}, y=#{y}, color=#{color}")
         Phoenix.PubSub.broadcast(
           Rzeczywiscie.PubSub,
           @topic,
@@ -121,8 +122,11 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
 
   # Handle pixel placed by other users
   def handle_info({:pixel_placed, x, y, color, user_id, stats}, socket) do
+    IO.inspect("Received pixel_placed event: x=#{x}, y=#{y}, my_user_id=#{socket.assigns.user_id}, sender_user_id=#{user_id}")
+
     # Don't update if this was our own pixel (already updated)
     if user_id != socket.assigns.user_id do
+      IO.inspect("Updating pixels for other user's placement")
       pixels = Map.put(socket.assigns.pixels, {x, y}, %{
         color: color,
         user_id: user_id,
@@ -131,6 +135,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
 
       {:noreply, assign(socket, pixels: pixels, stats: stats)}
     else
+      IO.inspect("Ignoring own pixel placement")
       {:noreply, socket}
     end
   end
