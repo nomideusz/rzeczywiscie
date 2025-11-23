@@ -71,7 +71,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
         )
 
         # Update local state
-        pixels = put_in(socket.assigns.pixels, [{x, y}], %{
+        pixels = Map.put(socket.assigns.pixels, {x, y}, %{
           color: color,
           user_id: user_id,
           updated_at: DateTime.utc_now()
@@ -128,7 +128,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
   def handle_info({:pixel_placed, x, y, color, user_id}, socket) do
     # Don't update if this was our own pixel (already updated)
     if user_id != socket.assigns.user_id do
-      pixels = put_in(socket.assigns.pixels, [{x, y}], %{
+      pixels = Map.put(socket.assigns.pixels, {x, y}, %{
         color: color,
         user_id: user_id,
         updated_at: DateTime.utc_now()
