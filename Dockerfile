@@ -56,6 +56,9 @@ RUN mkdir config
 COPY config/config.exs config/${MIX_ENV}.exs config/
 RUN mix deps.compile
 
+# Bust Docker cache to ensure fresh code copy
+ADD https://www.google.com /time.now
+
 # Copy assets and lib (lib needed for Tailwind to scan templates)
 COPY priv priv
 COPY assets assets
