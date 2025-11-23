@@ -18,6 +18,22 @@ defmodule Rzeczywiscie.Release do
     {:ok, _, _} = Ecto.Migrator.with_repo(repo, &Ecto.Migrator.run(&1, :down, to: version))
   end
 
+  def seed do
+    load_app()
+
+    for repo <- repos() do
+      {:ok, _, _} = Ecto.Migrator.with_repo(repo, fn _repo ->
+        # Run the seed script
+        seed_script = Path.join([priv_dir(), "repo", "seeds.exs"])
+
+        if File.exists?(seed_script) do
+          IO.puts("Running seed script: #{seed_script}")
+          Code.eval_file(seed_script)
+        end
+      end)
+    end
+  end
+
   defp repos do
     Application.fetch_env!(@app, :ecto_repos)
   end
@@ -26,5 +42,9 @@ defmodule Rzeczywiscie.Release do
     # Many platforms require SSL when connecting to the database
     Application.ensure_all_started(:ssl)
     Application.load(@app)
+  end
+
+  defp priv_dir do
+    Application.app_dir(@app, "priv")
   end
 end
