@@ -55,20 +55,20 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
     user_id = socket.assigns.user_id
 
     case PixelCanvas.place_pixel(x, y, color, user_id) do
-      {:ok, _pixel} ->
-        # Broadcast to all connected clients
+      {:ok, pixel} ->
+        # Update local state FIRST (immediate feedback)
+        new_pixels = Map.put(socket.assigns.pixels, {x, y}, %{
+          color: color,
+          user_id: user_id,
+          updated_at: pixel.updated_at
+        })
+
+        # Broadcast to all connected clients (after local update)
         Phoenix.PubSub.broadcast(
           Rzeczywiscie.PubSub,
           @topic,
           {:pixel_placed, x, y, color, user_id}
         )
-
-        # Update local state
-        pixels = Map.put(socket.assigns.pixels, {x, y}, %{
-          color: color,
-          user_id: user_id,
-          updated_at: DateTime.utc_now()
-        })
 
         stats = PixelCanvas.stats()
 
@@ -76,12 +76,11 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
         Process.send_after(self(), :update_cooldown, 1000)
 
         {:noreply,
-         assign(socket,
-           pixels: pixels,
-           can_place: false,
-           seconds_remaining: PixelCanvas.cooldown_seconds(),
-           stats: stats
-         )}
+         socket
+         |> assign(:pixels, new_pixels)
+         |> assign(:can_place, false)
+         |> assign(:seconds_remaining, PixelCanvas.cooldown_seconds())
+         |> assign(:stats, stats)}
 
       {:error, {:cooldown, seconds}} ->
         {:noreply, put_flash(socket, :error, "Cooldown: #{seconds}s remaining")}
