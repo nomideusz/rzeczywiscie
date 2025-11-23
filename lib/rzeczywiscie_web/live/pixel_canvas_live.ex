@@ -18,6 +18,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
     {:ok,
      assign(socket,
        user_id: user_id,
+       ip_address: ip_address,
        canvas_width: width,
        canvas_height: height,
        pixels: pixels,
