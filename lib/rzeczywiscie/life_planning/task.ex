@@ -31,7 +31,7 @@ defmodule Rzeczywiscie.LifePlanning.Task do
     task
     |> change(%{
       completed: true,
-      completed_at: DateTime.utc_now()
+      completed_at: DateTime.utc_now() |> DateTime.truncate(:second)
     })
   end
 
