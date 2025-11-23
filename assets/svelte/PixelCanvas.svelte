@@ -141,43 +141,47 @@
   }
 </script>
 
-<div class="fixed inset-0 flex flex-col bg-base-100">
-  <!-- Compact Header with All Controls -->
-  <div class="bg-base-200 border-b-2 border-base-content">
-    <div class="px-3 py-2 flex flex-wrap items-center gap-3 sm:gap-4">
+<div class="fixed inset-0 flex flex-col bg-white">
+  <!-- Minimal Header -->
+  <div class="bg-white border-b border-gray-200 shadow-sm">
+    <div class="px-3 py-2.5 flex flex-wrap items-center gap-2 sm:gap-3 max-w-screen-2xl mx-auto">
       <!-- Back Link -->
       <a
         href="/real-estate"
-        class="btn btn-sm btn-ghost gap-1 flex-shrink-0"
+        class="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900 transition-colors flex-shrink-0"
         title="Back to Kruk.live"
       >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
         </svg>
-        <span class="hidden sm:inline">Kruk.live</span>
+        <span class="hidden sm:inline font-medium">Kruk.live</span>
       </a>
 
+      <!-- Divider -->
+      <div class="h-4 w-px bg-gray-300 hidden sm:block"></div>
+
       <!-- Title -->
-      <h1 class="text-lg sm:text-xl font-black uppercase tracking-tight flex-shrink-0">
-        Pixel<span class="text-primary">Canvas</span>
+      <h1 class="text-sm font-semibold text-gray-800 flex-shrink-0">
+        Pixel Canvas
       </h1>
 
       <!-- Color Picker Button (Mobile) -->
       <div class="relative sm:hidden">
         <button
-          class="w-10 h-10 border-2 border-base-content rounded"
+          class="w-8 h-8 border border-gray-300 rounded-md shadow-sm hover:shadow transition-shadow"
           style="background-color: {selectedColor}"
           on:click={() => showColorPicker = !showColorPicker}
         ></button>
 
         {#if showColorPicker}
-          <div class="absolute top-full left-0 mt-2 p-3 bg-base-100 border-2 border-base-content shadow-xl z-50 w-64">
-            <div class="grid grid-cols-4 gap-2">
+          <div class="absolute top-full left-0 mt-2 p-2 bg-white border border-gray-200 rounded-lg shadow-xl z-50 w-56">
+            <div class="grid grid-cols-4 gap-1.5">
               {#each colors as color}
                 <button
-                  class="aspect-square border-2 hover:scale-110 active:scale-95 transition-transform"
-                  class:border-primary={selectedColor === color}
-                  class:border-base-300={selectedColor !== color}
+                  class="aspect-square rounded hover:scale-110 active:scale-95 transition-transform shadow-sm"
+                  class:ring-2={selectedColor === color}
+                  class:ring-blue-500={selectedColor === color}
+                  class:ring-offset-1={selectedColor === color}
                   style="background-color: {color}"
                   on:click={() => selectColor(color)}
                 ></button>
@@ -188,14 +192,13 @@
       </div>
 
       <!-- Color Palette (Desktop) -->
-      <div class="hidden sm:flex items-center gap-1 flex-wrap">
+      <div class="hidden sm:flex items-center gap-1">
         {#each colors as color}
           <button
-            class="w-8 h-8 border-2 hover:scale-110 active:scale-95 transition-transform"
-            class:border-base-content={selectedColor === color}
-            class:border-base-300={selectedColor !== color}
+            class="w-7 h-7 rounded hover:scale-110 active:scale-95 transition-transform shadow-sm"
             class:ring-2={selectedColor === color}
-            class:ring-primary={selectedColor === color}
+            class:ring-blue-500={selectedColor === color}
+            class:ring-offset-1={selectedColor === color}
             style="background-color: {color}"
             on:click={() => selectColor(color)}
             title={color}
@@ -206,20 +209,22 @@
       <div class="flex-1"></div>
 
       <!-- Stats -->
-      <div class="hidden md:flex items-center gap-3 text-xs opacity-60">
-        <span>{stats.total_pixels} pixels</span>
-        <span>·</span>
-        <span>{stats.unique_users} artists</span>
+      <div class="hidden md:flex items-center gap-2 text-xs text-gray-500">
+        <span>{stats.total_pixels.toLocaleString()}</span>
+        <span>pixels</span>
+        <span class="text-gray-300">·</span>
+        <span>{stats.unique_users.toLocaleString()}</span>
+        <span>artists</span>
       </div>
 
       <!-- Cooldown -->
       <div class="flex items-center gap-2 flex-shrink-0">
         {#if canPlace}
-          <div class="px-3 py-1 bg-primary text-primary-content font-bold text-sm uppercase">
-            Ready!
+          <div class="px-2.5 py-1 bg-green-500 text-white font-medium text-xs rounded-md shadow-sm">
+            Ready
           </div>
         {:else}
-          <div class="px-3 py-1 bg-base-300 font-bold text-sm">
+          <div class="px-2.5 py-1 bg-gray-100 text-gray-700 font-medium text-xs rounded-md border border-gray-200">
             {secondsRemaining}s
           </div>
         {/if}
@@ -228,9 +233,9 @@
 
     <!-- Progress Bar -->
     {#if !canPlace}
-      <div class="h-1 bg-base-300">
+      <div class="h-0.5 bg-gray-100">
         <div
-          class="h-full bg-primary transition-all duration-1000"
+          class="h-full bg-blue-500 transition-all duration-1000"
           style="width: {((60 - secondsRemaining) / 60) * 100}%"
         ></div>
       </div>
@@ -238,12 +243,12 @@
   </div>
 
   <!-- Canvas Area (Full Screen) -->
-  <div class="flex-1 overflow-auto bg-base-200">
+  <div class="flex-1 overflow-auto bg-gray-50">
     <canvas
       use:initCanvas
       width={canvasWidth}
       height={canvasHeight}
-      class="bg-white cursor-crosshair"
+      class="bg-white cursor-crosshair shadow-sm"
       class:cursor-not-allowed={!canPlace}
       on:click={handleClick}
       on:mousemove={handleMove}
