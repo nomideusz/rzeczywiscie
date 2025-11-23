@@ -4,7 +4,15 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
 
   @topic "pixel_canvas"
 
+  # Use root layout only (no app header/footer)
+  on_mount {__MODULE__, :assign_layout}
+
+  def on_mount(:assign_layout, _params, _session, socket) do
+    {:cont, Phoenix.Component.assign(socket, :live_action, :pixel_canvas)}
+  end
+
   def mount(_params, _session, socket) do
+    socket = Phoenix.LiveView.put_root_layout(socket, html: {RzeczywiscieWeb.Layouts, :root})
     if connected?(socket) do
       Phoenix.PubSub.subscribe(Rzeczywiscie.PubSub, @topic)
     end

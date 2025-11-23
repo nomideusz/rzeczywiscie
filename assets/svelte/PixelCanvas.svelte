@@ -10,7 +10,7 @@
   export let live
 
   let hoveredPixel = null
-  let pixelSize = 2 // Smaller pixels: 500x500 grid = 1000x1000px canvas
+  let pixelSize = 4 // Larger pixels: 500x500 grid = 2000x2000px canvas
   let canvasElement
   let ctx
 
@@ -36,8 +36,8 @@
     ctx.fillStyle = '#FFFFFF'
     ctx.fillRect(0, 0, canvasWidth, canvasHeight)
 
-    // Draw grid
-    ctx.strokeStyle = '#EEEEEE'
+    // Draw grid (lighter, less prominent)
+    ctx.strokeStyle = '#F5F5F5'
     ctx.lineWidth = 1
 
     for (let x = 0; x <= width; x++) {
@@ -113,120 +113,109 @@
   }
 </script>
 
-<div class="min-h-screen bg-base-100">
-  <!-- Header -->
-  <div class="container mx-auto px-4 py-8">
-    <h1 class="text-5xl font-black tracking-tight uppercase mb-4">
-      Pixel<br /><span class="text-primary">Canvas</span>
-    </h1>
-    <p class="text-lg opacity-70">
-      500×500 collaborative pixel art. Place one pixel every minute.
-    </p>
+<!-- Full screen layout -->
+<div class="fixed inset-0 bg-white overflow-hidden flex flex-col">
+  <!-- Minimal header -->
+  <div class="flex-none border-b-2 border-black px-4 py-2 bg-white z-10">
+    <a href="/" class="text-sm font-bold hover:text-primary transition-colors">
+      ← Kruk.live
+    </a>
   </div>
 
-  <div class="container mx-auto px-4 pb-8">
-    <div class="grid lg:grid-cols-[1fr_320px] gap-6">
-      <!-- Canvas Section -->
-      <div class="border-4 border-base-content bg-base-100 p-4 sm:p-6">
-      <div class="mb-4 flex items-center justify-between">
-        <div class="flex items-center gap-4">
-          <div class="w-3 h-3 bg-primary rounded-none animate-pulse"></div>
-          <span class="text-xs uppercase tracking-widest font-bold opacity-70">
-            Live Canvas
-          </span>
-        </div>
-        <div class="text-xs font-bold opacity-50">
-          {stats.total_pixels} pixels · {stats.unique_users} artists
-        </div>
-      </div>
-
-      <!-- Canvas -->
-      <div class="overflow-auto border-2 border-base-content bg-white max-h-[600px] lg:max-h-[800px]">
-        <canvas
-          use:initCanvas
-          width={canvasWidth}
-          height={canvasHeight}
-          class="cursor-crosshair block"
-          class:cursor-not-allowed={!canPlace}
-          on:click={handleCanvasClick}
-          on:mousemove={handleCanvasMove}
-          on:mouseleave={handleCanvasLeave}
-        ></canvas>
-      </div>
-
-      <!-- Instructions -->
-      <div class="mt-4 text-sm opacity-70">
-        Click any pixel to place your color. {#if !canPlace}Wait {secondsRemaining}s to place again.{/if}
-      </div>
+  <!-- Main content area -->
+  <div class="flex-1 flex overflow-hidden">
+    <!-- Canvas area (scrollable) -->
+    <div class="flex-1 overflow-auto bg-neutral-100 flex items-center justify-center p-4">
+      <canvas
+        use:initCanvas
+        width={canvasWidth}
+        height={canvasHeight}
+        class="cursor-crosshair border-2 border-black shadow-[8px_8px_0_0_rgba(0,0,0,1)]"
+        class:cursor-not-allowed={!canPlace}
+        on:click={handleCanvasClick}
+        on:mousemove={handleCanvasMove}
+        on:mouseleave={handleCanvasLeave}
+      ></canvas>
     </div>
 
-    <!-- Controls Sidebar -->
-    <div class="space-y-6">
-      <!-- Color Picker -->
-      <div class="border-4 border-base-content bg-base-100 p-6">
-        <h3 class="text-xl font-black uppercase mb-4 tracking-tight">Palette</h3>
-        <div class="grid grid-cols-4 gap-2">
-          {#each colors as color}
-            <button
-              on:click={() => selectColor(color)}
-              class="w-full aspect-square border-4 transition-all hover:scale-110"
-              class:border-base-content={selectedColor === color}
-              class:border-transparent={selectedColor !== color}
-              style="background-color: {color}"
-              title={color}
-            ></button>
-          {/each}
-        </div>
-
-        <div class="mt-4 p-3 bg-base-200 border-2 border-base-content">
-          <div class="text-xs uppercase tracking-wider font-bold opacity-50 mb-2">Selected</div>
-          <div class="flex items-center gap-3">
-            <div class="w-12 h-12 border-2 border-base-content" style="background-color: {selectedColor}"></div>
-            <div class="text-sm font-mono">{selectedColor}</div>
+    <!-- Controls sidebar (fixed on right) -->
+    <div class="flex-none w-80 border-l-2 border-black bg-white overflow-y-auto">
+      <div class="p-6 space-y-6">
+        <!-- Stats -->
+        <div class="border-2 border-black p-4">
+          <div class="flex items-center gap-2 mb-3">
+            <div class="w-2 h-2 bg-primary rounded-none animate-pulse"></div>
+            <h3 class="text-xs uppercase font-bold tracking-wider">Live</h3>
+          </div>
+          <div class="space-y-2">
+            <div class="flex justify-between text-xs">
+              <span class="opacity-60">Pixels</span>
+              <span class="font-bold">{stats.total_pixels.toLocaleString()}</span>
+            </div>
+            <div class="flex justify-between text-xs">
+              <span class="opacity-60">Artists</span>
+              <span class="font-bold">{stats.unique_users.toLocaleString()}</span>
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- Cooldown Timer -->
-      <div class="border-4 border-base-content bg-base-100 p-6">
-        <h3 class="text-xl font-black uppercase mb-4 tracking-tight">Cooldown</h3>
-
-        {#if canPlace}
-          <div class="text-center py-8">
-            <div class="text-6xl font-black mb-2">✓</div>
-            <div class="text-sm font-bold uppercase tracking-wide text-primary">Ready!</div>
+        <!-- Color Palette -->
+        <div class="border-2 border-black p-4">
+          <h3 class="text-sm font-bold uppercase mb-3 tracking-tight">Palette</h3>
+          <div class="grid grid-cols-4 gap-2 mb-3">
+            {#each colors as color}
+              <button
+                on:click={() => selectColor(color)}
+                class="w-full aspect-square border-2 transition-all hover:scale-110"
+                class:border-black={selectedColor === color}
+                class:border-gray-300={selectedColor !== color}
+                class:shadow-[4px_4px_0_0_rgba(0,0,0,1)]={selectedColor === color}
+                style="background-color: {color}"
+                title={color}
+              ></button>
+            {/each}
           </div>
-        {:else}
-          <div class="text-center py-8">
-            <div class="text-6xl font-black mb-2">{secondsRemaining}</div>
-            <div class="text-xs uppercase tracking-wider font-bold opacity-50">seconds</div>
+          <div class="flex items-center gap-2 text-xs">
+            <div class="w-8 h-8 border-2 border-black" style="background-color: {selectedColor}"></div>
+            <span class="font-mono opacity-60">{selectedColor}</span>
           </div>
-        {/if}
-
-        <!-- Progress bar -->
-        <div class="mt-4 h-2 bg-base-200 border-2 border-base-content overflow-hidden">
-          <div
-            class="h-full bg-primary transition-all duration-1000"
-            style="width: {canPlace ? 100 : ((60 - secondsRemaining) / 60) * 100}%"
-          ></div>
         </div>
-      </div>
 
-      <!-- Stats -->
-      <div class="border-4 border-base-content bg-base-100 p-6">
-        <h3 class="text-xl font-black uppercase mb-4 tracking-tight">Stats</h3>
-        <div class="space-y-3">
-          <div>
-            <div class="text-xs uppercase tracking-wider font-bold opacity-50">Total Pixels</div>
-            <div class="text-3xl font-black">{stats.total_pixels.toLocaleString()}</div>
+        <!-- Cooldown -->
+        <div class="border-2 border-black p-4">
+          <h3 class="text-sm font-bold uppercase mb-3 tracking-tight">Cooldown</h3>
+
+          {#if canPlace}
+            <div class="text-center py-6">
+              <div class="text-4xl font-black mb-2">✓</div>
+              <div class="text-xs uppercase tracking-wide text-primary font-bold">Ready!</div>
+            </div>
+          {:else}
+            <div class="text-center py-6">
+              <div class="text-5xl font-black mb-1">{secondsRemaining}</div>
+              <div class="text-xs uppercase tracking-wider opacity-50 font-bold">seconds</div>
+            </div>
+          {/if}
+
+          <!-- Progress bar -->
+          <div class="h-2 bg-gray-200 border-2 border-black overflow-hidden">
+            <div
+              class="h-full bg-primary transition-all duration-1000"
+              style="width: {canPlace ? 100 : ((60 - secondsRemaining) / 60) * 100}%"
+            ></div>
           </div>
-          <div>
-            <div class="text-xs uppercase tracking-wider font-bold opacity-50">Artists</div>
-            <div class="text-3xl font-black">{stats.unique_users.toLocaleString()}</div>
-          </div>
+        </div>
+
+        <!-- Instructions -->
+        <div class="text-xs opacity-60 leading-relaxed">
+          Click any pixel to place your selected color.
+          {#if !canPlace}
+            Wait <span class="font-bold text-black">{secondsRemaining}s</span> to place again.
+          {:else}
+            <span class="font-bold text-primary">Ready to place!</span>
+          {/if}
         </div>
       </div>
     </div>
-  </div>
   </div>
 </div>
