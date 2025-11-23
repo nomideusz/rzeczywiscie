@@ -4,16 +4,22 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
 
   @topic "pixel_canvas"
 
-  def mount(_params, _session, socket) do
+  def mount(_params, session, socket) do
     if connected?(socket) do
       Phoenix.PubSub.subscribe(Rzeczywiscie.PubSub, @topic)
     end
 
-    user_id = get_or_create_user_id(socket)
+    user_id = get_or_create_user_id(socket, session)
     {width, height} = PixelCanvas.canvas_size()
     pixels = PixelCanvas.load_canvas()
     stats = PixelCanvas.stats()
     cooldown = PixelCanvas.check_cooldown(user_id)
+    seconds_remaining = get_seconds_remaining(cooldown)
+
+    # Start cooldown timer if user is on cooldown
+    if connected?(socket) and seconds_remaining > 0 do
+      Process.send_after(self(), :update_cooldown, 1000)
+    end
 
     {:ok,
      assign(socket,
@@ -25,7 +31,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
        selected_color: List.first(PixelCanvas.available_colors()),
        cooldown_seconds: PixelCanvas.cooldown_seconds(),
        can_place: cooldown == :ok,
-       seconds_remaining: get_seconds_remaining(cooldown),
+       seconds_remaining: seconds_remaining,
        stats: stats,
        page_title: "Pixel Canvas"
      )}
@@ -152,9 +158,16 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
     "Error: #{errors}"
   end
 
-  # Get or create user ID (same pattern as other features)
-  defp get_or_create_user_id(socket) do
-    get_user_agent_id(socket) || get_peer_ip_id(socket) || get_fallback_id()
+  # Get or create user ID - persistent across refreshes via session
+  defp get_or_create_user_id(socket, session) do
+    # First try to get from session (persistent across refreshes in same browser)
+    session["pixel_canvas_user_id"] ||
+      # Then try user agent hash (persistent for same browser)
+      get_user_agent_id(socket) ||
+      # Then try IP hash (persistent for same network)
+      get_peer_ip_id(socket) ||
+      # Fallback: generate random (not ideal but better than nothing)
+      get_fallback_id()
   end
 
   defp get_user_agent_id(socket) do
