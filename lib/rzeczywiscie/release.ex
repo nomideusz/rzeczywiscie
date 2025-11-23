@@ -19,6 +19,10 @@ defmodule Rzeczywiscie.Release do
   end
 
   def seed do
+    # First ensure migrations are run
+    IO.puts("Ensuring migrations are up to date...")
+    migrate()
+
     load_app()
     {:ok, _, _} = Ecto.Migrator.with_repo(
       List.first(repos()),
