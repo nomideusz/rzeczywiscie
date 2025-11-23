@@ -1,8 +1,8 @@
-# Rzeczywiscie - Real Estate Aggregator
+# Kruk.live - Real Estate Aggregator
 
 ## Project Overview
 
-This is a **real estate listing aggregator** for the Małopolskie region of Poland, built with Phoenix 1.8.1 and LiveSvelte 0.16.0 (Svelte 5). It scrapes property listings from OLX and Otodom, stores them in PostgreSQL, and provides a modern web interface for browsing, filtering, and favoriting properties.
+**Kruk.live** is a real estate listing aggregator for the Małopolskie region of Poland, built with Phoenix 1.8.1 and LiveSvelte 0.16.0 (Svelte 5). It scrapes property listings from OLX and Otodom, stores them in PostgreSQL, and provides a modern web interface for browsing, filtering, and favoriting properties.
 
 **Key Features:**
 - 🏠 **Property Listings**: Browse thousands of real estate listings from multiple sources

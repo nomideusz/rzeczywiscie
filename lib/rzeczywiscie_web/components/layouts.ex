@@ -41,13 +41,13 @@ defmodule RzeczywiscieWeb.Layouts do
           <!-- Logo - Brutalist -->
           <a href={~p"/"} class="flex items-center gap-2 sm:gap-3 group">
             <div class="w-8 h-8 sm:w-10 sm:h-10 bg-primary border-2 border-base-content flex items-center justify-center font-black text-primary-content text-sm sm:text-base">
-              R
+              K
             </div>
             <span class="text-base sm:text-xl font-black uppercase tracking-tighter hidden sm:inline">
-              Rzeka
+              Kruk
             </span>
             <span class="text-base font-black uppercase tracking-tighter sm:hidden">
-              RZK
+              KRK
             </span>
           </a>
 
@@ -133,10 +133,10 @@ defmodule RzeczywiscieWeb.Layouts do
           <div class="md:col-span-2">
             <div class="flex items-center gap-3 mb-6">
               <div class="w-12 h-12 bg-primary border-2 border-base-content flex items-center justify-center font-black text-primary-content text-xl">
-                R
+                K
               </div>
               <span class="text-2xl font-black uppercase tracking-tighter">
-                Rzeka
+                Kruk
               </span>
             </div>
             <p class="text-sm opacity-70 leading-relaxed max-w-md mb-6">
@@ -225,7 +225,7 @@ defmodule RzeczywiscieWeb.Layouts do
         </div>
         <!-- Copyright bar -->
         <div class="pt-8 border-t-2 border-base-content text-xs uppercase tracking-widest font-bold opacity-50">
-          © <%= Date.utc_today().year %> Rzeka.live
+          © <%= Date.utc_today().year %> Kruk.live
         </div>
       </div>
     </footer>
