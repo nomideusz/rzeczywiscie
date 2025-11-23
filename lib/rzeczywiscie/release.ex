@@ -54,6 +54,25 @@ defmodule Rzeczywiscie.Release do
     )
   end
 
+  def clean_life_planning_tables do
+    load_app()
+    {:ok, _, _} = Ecto.Migrator.with_repo(
+      List.first(repos()),
+      fn repo ->
+        IO.puts("Dropping life planning tables...")
+        repo.query!("DROP TABLE IF EXISTS tasks CASCADE")
+        repo.query!("DROP TABLE IF EXISTS life_projects CASCADE")
+        repo.query!("DROP TABLE IF EXISTS daily_checkins CASCADE")
+
+        IO.puts("Removing migration records...")
+        repo.query!("DELETE FROM schema_migrations WHERE version >= '20251123120000' AND version <= '20251123130000'")
+
+        IO.puts("✓ Cleanup complete")
+        IO.puts("Now run: Rzeczywiscie.Release.seed()")
+      end
+    )
+  end
+
   defp repos do
     Application.fetch_env!(@app, :ecto_repos)
   end
