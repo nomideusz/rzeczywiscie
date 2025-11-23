@@ -26,9 +26,9 @@ defmodule RzeczywiscieWeb.HomeLive do
         <div class="grid lg:grid-cols-12 gap-8 items-center">
           <div class="lg:col-span-7">
             <h1 class="text-6xl sm:text-7xl lg:text-8xl xl:text-9xl font-black leading-[0.9] tracking-tighter mb-8">
-              RZ
+              KR
               <br />
-              <span class="text-primary">EKA</span>
+              <span class="text-primary">UK</span>
             </h1>
 
             <div class="flex items-start gap-4 mb-12">
@@ -56,9 +56,10 @@ defmodule RzeczywiscieWeb.HomeLive do
               </a>
               <a
                 href={~p"/kanban"}
-                class="group relative px-6 sm:px-8 py-3 sm:py-4 bg-base-100 font-bold text-base sm:text-lg tracking-wide uppercase border-4 border-base-content hover:bg-base-content hover:text-base-100 transition-colors text-center"
+                class="group relative px-6 sm:px-8 py-3 sm:py-4 bg-secondary text-secondary-content font-bold text-base sm:text-lg tracking-wide uppercase border-4 border-base-content hover:translate-x-1 hover:translate-y-1 transition-transform text-center"
               >
-                Kanban
+                <span class="relative z-10">Kanban</span>
+                <div class="absolute inset-0 bg-base-content translate-x-1 translate-y-1 -z-10"></div>
               </a>
               <a
                 href={~p"/world"}
@@ -92,7 +93,7 @@ defmodule RzeczywiscieWeb.HomeLive do
           <div class="flex items-center gap-4 mb-6">
             <div class="w-12 h-1 bg-base-content"></div>
             <span class="text-sm uppercase tracking-widest font-bold opacity-50">
-              02 / Apps
+              01 / Apps
             </span>
           </div>
           <h2 class="text-5xl sm:text-6xl font-black tracking-tight leading-none">
@@ -379,7 +380,7 @@ defmodule RzeczywiscieWeb.HomeLive do
           <div class="flex items-center gap-4 mb-6">
             <div class="w-12 h-1 bg-base-content"></div>
             <span class="text-sm uppercase tracking-widest font-bold opacity-50">
-              03 / Stack
+              02 / Stack
             </span>
           </div>
           <h2 class="text-5xl sm:text-6xl font-black tracking-tight leading-none">
