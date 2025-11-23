@@ -8,7 +8,8 @@ defmodule Rzeczywiscie.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      {NodeJS.Supervisor, [path: LiveSvelte.SSR.NodeJS.server_path(), pool_size: 4]},
+      # TEMPORARILY DISABLED SSR to diagnose regex error
+      # {NodeJS.Supervisor, [path: LiveSvelte.SSR.NodeJS.server_path(), pool_size: 4]},
       RzeczywiscieWeb.Telemetry,
       Rzeczywiscie.Repo,
       {Oban, Application.fetch_env!(:rzeczywiscie, Oban)},
