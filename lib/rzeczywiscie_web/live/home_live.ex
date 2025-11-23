@@ -217,6 +217,149 @@ defmodule RzeczywiscieWeb.HomeLive do
           </div>
         </div>
 
+        <!-- Pixel Canvas Card - Full Width, Viral Feature -->
+        <div class="group relative border-4 border-base-content bg-gradient-to-br from-base-100 to-primary/5 p-6 sm:p-8 hover:translate-x-1 hover:translate-y-1 transition-transform lg:col-span-2">
+          <!-- Accent bar -->
+          <div class="absolute top-0 left-0 w-2 h-full bg-primary"></div>
+
+          <!-- Number badge -->
+          <div class="absolute top-4 right-4 w-12 h-12 border-2 border-base-content flex items-center justify-center font-black text-xl">
+            03
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-8">
+            <div class="pr-4 sm:pr-16">
+              <!-- Icon - geometric -->
+              <div class="w-20 h-20 border-4 border-primary mb-6 flex items-center justify-center">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  class="h-10 w-10"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                >
+                  <path
+                    stroke-linecap="square"
+                    stroke-linejoin="miter"
+                    d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"
+                  />
+                </svg>
+              </div>
+
+              <h3 class="text-3xl sm:text-4xl font-black mb-4 tracking-tight uppercase">
+                Pixel<br />Canvas
+              </h3>
+
+              <p class="text-base opacity-70 mb-6 leading-relaxed">
+                Collaborative pixel art canvas. Place colored pixels with a 60-second cooldown and watch art emerge in real-time with hundreds of other artists.
+              </p>
+
+              <!-- Tags - raw style -->
+              <div class="flex flex-wrap gap-2 mb-8">
+                <span class="px-3 py-1 text-xs uppercase tracking-wider bg-primary text-primary-content font-bold">
+                  🎨 r/place Style
+                </span>
+                <span class="px-3 py-1 text-xs uppercase tracking-wider border-2 border-base-content font-bold">
+                  500×500 Grid
+                </span>
+                <span class="px-3 py-1 text-xs uppercase tracking-wider bg-base-content text-base-100 font-bold">
+                  Viral
+                </span>
+              </div>
+
+              <a
+                href={~p"/pixels"}
+                class="inline-block px-6 py-3 bg-primary text-primary-content font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors"
+              >
+                Create Art →
+              </a>
+            </div>
+
+            <!-- Visual Preview -->
+            <div class="hidden md:flex items-center justify-center relative">
+              <div class="relative w-full max-w-xs">
+                <!-- Pixelated Grid Illustration -->
+                <div class="grid grid-cols-8 gap-1 p-4 border-4 border-primary bg-white">
+                  <div class="aspect-square bg-primary"></div>
+                  <div class="aspect-square bg-secondary"></div>
+                  <div class="aspect-square bg-accent"></div>
+                  <div class="aspect-square bg-primary"></div>
+                  <div class="aspect-square bg-base-content"></div>
+                  <div class="aspect-square bg-secondary"></div>
+                  <div class="aspect-square bg-accent"></div>
+                  <div class="aspect-square bg-primary"></div>
+
+                  <div class="aspect-square bg-secondary"></div>
+                  <div class="aspect-square bg-primary"></div>
+                  <div class="aspect-square bg-base-content"></div>
+                  <div class="aspect-square bg-accent"></div>
+                  <div class="aspect-square bg-primary"></div>
+                  <div class="aspect-square bg-secondary"></div>
+                  <div class="aspect-square bg-primary"></div>
+                  <div class="aspect-square bg-accent"></div>
+
+                  <div class="aspect-square bg-accent"></div>
+                  <div class="aspect-square bg-base-content"></div>
+                  <div class="aspect-square bg-primary"></div>
+                  <div class="aspect-square bg-secondary"></div>
+                  <div class="aspect-square bg-accent"></div>
+                  <div class="aspect-square bg-primary"></div>
+                  <div class="aspect-square bg-base-content"></div>
+                  <div class="aspect-square bg-secondary"></div>
+
+                  <div class="aspect-square bg-primary"></div>
+                  <div class="aspect-square bg-accent"></div>
+                  <div class="aspect-square bg-secondary"></div>
+                  <div class="aspect-square bg-primary"></div>
+                  <div class="aspect-square bg-base-content"></div>
+                  <div class="aspect-square bg-accent"></div>
+                  <div class="aspect-square bg-primary"></div>
+                  <div class="aspect-square bg-secondary"></div>
+
+                  <div class="aspect-square bg-base-content"></div>
+                  <div class="aspect-square bg-primary"></div>
+                  <div class="aspect-square bg-accent"></div>
+                  <div class="aspect-square bg-secondary"></div>
+                  <div class="aspect-square bg-primary"></div>
+                  <div class="aspect-square bg-base-content"></div>
+                  <div class="aspect-square bg-secondary"></div>
+                  <div class="aspect-square bg-accent"></div>
+
+                  <div class="aspect-square bg-secondary"></div>
+                  <div class="aspect-square bg-accent"></div>
+                  <div class="aspect-square bg-primary"></div>
+                  <div class="aspect-square bg-base-content"></div>
+                  <div class="aspect-square bg-secondary"></div>
+                  <div class="aspect-square bg-primary"></div>
+                  <div class="aspect-square bg-accent"></div>
+                  <div class="aspect-square bg-base-content"></div>
+
+                  <div class="aspect-square bg-accent"></div>
+                  <div class="aspect-square bg-secondary"></div>
+                  <div class="aspect-square bg-base-content"></div>
+                  <div class="aspect-square bg-primary"></div>
+                  <div class="aspect-square bg-accent"></div>
+                  <div class="aspect-square bg-secondary"></div>
+                  <div class="aspect-square bg-primary"></div>
+                  <div class="aspect-square bg-secondary"></div>
+
+                  <div class="aspect-square bg-primary"></div>
+                  <div class="aspect-square bg-base-content"></div>
+                  <div class="aspect-square bg-secondary"></div>
+                  <div class="aspect-square bg-accent"></div>
+                  <div class="aspect-square bg-primary"></div>
+                  <div class="aspect-square bg-accent"></div>
+                  <div class="aspect-square bg-base-content"></div>
+                  <div class="aspect-square bg-primary"></div>
+                </div>
+                <!-- Live indicator -->
+                <div class="absolute -top-2 -right-2 w-6 h-6 bg-primary rounded-full animate-ping"></div>
+                <div class="absolute -top-2 -right-2 w-6 h-6 bg-primary rounded-full"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Live World Map Card - Full Width, Special Feature -->
         <div class="group relative border-4 border-base-content bg-gradient-to-br from-base-100 to-accent/5 p-6 sm:p-8 hover:translate-x-1 hover:translate-y-1 transition-transform lg:col-span-2">
           <!-- Accent bar -->
@@ -224,7 +367,7 @@ defmodule RzeczywiscieWeb.HomeLive do
 
           <!-- Number badge -->
           <div class="absolute top-4 right-4 w-12 h-12 border-2 border-base-content flex items-center justify-center font-black text-xl">
-            03
+            04
           </div>
 
           <div class="grid md:grid-cols-2 gap-8">
@@ -299,7 +442,7 @@ defmodule RzeczywiscieWeb.HomeLive do
 
           <!-- Number badge -->
           <div class="absolute top-4 right-4 w-12 h-12 border-2 border-base-content flex items-center justify-center font-black text-xl">
-            04
+            05
           </div>
 
           <div class="grid md:grid-cols-2 gap-8">
