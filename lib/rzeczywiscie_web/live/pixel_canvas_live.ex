@@ -177,6 +177,13 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
     end
   end
 
+  defp get_peer_ip(socket) do
+    case get_connect_info(socket, :peer_data) do
+      %{address: address} -> :inet.ntoa(address) |> to_string()
+      _ -> nil
+    end
+  end
+
   defp get_fallback_id do
     :crypto.strong_rand_bytes(8) |> Base.encode16(case: :lower)
   end
