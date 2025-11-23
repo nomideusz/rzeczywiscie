@@ -14,6 +14,12 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
     pixels = PixelCanvas.load_canvas()
     stats = PixelCanvas.stats()
     cooldown = PixelCanvas.check_cooldown(user_id)
+    seconds_remaining = get_seconds_remaining(cooldown)
+
+    # Start cooldown timer if user is on cooldown
+    if connected?(socket) and seconds_remaining > 0 do
+      Process.send_after(self(), :update_cooldown, 1000)
+    end
 
     {:ok,
      assign(socket,
@@ -25,7 +31,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
        selected_color: List.first(PixelCanvas.available_colors()),
        cooldown_seconds: PixelCanvas.cooldown_seconds(),
        can_place: cooldown == :ok,
-       seconds_remaining: get_seconds_remaining(cooldown),
+       seconds_remaining: seconds_remaining,
        stats: stats,
        page_title: "Pixel Canvas"
      )}
