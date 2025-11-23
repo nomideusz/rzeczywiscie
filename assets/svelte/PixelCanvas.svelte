@@ -1,6 +1,4 @@
 <script>
-  import { onMount } from 'svelte'
-
   export let width = 500
   export let height = 500
   export let pixels = []
