@@ -383,9 +383,11 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
       end)
 
     # If still nothing found, try link-based approach but filter for valid listings
-    if result == [] do
+    result = if result == [] do
       Logger.warning("⚠️  No listings found with standard selectors, trying link-based approach")
-      result = find_listings_by_links(document)
+      find_listings_by_links(document)
+    else
+      result
     end
 
     # If still nothing, do extensive debugging
@@ -416,7 +418,7 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
     end)
   end
 
-  defp find_parent_container({tag, attrs, children} = element, _document) do
+  defp find_parent_container({_tag, _attrs, _children} = element, _document) do
     # Check if this element itself is a container (article, li, div with substantial content)
     if is_listing_container?(element) do
       element
