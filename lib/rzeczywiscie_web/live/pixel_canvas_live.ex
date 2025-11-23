@@ -21,20 +21,22 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
       Process.send_after(self(), :update_cooldown, 1000)
     end
 
-    {:ok,
-     assign(socket,
-       user_id: user_id,
-       canvas_width: width,
-       canvas_height: height,
-       pixels: pixels,
-       colors: PixelCanvas.available_colors(),
-       selected_color: List.first(PixelCanvas.available_colors()),
-       cooldown_seconds: PixelCanvas.cooldown_seconds(),
-       can_place: cooldown == :ok,
-       seconds_remaining: seconds_remaining,
-       stats: stats,
-       page_title: "Pixel Canvas"
-     )}
+    socket =
+      socket
+      |> assign(:user_id, user_id)
+      |> assign(:canvas_width, width)
+      |> assign(:canvas_height, height)
+      |> assign(:pixels, pixels)
+      |> assign(:colors, PixelCanvas.available_colors())
+      |> assign(:selected_color, List.first(PixelCanvas.available_colors()))
+      |> assign(:cooldown_seconds, PixelCanvas.cooldown_seconds())
+      |> assign(:can_place, cooldown == :ok)
+      |> assign(:seconds_remaining, seconds_remaining)
+      |> assign(:stats, stats)
+      |> assign(:page_title, "Pixel Canvas")
+      |> assign(:pixels_version, 0)  # Add version counter to force Svelte updates
+
+    {:ok, socket}
   end
 
   def render(assigns) do
@@ -45,6 +47,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
         width: @canvas_width,
         height: @canvas_height,
         pixels: serialize_pixels(@pixels),
+        pixelsVersion: @pixels_version,
         colors: @colors,
         selectedColor: @selected_color,
         canPlace: @can_place,
@@ -85,6 +88,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
         {:noreply,
          socket
          |> assign(:pixels, pixels)
+         |> assign(:pixels_version, socket.assigns.pixels_version + 1)
          |> assign(:can_place, false)
          |> assign(:seconds_remaining, PixelCanvas.cooldown_seconds())
          |> assign(:stats, stats)}
@@ -133,7 +137,11 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
         updated_at: DateTime.utc_now()
       })
 
-      {:noreply, assign(socket, pixels: pixels, stats: stats)}
+      {:noreply,
+       socket
+       |> assign(:pixels, pixels)
+       |> assign(:pixels_version, socket.assigns.pixels_version + 1)
+       |> assign(:stats, stats)}
     else
       IO.inspect("Ignoring own pixel placement")
       {:noreply, socket}
