@@ -175,26 +175,89 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
     # Find all JSON-LD script tags
     json_ld_scripts = Floki.find(document, "script[type='application/ld+json']")
 
-    json_ld_scripts
-    |> Enum.flat_map(fn {_tag, _attrs, [content]} ->
-      case Jason.decode(content) do
-        {:ok, json_data} -> extract_offers_from_json(json_data, transaction_type)
-        {:error, _} -> []
-      end
-    end)
+    Logger.info("Found #{length(json_ld_scripts)} JSON-LD script tags")
+
+    results =
+      json_ld_scripts
+      |> Enum.with_index()
+      |> Enum.flat_map(fn {{_tag, _attrs, children}, index} ->
+        # Handle both single content and multiple children
+        content =
+          case children do
+            [single_content] when is_binary(single_content) -> single_content
+            multiple -> Enum.join(multiple, "")
+          end
+
+        case Jason.decode(content) do
+          {:ok, json_data} ->
+            offers = extract_offers_from_json(json_data, transaction_type)
+            Logger.info("JSON-LD script #{index + 1}: extracted #{length(offers)} offers")
+
+            if length(offers) == 0 do
+              # Log the structure for debugging
+              json_type = get_json_type(json_data)
+              Logger.debug("JSON-LD script #{index + 1}: type = #{inspect(json_type)}, no offers found")
+            end
+
+            offers
+
+          {:error, error} ->
+            Logger.warning("Failed to parse JSON-LD script #{index + 1}: #{inspect(error)}")
+            Logger.debug("Content preview: #{String.slice(content, 0, 200)}")
+            []
+        end
+      end)
+
+    if length(results) == 0 and length(json_ld_scripts) > 0 do
+      Logger.warning("Found #{length(json_ld_scripts)} JSON-LD scripts but extracted 0 properties")
+    end
+
+    results
   end
 
+  defp get_json_type(%{"@type" => type}), do: type
+  defp get_json_type(%{"@graph" => graph}) when is_list(graph), do: "@graph with #{length(graph)} items"
+  defp get_json_type(data) when is_map(data), do: "map with keys: #{inspect(Map.keys(data))}"
+  defp get_json_type(data), do: inspect(data)
+
   defp extract_offers_from_json(json_data, transaction_type) when is_map(json_data) do
-    # Handle @graph structure (array of structured data objects)
+    # Handle different JSON-LD structures that Otodom might use
     case json_data do
+      # @graph structure (array of structured data objects)
       %{"@graph" => graph} when is_list(graph) ->
         Enum.flat_map(graph, &extract_offers_from_json(&1, transaction_type))
 
+      # Product with nested offers
       %{"@type" => "Product", "offers" => %{"offers" => offers}} when is_list(offers) ->
         Enum.map(offers, fn offer -> parse_json_offer(offer, transaction_type) end)
 
       %{"@type" => "Product", "offers" => %{"offers" => offers}} when is_map(offers) ->
         [parse_json_offer(offers, transaction_type)]
+
+      # Product with direct offers array
+      %{"@type" => "Product", "offers" => offers} when is_list(offers) ->
+        Enum.map(offers, fn offer -> parse_json_offer(offer, transaction_type) end)
+
+      # Single Product with single offer
+      %{"@type" => "Product", "offers" => offer} when is_map(offer) ->
+        [parse_json_offer(offer, transaction_type)]
+
+      # RealEstateListing type (alternative format)
+      %{"@type" => "RealEstateListing"} = listing ->
+        [parse_real_estate_listing(listing, transaction_type)]
+
+      # ItemList with items
+      %{"@type" => "ItemList", "itemListElement" => items} when is_list(items) ->
+        Enum.flat_map(items, fn item ->
+          case item do
+            %{"item" => item_data} -> extract_offers_from_json(item_data, transaction_type)
+            _ -> extract_offers_from_json(item, transaction_type)
+          end
+        end)
+
+      # SearchResultsPage (Otodom might use this)
+      %{"@type" => "SearchResultsPage", "mainEntity" => entity} ->
+        extract_offers_from_json(entity, transaction_type)
 
       _ ->
         []
@@ -202,6 +265,40 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
   end
 
   defp extract_offers_from_json(_, _), do: []
+
+  defp parse_real_estate_listing(listing, transaction_type) do
+    # Parse RealEstateListing structured data format
+    url = listing["url"] || ""
+    title = String.trim(listing["name"] || listing["description"] || "")
+    external_id = extract_id_from_url(url)
+
+    address = listing["address"] || %{}
+    floor_size = listing["floorSize"] || listing["size"] || %{}
+
+    %{
+      source: "otodom",
+      external_id: external_id || generate_id_from_url(url),
+      title: title,
+      url: url,
+      price: parse_json_price(listing["price"] || get_in(listing, ["offers", "price"])),
+      currency: listing["priceCurrency"] || "PLN",
+      area_sqm: parse_json_number(floor_size["value"] || floor_size),
+      rooms: parse_json_integer(listing["numberOfRooms"]),
+      transaction_type: transaction_type,
+      property_type: extract_property_type_from_text(title <> " " <> url),
+      city: address["addressLocality"],
+      voivodeship: address["addressRegion"] || "małopolskie",
+      image_url: get_first_image(listing["image"]),
+      raw_data: %{
+        scraped_at: DateTime.utc_now() |> DateTime.to_iso8601(),
+        from_json_ld: true
+      }
+    }
+  end
+
+  defp get_first_image(images) when is_list(images), do: List.first(images)
+  defp get_first_image(image) when is_binary(image), do: image
+  defp get_first_image(_), do: nil
 
   defp parse_json_offer(offer, transaction_type) do
     item = offer["itemOffered"] || %{}
@@ -265,15 +362,11 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
       "article[class*='listing']",
       "li[class*='listing']",
       "div[class*='listing']",
-      "article",
 
       # CSS class-based selectors (may change)
       "li.css-p74l73",
       "div.css-p74l73",
-      "article.css-p74l73",
-
-      # Link-based approach (find links to /pl/oferta/)
-      "a[href*='/pl/oferta/']"
+      "article.css-p74l73"
     ]
 
     result =
@@ -289,7 +382,13 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
         end
       end)
 
-    # If still nothing found, do extensive debugging
+    # If still nothing found, try link-based approach but filter for valid listings
+    if result == [] do
+      Logger.warning("⚠️  No listings found with standard selectors, trying link-based approach")
+      result = find_listings_by_links(document)
+    end
+
+    # If still nothing, do extensive debugging
     if result == [] do
       Logger.warning("⚠️  No listings found with any selector!")
       debug_document_structure(document)
@@ -297,6 +396,53 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
 
     result
   end
+
+  defp find_listings_by_links(document) do
+    # Find all links that point to property listings
+    property_links = Floki.find(document, "a[href*='/pl/oferta/']")
+    Logger.info("Found #{length(property_links)} links to /pl/oferta/")
+
+    # Group links by their parent article/li/div to find listing containers
+    # Each listing typically has a link, so we can work backwards from links to containers
+    property_links
+    |> Enum.map(fn link ->
+      # Try to find the parent container (article, li, or div)
+      find_parent_container(link, document)
+    end)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+    |> tap(fn containers ->
+      Logger.info("Extracted #{length(containers)} unique listing containers from links")
+    end)
+  end
+
+  defp find_parent_container({tag, attrs, children} = element, _document) do
+    # Check if this element itself is a container (article, li, div with substantial content)
+    if is_listing_container?(element) do
+      element
+    else
+      # For links, we need a different strategy - just return the link element
+      # and we'll extract data from it differently
+      element
+    end
+  end
+
+  defp is_listing_container?({tag, _attrs, children}) when tag in ["article", "li", "div"] do
+    # A valid listing container should have some content (not empty)
+    # and ideally have some structure (nested elements)
+    has_content = children != [] and children != [""]
+
+    # Check if it has nested elements (links, images, text)
+    has_structure =
+      Enum.any?(children, fn
+        {_tag, _attrs, _children} -> true
+        _ -> false
+      end)
+
+    has_content and has_structure
+  end
+
+  defp is_listing_container?(_), do: false
 
   defp debug_document_structure(document) do
     # Find all elements with data-cy attribute
@@ -453,9 +599,15 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
   defp extract_title(card) do
     selectors = [
       "h2[data-cy='listing-item-title']",
+      "h3[data-cy='listing-item-title']",
+      "p[data-cy='listing-item-title']",
+      "span[data-cy='listing-item-title']",
       "h3",
       "h2",
-      "p[class*='title']"
+      "h4",
+      "p[class*='title']",
+      "span[class*='title']",
+      "div[class*='title']"
     ]
 
     result =
@@ -466,8 +618,37 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
         end
       end)
 
-    result || {:error, :no_title}
+    # If no title found with selectors, check if this is a link element
+    # and extract title from the link text or aria-label
+    if is_nil(result) do
+      case extract_title_from_link(card) do
+        nil -> {:error, :no_title}
+        title -> {:ok, title}
+      end
+    else
+      result
+    end
   end
+
+  defp extract_title_from_link({tag, attrs, children}) when tag == "a" do
+    # Try to get title from aria-label or title attribute
+    title_from_attr =
+      Enum.find_value(attrs, fn
+        {"aria-label", value} when value != "" -> value
+        {"title", value} when value != "" -> value
+        _ -> nil
+      end)
+
+    if title_from_attr do
+      String.trim(title_from_attr)
+    else
+      # Extract text from children
+      text = Floki.text({tag, attrs, children}) |> String.trim()
+      if text != "", do: text, else: nil
+    end
+  end
+
+  defp extract_title_from_link(_), do: nil
 
   defp extract_price(card) do
     selectors = [
