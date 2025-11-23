@@ -485,7 +485,7 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
     end
   end
 
-  defp parse_area_number(number_str, opts \\ []) do
+  defp parse_area_number(number_str, opts) do
     max_area = Keyword.get(opts, :max_area, 50000)
 
     # Clean up the number: remove spaces and replace comma with dot

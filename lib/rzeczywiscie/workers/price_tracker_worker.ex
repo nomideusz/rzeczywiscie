@@ -58,15 +58,15 @@ defmodule Rzeczywiscie.Workers.PriceTrackerWorker do
         # Check if price changed
         if Decimal.compare(property.price, last_price_record.price) != :eq do
           case RealEstate.track_price_change(property, property.price) do
+            {:ok, :no_change} ->
+              :ok
+
             {:ok, price_history} ->
               Logger.info(
                 "Tracked price change for property #{property.id}: " <>
                   "#{last_price_record.price} → #{property.price} " <>
                   "(#{price_history.change_percentage}%)"
               )
-
-            {:ok, :no_change} ->
-              :ok
 
             {:error, reason} ->
               Logger.error("Failed to track price change: #{inspect(reason)}")

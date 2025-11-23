@@ -70,6 +70,13 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
           {:pixel_placed, x, y, color, user_id}
         )
 
+        # Update pixels map with the newly placed pixel
+        pixels = Map.put(socket.assigns.pixels, {x, y}, %{
+          color: color,
+          user_id: user_id,
+          updated_at: DateTime.utc_now()
+        })
+
         stats = PixelCanvas.stats()
 
         # Schedule cooldown update
@@ -77,7 +84,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
 
         {:noreply,
          socket
-         |> assign(:pixels, new_pixels)
+         |> assign(:pixels, pixels)
          |> assign(:can_place, false)
          |> assign(:seconds_remaining, PixelCanvas.cooldown_seconds())
          |> assign(:stats, stats)}
