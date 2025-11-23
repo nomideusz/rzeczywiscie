@@ -613,46 +613,51 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
       # PRIORITY 1: Parse URL path structure (same info as breadcrumbs)
       # OLX URL structure: /nieruchomosci/{property_type}/{transaction_type}/...
       # Extract from URL path segments
-      String.match?(text_lower, ~r{/nieruchomosci/[^/]+/sprzedaz/}) -> "sprzedaż"
-      String.match?(text_lower, ~r{/nieruchomosci/[^/]+/wynajem/}) -> "wynajem"
+      # Make trailing slash optional with /?
+      String.match?(text_lower, ~r{/nieruchomosci/[^/]+/sprzedaz/?}) -> "sprzedaż"
+      String.match?(text_lower, ~r{/nieruchomosci/[^/]+/wynajem/?}) -> "wynajem"
+
+      # Also check for sprzedaz directly after nieruchomosci
+      String.match?(text_lower, ~r{/nieruchomosci/sprzedaz/?}) -> "sprzedaż"
 
       # PRIORITY 2: Check URL patterns (direct keywords in path)
-      String.contains?(text_lower, "/sprzedam/") -> "sprzedaż"
-      String.contains?(text_lower, "/sprzedaz/") -> "sprzedaż"
-      String.contains?(text_lower, "/na-sprzedaz/") -> "sprzedaż"
-      String.contains?(text_lower, "-sprzedam-") -> "sprzedaż"
-      String.contains?(text_lower, "-sprzedaz-") -> "sprzedaż"
+      # More flexible patterns without requiring slashes
+      String.contains?(text_lower, "sprzedam") -> "sprzedaż"
+      String.contains?(text_lower, "sprzedaz") -> "sprzedaż"
+      String.contains?(text_lower, "na-sprzedaz") -> "sprzedaż"
 
       # URL patterns for rent
-      String.contains?(text_lower, "/wynajem/") -> "wynajem"
-      String.contains?(text_lower, "/do-wynajecia/") -> "wynajem"
-      String.contains?(text_lower, "-wynajem-") -> "wynajem"
+      String.contains?(text_lower, "wynajem") -> "wynajem"
+      String.contains?(text_lower, "do-wynajecia") -> "wynajem"
+      String.contains?(text_lower, "wynajme") -> "wynajem"
+      String.contains?(text_lower, "wynajęcia") -> "wynajem"
 
       # PRIORITY 3: Keywords in text (title, description)
       # Keywords for sale (sprzedaż) - check most specific first
       String.contains?(text_lower, "na sprzedaż") -> "sprzedaż"
-      String.contains?(text_lower, "na-sprzedaz") -> "sprzedaż"
-      String.contains?(text_lower, "sprzedam") -> "sprzedaż"
-      String.contains?(text_lower, "sprzedaż") -> "sprzedaż"
-      String.contains?(text_lower, "sprzedaz") -> "sprzedaż"
       String.contains?(text_lower, "do kupienia") -> "sprzedaż"
       String.contains?(text_lower, "kupno") -> "sprzedaż"
       String.contains?(text_lower, "na własność") -> "sprzedaż"
+      String.contains?(text_lower, "własnościowe") -> "sprzedaż"
 
       # Keywords for rent (wynajem)
       String.contains?(text_lower, "na wynajem") -> "wynajem"
-      String.contains?(text_lower, "do wynajęcia") -> "wynajem"
-      String.contains?(text_lower, "do wynajecia") -> "wynajem"
-      String.contains?(text_lower, "wynajmę") -> "wynajem"
-      String.contains?(text_lower, "wynajme") -> "wynajem"
-      String.contains?(text_lower, "wynajem") -> "wynajem"
-      String.contains?(text_lower, "na-wynajem") -> "wynajem"
+      String.contains?(text_lower, "do wynaj") -> "wynajem"
 
       # PRIORITY 4: Price indicators - monthly prices usually indicate rent
       # This is a fallback for ambiguous cases
       String.contains?(text_lower, "zł/mies") -> "wynajem"
       String.contains?(text_lower, "zł / mies") -> "wynajem"
+      String.contains?(text_lower, "/mies") -> "wynajem"
       String.contains?(text_lower, "miesięcznie") -> "wynajem"
+      String.contains?(text_lower, "mc.") -> "wynajem"
+
+      # PRIORITY 5: Fallback - if it's a property listing but no wynajem indicators,
+      # assume it's for sale (most OLX listings are sales)
+      String.contains?(text_lower, "/nieruchomosci/") and
+        not String.contains?(text_lower, "wynaj") and
+        not String.contains?(text_lower, "mies") ->
+        "sprzedaż"
 
       true -> nil
     end
