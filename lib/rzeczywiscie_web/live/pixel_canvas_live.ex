@@ -4,23 +4,16 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
 
   @topic "pixel_canvas"
 
-  def mount(_params, session, socket) do
+  def mount(_params, _session, socket) do
     if connected?(socket) do
       Phoenix.PubSub.subscribe(Rzeczywiscie.PubSub, @topic)
     end
 
-    user_id = get_or_create_user_id(socket, session)
-    ip_address = if connected?(socket), do: get_peer_ip(socket), else: nil
+    user_id = get_or_create_user_id(socket)
     {width, height} = PixelCanvas.canvas_size()
     pixels = PixelCanvas.load_canvas()
     stats = PixelCanvas.stats()
     cooldown = PixelCanvas.check_cooldown(user_id)
-    seconds_remaining = get_seconds_remaining(cooldown)
-
-    # Start cooldown timer if user is on cooldown
-    if connected?(socket) and seconds_remaining > 0 do
-      Process.send_after(self(), :update_cooldown, 1000)
-    end
 
     {:ok,
      assign(socket,
@@ -33,7 +26,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
        selected_color: List.first(PixelCanvas.available_colors()),
        cooldown_seconds: PixelCanvas.cooldown_seconds(),
        can_place: cooldown == :ok,
-       seconds_remaining: seconds_remaining,
+       seconds_remaining: get_seconds_remaining(cooldown),
        stats: stats,
        page_title: "Pixel Canvas"
      )}
@@ -61,24 +54,22 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
   def handle_event("place_pixel", %{"x" => x, "y" => y}, socket) do
     color = socket.assigns.selected_color
     user_id = socket.assigns.user_id
-    # Get IP from assigns (stored during mount) instead of calling get_connect_info
-    ip_address = Map.get(socket.assigns, :ip_address)
 
-    case PixelCanvas.place_pixel(x, y, color, user_id, ip_address) do
+    case PixelCanvas.place_pixel(x, y, color, user_id) do
       {:ok, pixel} ->
-        # Update local state with new pixel
-        new_pixels = Map.put(socket.assigns.pixels, {x, y}, %{
-          color: color,
-          user_id: user_id,
-          updated_at: pixel.updated_at
-        })
-
         # Broadcast to all connected clients
         Phoenix.PubSub.broadcast(
           Rzeczywiscie.PubSub,
           @topic,
           {:pixel_placed, x, y, color, user_id}
         )
+
+        # Update pixels map with the newly placed pixel
+        pixels = Map.put(socket.assigns.pixels, {x, y}, %{
+          color: color,
+          user_id: user_id,
+          updated_at: pixel.updated_at
+        })
 
         stats = PixelCanvas.stats()
 
@@ -87,16 +78,13 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
 
         {:noreply,
          socket
-         |> assign(:pixels, new_pixels)
+         |> assign(:pixels, pixels)
          |> assign(:can_place, false)
          |> assign(:seconds_remaining, PixelCanvas.cooldown_seconds())
          |> assign(:stats, stats)}
 
       {:error, {:cooldown, seconds}} ->
         {:noreply, put_flash(socket, :error, "Cooldown: #{seconds}s remaining")}
-
-      {:error, {:ip_rate_limit, count, window_minutes}} ->
-        {:noreply, put_flash(socket, :error, "Rate limit: max #{count} pixels per #{window_minutes} minutes")}
 
       {:error, changeset} ->
         error_msg = format_error(changeset)
@@ -164,16 +152,9 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
     "Error: #{errors}"
   end
 
-  # Get or create user ID - persistent across refreshes via session
-  defp get_or_create_user_id(socket, session) do
-    # First try to get from session (persistent across refreshes in same browser)
-    session["pixel_canvas_user_id"] ||
-      # Then try user agent hash (persistent for same browser)
-      get_user_agent_id(socket) ||
-      # Then try IP hash (persistent for same network)
-      get_peer_ip_id(socket) ||
-      # Fallback: generate random (not ideal but better than nothing)
-      get_fallback_id()
+  # Get or create user ID (same pattern as other features)
+  defp get_or_create_user_id(socket) do
+    get_user_agent_id(socket) || get_peer_ip_id(socket) || get_fallback_id()
   end
 
   defp get_user_agent_id(socket) do
@@ -196,13 +177,5 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
 
   defp get_fallback_id do
     :crypto.strong_rand_bytes(8) |> Base.encode16(case: :lower)
-  end
-
-  # Get peer IP address for rate limiting
-  defp get_peer_ip(socket) do
-    case get_connect_info(socket, :peer_data) do
-      %{address: address} -> :inet.ntoa(address) |> to_string()
-      _ -> nil
-    end
   end
 end

@@ -50,7 +50,8 @@ let optsServer = {
     platform: "node",
     bundle: true,
     minify: false,
-    target: "node19.6.1",
+    target: "es2022",  // Use ES2022 to avoid regex 'v' flag (ES2024 feature)
+    format: "cjs",     // CommonJS format for Node.js compatibility
     conditions: serverConditions,
     alias: {svelte: "svelte"},
     outdir: "../priv/svelte",
