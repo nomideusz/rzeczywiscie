@@ -20,13 +20,18 @@ defmodule Rzeczywiscie.LifePlanning do
 
   @doc """
   Broadcast life planning updates to all subscribed clients.
+  Safe to call during seeding (will skip if PubSub not started).
   """
   def broadcast_update(data, event) do
-    Phoenix.PubSub.broadcast(
-      Rzeczywiscie.PubSub,
-      @topic,
-      {event, data}
-    )
+    try do
+      Phoenix.PubSub.broadcast(
+        Rzeczywiscie.PubSub,
+        @topic,
+        {event, data}
+      )
+    rescue
+      ArgumentError -> :ok  # PubSub not started (e.g., during seeding)
+    end
   end
 
   @doc """
