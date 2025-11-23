@@ -56,14 +56,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
 
     case PixelCanvas.place_pixel(x, y, color, user_id) do
       {:ok, pixel} ->
-        # Update local state FIRST (immediate feedback)
-        new_pixels = Map.put(socket.assigns.pixels, {x, y}, %{
-          color: color,
-          user_id: user_id,
-          updated_at: pixel.updated_at
-        })
-
-        # Broadcast to all connected clients (after local update)
+        # Broadcast to all connected clients
         Phoenix.PubSub.broadcast(
           Rzeczywiscie.PubSub,
           @topic,
@@ -74,7 +67,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
         pixels = Map.put(socket.assigns.pixels, {x, y}, %{
           color: color,
           user_id: user_id,
-          updated_at: DateTime.utc_now()
+          updated_at: pixel.updated_at
         })
 
         stats = PixelCanvas.stats()
