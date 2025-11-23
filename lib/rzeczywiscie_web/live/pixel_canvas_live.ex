@@ -10,6 +10,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
     end
 
     user_id = get_or_create_user_id(socket)
+    ip_address = if connected?(socket), do: get_peer_ip(socket), else: nil
     {width, height} = PixelCanvas.canvas_size()
     pixels = PixelCanvas.load_canvas()
     stats = PixelCanvas.stats()
@@ -54,8 +55,9 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
   def handle_event("place_pixel", %{"x" => x, "y" => y}, socket) do
     color = socket.assigns.selected_color
     user_id = socket.assigns.user_id
+    ip_address = Map.get(socket.assigns, :ip_address)
 
-    case PixelCanvas.place_pixel(x, y, color, user_id) do
+    case PixelCanvas.place_pixel(x, y, color, user_id, ip_address) do
       {:ok, pixel} ->
         # Broadcast to all connected clients
         Phoenix.PubSub.broadcast(
