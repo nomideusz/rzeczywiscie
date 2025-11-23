@@ -29,7 +29,6 @@ defmodule RzeczywiscieWeb.Router do
     live "/admin", AdminLive
     live "/stats", StatsLive
     live "/url-inspector", UrlInspectorLive
-    live "/forward", DashboardLive
   end
 
   # Other scopes may use custom stacks.

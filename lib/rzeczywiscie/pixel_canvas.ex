@@ -10,8 +10,6 @@ defmodule Rzeczywiscie.PixelCanvas do
   @canvas_width 500
   @canvas_height 500
   @cooldown_seconds 60
-  @ip_rate_limit_count 10  # Max pixels per IP per hour
-  @ip_rate_limit_window 3600  # 1 hour in seconds
 
   @doc """
   Returns the canvas dimensions.
@@ -49,20 +47,22 @@ defmodule Rzeczywiscie.PixelCanvas do
   Places a pixel on the canvas.
   Returns {:ok, pixel} or {:error, reason}
   """
-  def place_pixel(x, y, color, user_id, ip_address \\ nil) do
-    # Check per-user cooldown (60 seconds)
-    with :ok <- check_cooldown(user_id),
-         # Check IP-based rate limit (10 pixels per hour)
-         :ok <- check_ip_rate_limit(ip_address) do
-      attrs = %{x: x, y: y, color: color, user_id: user_id, ip_address: ip_address}
+  def place_pixel(x, y, color, user_id) do
+    # Check cooldown
+    case check_cooldown(user_id) do
+      :ok ->
+        attrs = %{x: x, y: y, color: color, user_id: user_id}
 
-      # Upsert: insert or update if pixel already exists at this location
-      %Pixel{}
-      |> Pixel.changeset(attrs)
-      |> Repo.insert(
-        on_conflict: {:replace, [:color, :user_id, :ip_address, :updated_at]},
-        conflict_target: [:x, :y]
-      )
+        # Upsert: insert or update if pixel already exists at this location
+        %Pixel{}
+        |> Pixel.changeset(attrs)
+        |> Repo.insert(
+          on_conflict: {:replace, [:color, :user_id, :updated_at]},
+          conflict_target: [:x, :y]
+        )
+
+      {:error, seconds_remaining} ->
+        {:error, {:cooldown, seconds_remaining}}
     end
   end
 
@@ -91,29 +91,6 @@ defmodule Rzeczywiscie.PixelCanvas do
           seconds_remaining = @cooldown_seconds - seconds_since
           {:error, seconds_remaining}
         end
-    end
-  end
-
-  @doc """
-  Checks IP-based rate limit (prevents abuse from multiple devices).
-  Returns :ok or {:error, {:ip_rate_limit, count, window}}
-  """
-  def check_ip_rate_limit(nil), do: :ok  # Skip check if no IP provided
-
-  def check_ip_rate_limit(ip_address) do
-    cutoff_time = DateTime.add(DateTime.utc_now(), -@ip_rate_limit_window, :second)
-
-    pixel_count =
-      Pixel
-      |> where([p], p.ip_address == ^ip_address)
-      |> where([p], p.updated_at > ^cutoff_time)
-      |> select([p], count(p.id))
-      |> Repo.one()
-
-    if pixel_count >= @ip_rate_limit_count do
-      {:error, {:ip_rate_limit, @ip_rate_limit_count, div(@ip_rate_limit_window, 60)}}
-    else
-      :ok
     end
   end
 
