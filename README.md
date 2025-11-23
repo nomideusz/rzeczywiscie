@@ -1,4 +1,8 @@
-# Rzeczywiscie
+# Kruk.live
+
+Real-time collaborative applications built with Phoenix LiveView and Svelte 5.
+
+## Getting Started
 
 To start your Phoenix server:
 
