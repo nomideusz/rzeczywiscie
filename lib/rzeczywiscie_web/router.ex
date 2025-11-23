@@ -29,6 +29,11 @@ defmodule RzeczywiscieWeb.Router do
     live "/admin", AdminLive
     live "/stats", StatsLive
     live "/url-inspector", UrlInspectorLive
+
+    # Life Planning Routes
+    live "/life", LifeDashboardLive
+    live "/life/projects/:id", LifeProjectLive
+    live "/life/check-in", LifeCheckinLive
   end
 
   # Other scopes may use custom stacks.
