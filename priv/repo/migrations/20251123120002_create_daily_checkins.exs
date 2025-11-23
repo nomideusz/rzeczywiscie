@@ -13,6 +13,5 @@ defmodule Rzeczywiscie.Repo.Migrations.CreateDailyCheckins do
     end
 
     create unique_index(:daily_checkins, [:date])
-    create index(:daily_checkins, [:date])
   end
 end
