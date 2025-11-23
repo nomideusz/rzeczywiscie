@@ -10,7 +10,7 @@
   export let live
 
   let hoveredPixel = null
-  let pixelSize = 10 // Each pixel is 10x10 on screen
+  let pixelSize = 2 // Smaller pixels: 500x500 grid = 1000x1000px canvas
   let canvasElement
   let ctx
 
@@ -113,9 +113,9 @@
   }
 </script>
 
-<div class="container mx-auto p-4">
+<div class="min-h-screen bg-base-100">
   <!-- Header -->
-  <div class="mb-8">
+  <div class="container mx-auto px-4 py-8">
     <h1 class="text-5xl font-black tracking-tight uppercase mb-4">
       Pixel<br /><span class="text-primary">Canvas</span>
     </h1>
@@ -124,9 +124,10 @@
     </p>
   </div>
 
-  <div class="grid lg:grid-cols-[1fr_300px] gap-8">
-    <!-- Canvas Section -->
-    <div class="border-4 border-base-content bg-base-100 p-6">
+  <div class="container mx-auto px-4 pb-8">
+    <div class="grid lg:grid-cols-[1fr_320px] gap-6">
+      <!-- Canvas Section -->
+      <div class="border-4 border-base-content bg-base-100 p-4 sm:p-6">
       <div class="mb-4 flex items-center justify-between">
         <div class="flex items-center gap-4">
           <div class="w-3 h-3 bg-primary rounded-none animate-pulse"></div>
@@ -140,12 +141,12 @@
       </div>
 
       <!-- Canvas -->
-      <div class="overflow-auto border-2 border-base-content bg-white">
+      <div class="overflow-auto border-2 border-base-content bg-white max-h-[600px] lg:max-h-[800px]">
         <canvas
           use:initCanvas
           width={canvasWidth}
           height={canvasHeight}
-          class="cursor-crosshair"
+          class="cursor-crosshair block"
           class:cursor-not-allowed={!canPlace}
           on:click={handleCanvasClick}
           on:mousemove={handleCanvasMove}
