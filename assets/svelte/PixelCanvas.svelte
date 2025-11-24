@@ -135,10 +135,19 @@
     }
   }
 
-  function selectColor(color) {
+  function selectColor(color, event) {
+    if (event) {
+      event.stopPropagation()
+      event.preventDefault()
+    }
     selectedColor = color
     live.pushEvent("select_color", { color })
     showColorPicker = false
+  }
+
+  function handleColorPickerClick(event) {
+    // Prevent clicks inside the color picker from closing it
+    event.stopPropagation()
   }
 </script>
 
@@ -177,7 +186,11 @@
         </button>
 
         {#if showColorPicker}
-          <div class="absolute top-full left-0 mt-2 p-3 bg-white border border-gray-200 rounded-xl shadow-2xl z-50 w-64 backdrop-blur-sm">
+          <div
+            class="absolute top-full left-0 mt-2 p-3 bg-white border border-gray-200 rounded-xl shadow-2xl z-50 w-64 backdrop-blur-sm"
+            on:click={handleColorPickerClick}
+            on:touchstart={handleColorPickerClick}
+          >
             <div class="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Pick a color</div>
             <div class="grid grid-cols-4 gap-2">
               {#each colors as color}
@@ -187,7 +200,8 @@
                   class:ring-blue-500={selectedColor === color}
                   class:ring-offset-2={selectedColor === color}
                   style="background-color: {color}"
-                  on:click={() => selectColor(color)}
+                  on:click={(e) => selectColor(color, e)}
+                  on:touchend={(e) => selectColor(color, e)}
                 >
                   {#if selectedColor === color}
                     <div class="absolute inset-0 flex items-center justify-center">
@@ -221,7 +235,7 @@
             class:ring-blue-500={selectedColor === color}
             class:ring-offset-2={selectedColor === color}
             style="background-color: {color}"
-            on:click={() => selectColor(color)}
+            on:click={(e) => selectColor(color, e)}
             title={color.toUpperCase()}
           >
             {#if selectedColor === color}
@@ -294,6 +308,7 @@
   <div
     class="fixed inset-0 z-40"
     on:click={() => showColorPicker = false}
+    on:touchend|preventDefault={() => showColorPicker = false}
   ></div>
 {/if}
 
