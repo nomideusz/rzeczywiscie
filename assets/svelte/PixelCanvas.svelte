@@ -9,6 +9,7 @@
   export let secondsRemaining = 0
   export let cooldownSeconds = 60
   export let stats = { total_pixels: 0, unique_users: 0 }
+  export let cursors = []
   export let live
 
   let hoveredPixel = null
@@ -17,6 +18,8 @@
   let canvasContainer
   let ctx
   let showColorPicker = false
+  let lastCursorSend = 0
+  const CURSOR_THROTTLE_MS = 100  // Send cursor updates every 100ms max
 
   $: canvasWidth = width * pixelSize
   $: canvasHeight = height * pixelSize
@@ -148,6 +151,17 @@
     if (x >= 0 && x < width && y >= 0 && y < height) {
       hoveredPixel = { x, y }
       drawCanvas()
+
+      // Send cursor position (throttled)
+      sendCursorPosition(x, y)
+    }
+  }
+
+  function sendCursorPosition(x, y) {
+    const now = Date.now()
+    if (now - lastCursorSend >= CURSOR_THROTTLE_MS) {
+      lastCursorSend = now
+      live.pushEvent("cursor_move", { x, y })
     }
   }
 
@@ -178,6 +192,9 @@
     if (x >= 0 && x < width && y >= 0 && y < height) {
       hoveredPixel = { x, y }
       drawCanvas()
+
+      // Send cursor position (throttled)
+      sendCursorPosition(x, y)
     }
   }
 
@@ -332,20 +349,43 @@
   </div>
 
   <!-- Canvas Area (Full Screen) -->
-  <div class="flex-1 overflow-auto bg-gray-50" use:initContainer>
-    <canvas
-      use:initCanvas
-      width={canvasWidth}
-      height={canvasHeight}
-      class="bg-white cursor-crosshair shadow-sm"
-      class:cursor-not-allowed={!canPlace}
-      on:click={handleClick}
-      on:mousemove={handleMove}
-      on:mouseleave={handleLeave}
-      on:touchstart={handleTouch}
-      on:touchmove={handleTouchMove}
-      on:touchend={handleLeave}
-    ></canvas>
+  <div class="flex-1 overflow-auto bg-gray-50 relative" use:initContainer>
+    <div class="relative inline-block">
+      <canvas
+        use:initCanvas
+        width={canvasWidth}
+        height={canvasHeight}
+        class="bg-white cursor-crosshair shadow-sm"
+        class:cursor-not-allowed={!canPlace}
+        on:click={handleClick}
+        on:mousemove={handleMove}
+        on:mouseleave={handleLeave}
+        on:touchstart={handleTouch}
+        on:touchmove={handleTouchMove}
+        on:touchend={handleLeave}
+      ></canvas>
+
+      <!-- Live Cursors Overlay -->
+      {#each cursors as cursor (cursor.id)}
+        <div
+          class="absolute pointer-events-none transition-all duration-75"
+          style="left: {cursor.x * pixelSize}px; top: {cursor.y * pixelSize}px; transform: translate(-50%, -50%);"
+        >
+          <!-- Cursor dot -->
+          <div
+            class="w-3 h-3 rounded-full border-2 border-white shadow-lg"
+            style="background-color: {cursor.color}"
+          ></div>
+          <!-- User ID label -->
+          <div
+            class="absolute top-4 left-1/2 -translate-x-1/2 px-1.5 py-0.5 bg-gray-900 text-white text-xs rounded whitespace-nowrap shadow-lg"
+            style="font-size: 10px;"
+          >
+            {cursor.id}
+          </div>
+        </div>
+      {/each}
+    </div>
   </div>
 </div>
 
