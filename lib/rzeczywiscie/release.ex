@@ -19,6 +19,10 @@ defmodule Rzeczywiscie.Release do
   end
 
   def seed do
+    # First ensure migrations are run
+    IO.puts("Ensuring migrations are up to date...")
+    migrate()
+
     load_app()
     {:ok, _, _} = Ecto.Migrator.with_repo(
       List.first(repos()),
@@ -31,6 +35,40 @@ defmodule Rzeczywiscie.Release do
         else
           IO.puts("Seed script not found: #{seed_script}")
         end
+      end
+    )
+  end
+
+  def fix_tasks_migration do
+    load_app()
+    {:ok, _, _} = Ecto.Migrator.with_repo(
+      List.first(repos()),
+      fn repo ->
+        IO.puts("Marking migration 20251123120001 as complete...")
+        repo.query!(
+          "INSERT INTO schema_migrations (version, inserted_at) VALUES (20251123120001, NOW()) ON CONFLICT DO NOTHING"
+        )
+        IO.puts("✓ Migration marked as complete")
+        IO.puts("Now run: Rzeczywiscie.Release.seed()")
+      end
+    )
+  end
+
+  def clean_life_planning_tables do
+    load_app()
+    {:ok, _, _} = Ecto.Migrator.with_repo(
+      List.first(repos()),
+      fn repo ->
+        IO.puts("Dropping life planning tables...")
+        repo.query!("DROP TABLE IF EXISTS tasks CASCADE")
+        repo.query!("DROP TABLE IF EXISTS life_projects CASCADE")
+        repo.query!("DROP TABLE IF EXISTS daily_checkins CASCADE")
+
+        IO.puts("Removing migration records...")
+        repo.query!("DELETE FROM schema_migrations WHERE version >= '20251123120000' AND version <= '20251123130000'")
+
+        IO.puts("✓ Cleanup complete")
+        IO.puts("Now run: Rzeczywiscie.Release.seed()")
       end
     )
   end

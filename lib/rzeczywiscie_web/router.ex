@@ -34,6 +34,8 @@ defmodule RzeczywiscieWeb.Router do
     live "/life", LifeDashboardLive
     live "/life/projects/:id", LifeProjectLive
     live "/life/check-in", LifeCheckinLive
+    live "/life/weekly-review", WeeklyReviewLive
+    live "/life/progress", ProgressDashboardLive
   end
 
   # Other scopes may use custom stacks.
