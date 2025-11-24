@@ -13,11 +13,35 @@
   let hoveredPixel = null
   let pixelSize = 5
   let canvasElement
+  let canvasContainer
   let ctx
   let showColorPicker = false
 
   $: canvasWidth = width * pixelSize
   $: canvasHeight = height * pixelSize
+
+  // Calculate responsive pixel size based on available space
+  function calculatePixelSize() {
+    if (!canvasContainer) return
+
+    const containerWidth = canvasContainer.clientWidth
+    const containerHeight = canvasContainer.clientHeight
+
+    // Calculate pixel size that fits both dimensions with some padding
+    const maxPixelWidth = Math.floor(containerWidth / width)
+    const maxPixelHeight = Math.floor(containerHeight / height)
+
+    // Use the smaller dimension to ensure it fits
+    const newPixelSize = Math.max(1, Math.min(maxPixelWidth, maxPixelHeight))
+
+    if (newPixelSize !== pixelSize) {
+      pixelSize = newPixelSize
+      // Redraw after size change
+      if (ctx) {
+        requestAnimationFrame(() => drawCanvas())
+      }
+    }
+  }
 
   // Draw canvas when pixels change (using version to force reactivity)
   $: if (ctx && pixelsVersion >= 0) {
@@ -30,6 +54,25 @@
     drawCanvas()
     return {
       destroy() {}
+    }
+  }
+
+  function initContainer(node) {
+    canvasContainer = node
+
+    // Calculate initial size
+    calculatePixelSize()
+
+    // Recalculate on window resize
+    const resizeObserver = new ResizeObserver(() => {
+      calculatePixelSize()
+    })
+    resizeObserver.observe(node)
+
+    return {
+      destroy() {
+        resizeObserver.disconnect()
+      }
     }
   }
 
@@ -135,10 +178,19 @@
     }
   }
 
-  function selectColor(color) {
+  function selectColor(color, event) {
+    if (event) {
+      event.stopPropagation()
+      event.preventDefault()
+    }
     selectedColor = color
     live.pushEvent("select_color", { color })
     showColorPicker = false
+  }
+
+  function handleColorPickerClick(event) {
+    // Prevent clicks inside the color picker from closing it
+    event.stopPropagation()
   }
 </script>
 
@@ -177,7 +229,11 @@
         </button>
 
         {#if showColorPicker}
-          <div class="absolute top-full left-0 mt-2 p-3 bg-white border border-gray-200 rounded-xl shadow-2xl z-50 w-64 backdrop-blur-sm">
+          <div
+            class="absolute top-full left-0 mt-2 p-3 bg-white border border-gray-200 rounded-xl shadow-2xl z-50 w-64 backdrop-blur-sm"
+            on:click={handleColorPickerClick}
+            on:touchstart={handleColorPickerClick}
+          >
             <div class="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Pick a color</div>
             <div class="grid grid-cols-4 gap-2">
               {#each colors as color}
@@ -187,7 +243,8 @@
                   class:ring-blue-500={selectedColor === color}
                   class:ring-offset-2={selectedColor === color}
                   style="background-color: {color}"
-                  on:click={() => selectColor(color)}
+                  on:click={(e) => selectColor(color, e)}
+                  on:touchend={(e) => selectColor(color, e)}
                 >
                   {#if selectedColor === color}
                     <div class="absolute inset-0 flex items-center justify-center">
@@ -221,7 +278,7 @@
             class:ring-blue-500={selectedColor === color}
             class:ring-offset-2={selectedColor === color}
             style="background-color: {color}"
-            on:click={() => selectColor(color)}
+            on:click={(e) => selectColor(color, e)}
             title={color.toUpperCase()}
           >
             {#if selectedColor === color}
@@ -272,7 +329,7 @@
   </div>
 
   <!-- Canvas Area (Full Screen) -->
-  <div class="flex-1 overflow-auto bg-gray-50">
+  <div class="flex-1 overflow-hidden bg-gray-50 flex items-center justify-center" use:initContainer>
     <canvas
       use:initCanvas
       width={canvasWidth}
@@ -294,6 +351,7 @@
   <div
     class="fixed inset-0 z-40"
     on:click={() => showColorPicker = false}
+    on:touchend|preventDefault={() => showColorPicker = false}
   ></div>
 {/if}
 
