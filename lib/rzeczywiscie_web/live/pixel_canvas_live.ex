@@ -35,6 +35,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
       |> assign(:stats, stats)
       |> assign(:page_title, "Pixel Canvas")
       |> assign(:pixels_version, 0)  # Add version counter to force Svelte updates
+      |> assign(:cursors, %{})  # Map of user_id => {x, y, color, timestamp}
 
     {:ok, socket}
   end
@@ -53,7 +54,8 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
         canPlace: @can_place,
         secondsRemaining: @seconds_remaining,
         cooldownSeconds: @cooldown_seconds,
-        stats: @stats
+        stats: @stats,
+        cursors: serialize_cursors(@cursors)
       }}
       socket={@socket}
     />
@@ -107,6 +109,20 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
     {:noreply, assign(socket, selected_color: color)}
   end
 
+  def handle_event("cursor_move", %{"x" => x, "y" => y}, socket) do
+    user_id = socket.assigns.user_id
+    selected_color = socket.assigns.selected_color
+
+    # Broadcast cursor position to all connected clients
+    Phoenix.PubSub.broadcast(
+      Rzeczywiscie.PubSub,
+      @topic,
+      {:cursor_move, user_id, x, y, selected_color}
+    )
+
+    {:noreply, socket}
+  end
+
   # Update cooldown timer every second
   def handle_info(:update_cooldown, socket) do
     cooldown = PixelCanvas.check_cooldown(socket.assigns.user_id)
@@ -149,9 +165,41 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
     end
   end
 
+  # Handle cursor movements from other users
+  def handle_info({:cursor_move, user_id, x, y, color}, socket) do
+    # Don't track our own cursor
+    if user_id != socket.assigns.user_id do
+      cursors = Map.put(socket.assigns.cursors, user_id, %{
+        x: x,
+        y: y,
+        color: color,
+        timestamp: System.system_time(:second)
+      })
+
+      # Clean up stale cursors (older than 3 seconds)
+      now = System.system_time(:second)
+      cursors = Map.filter(cursors, fn {_id, data} -> now - data.timestamp < 3 end)
+
+      {:noreply, assign(socket, cursors: cursors)}
+    else
+      {:noreply, socket}
+    end
+  end
+
   defp serialize_pixels(pixels) do
     Enum.map(pixels, fn {{x, y}, data} ->
       %{x: x, y: y, color: data.color}
+    end)
+  end
+
+  defp serialize_cursors(cursors) do
+    Enum.map(cursors, fn {user_id, data} ->
+      %{
+        id: String.slice(user_id, 0, 6),  # First 6 chars for display
+        x: data.x,
+        y: data.y,
+        color: data.color
+      }
     end)
   end
 

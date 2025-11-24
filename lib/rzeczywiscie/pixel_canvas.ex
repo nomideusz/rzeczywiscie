@@ -9,7 +9,7 @@ defmodule Rzeczywiscie.PixelCanvas do
 
   @canvas_width 500
   @canvas_height 500
-  @cooldown_seconds 60
+  @cooldown_seconds 15
 
   @doc """
   Returns the canvas dimensions.
