@@ -223,7 +223,7 @@
       <h1 class="text-xs font-semibold text-gray-700 flex-shrink-0 hidden sm:block">Pixel Canvas</h1>
 
       <!-- Color Palette -->
-      <div class="flex items-center gap-0.5 overflow-x-auto overflow-y-hidden scrollbar-hide flex-1 px-0.5 touch-pan-x">
+      <div class="flex items-center gap-0.5 overflow-x-auto overflow-y-hidden scrollbar-hide flex-1 px-0.5 py-1 touch-pan-x">
         {#each colors as color}
           <button
             class="w-5 h-5 sm:w-6 sm:h-6 rounded flex-shrink-0 transition-all duration-150 relative border border-gray-200/50"
@@ -278,8 +278,8 @@
   </div>
 
   <!-- Canvas Area (Full Screen) -->
-  <div class="flex-1 overflow-auto relative" use:initContainer>
-    <div class="relative inline-block">
+  <div class="flex-1 overflow-auto relative p-4" use:initContainer>
+    <div class="relative inline-block mx-auto">
       <canvas
         use:initCanvas
         width={canvasWidth}
