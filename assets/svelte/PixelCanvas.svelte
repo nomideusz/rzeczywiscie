@@ -91,13 +91,13 @@
     if (now - lastDraw < DRAW_THROTTLE_MS) return
     lastDraw = now
 
-    // Clear canvas with subtle light gray background (creates border effect for pixels)
-    ctx.fillStyle = '#F8F8F8'
+    // Clear canvas with subtle gray background (creates visible border effect for pixels)
+    ctx.fillStyle = '#E8E8E8'
     ctx.fillRect(0, 0, canvasWidth, canvasHeight)
 
     // Draw subtle grid only when pixels are large enough (performance optimization)
     if (pixelSize >= 8) {
-      ctx.strokeStyle = '#F8F8F8'
+      ctx.strokeStyle = '#E0E0E0'
       ctx.lineWidth = 1
 
       // Draw grid lines every 10 pixels (not every pixel!)
@@ -303,7 +303,7 @@
         height={canvasHeight}
         class="cursor-crosshair shadow-sm"
         class:cursor-not-allowed={!canPlace}
-        style="background-color: #F8F8F8;"
+        style="background-color: #E8E8E8;"
         on:click={handleClick}
         on:mousemove={handleMove}
         on:mouseleave={handleLeave}
