@@ -171,14 +171,15 @@
   }
 
   // Touch support
-  function handleTouch(event) {
-    event.preventDefault()
+  function handleTouchStart(event) {
     if (!canPlace || event.touches.length !== 1) return
 
     const touch = event.touches[0]
     const { x, y } = getCoords(touch.clientX, touch.clientY)
 
     if (x >= 0 && x < width && y >= 0 && y < height) {
+      // Only prevent default when actually placing a pixel
+      event.preventDefault()
       hoveredPixel = { x, y }
       drawCanvas()
       live.pushEvent("place_pixel", { x, y })
@@ -243,16 +244,17 @@
         <button
           class="w-9 h-9 rounded-lg border-2 border-gray-200 shadow-sm hover:shadow-md transition-all hover:scale-105 active:scale-95 relative group"
           style="background-color: {selectedColor}"
-          on:click={() => showColorPicker = !showColorPicker}
+          on:click|stopPropagation={() => showColorPicker = !showColorPicker}
+          on:touchend|preventDefault|stopPropagation={() => showColorPicker = !showColorPicker}
         >
           <div class="absolute inset-0 rounded-lg ring-2 ring-blue-400 opacity-0 group-hover:opacity-100 transition-opacity"></div>
         </button>
 
         {#if showColorPicker}
           <div
-            class="absolute top-full left-0 mt-2 p-3 bg-white border border-gray-200 rounded-xl shadow-2xl z-50 w-64 backdrop-blur-sm"
-            on:click={handleColorPickerClick}
-            on:touchstart={handleColorPickerClick}
+            class="absolute top-full left-0 mt-2 p-3 bg-white border border-gray-200 rounded-xl shadow-2xl z-[60] w-64 backdrop-blur-sm"
+            on:click|stopPropagation={handleColorPickerClick}
+            on:touchstart|stopPropagation={handleColorPickerClick}
           >
             <div class="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Pick a color</div>
             <div class="grid grid-cols-4 gap-2">
@@ -263,8 +265,8 @@
                   class:ring-blue-500={selectedColor === color}
                   class:ring-offset-2={selectedColor === color}
                   style="background-color: {color}"
-                  on:click={(e) => selectColor(color, e)}
-                  on:touchend={(e) => selectColor(color, e)}
+                  on:click|stopPropagation={(e) => selectColor(color, e)}
+                  on:touchend|preventDefault|stopPropagation={(e) => selectColor(color, e)}
                 >
                   {#if selectedColor === color}
                     <div class="absolute inset-0 flex items-center justify-center">
@@ -360,7 +362,7 @@
         on:click={handleClick}
         on:mousemove={handleMove}
         on:mouseleave={handleLeave}
-        on:touchstart={handleTouch}
+        on:touchstart={handleTouchStart}
         on:touchmove={handleTouchMove}
         on:touchend={handleLeave}
       ></canvas>
@@ -392,9 +394,9 @@
 <!-- Close color picker when clicking outside -->
 {#if showColorPicker}
   <div
-    class="fixed inset-0 z-40"
-    on:click={() => showColorPicker = false}
-    on:touchend|preventDefault={() => showColorPicker = false}
+    class="fixed inset-0 z-[50]"
+    on:click|stopPropagation={() => showColorPicker = false}
+    on:touchstart|stopPropagation={() => showColorPicker = false}
   ></div>
 {/if}
 
