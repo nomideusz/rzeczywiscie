@@ -66,42 +66,50 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
     color = socket.assigns.selected_color
     user_id = socket.assigns.user_id
 
-    case PixelCanvas.place_pixel(x, y, color, user_id) do
-      {:ok, pixel} ->
-        # Update pixels map with the newly placed pixel
-        pixels = Map.put(socket.assigns.pixels, {x, y}, %{
-          color: color,
-          user_id: user_id,
-          updated_at: pixel.updated_at
-        })
+    # Check if pixel already exists with same color
+    existing_pixel = Map.get(socket.assigns.pixels, {x, y})
 
-        stats = PixelCanvas.stats()
+    if existing_pixel && existing_pixel.color == color do
+      # Same color, don't waste cooldown
+      {:noreply, socket}
+    else
+      case PixelCanvas.place_pixel(x, y, color, user_id) do
+        {:ok, pixel} ->
+          # Update pixels map with the newly placed pixel
+          pixels = Map.put(socket.assigns.pixels, {x, y}, %{
+            color: color,
+            user_id: user_id,
+            updated_at: pixel.updated_at
+          })
 
-        # Broadcast to all connected clients (including stats)
-        IO.inspect("Broadcasting pixel placement: x=#{x}, y=#{y}, color=#{color}")
-        Phoenix.PubSub.broadcast(
-          Rzeczywiscie.PubSub,
-          @topic,
-          {:pixel_placed, x, y, color, user_id, stats}
-        )
+          stats = PixelCanvas.stats()
 
-        # Schedule cooldown update
-        Process.send_after(self(), :update_cooldown, 1000)
+          # Broadcast to all connected clients (including stats)
+          IO.inspect("Broadcasting pixel placement: x=#{x}, y=#{y}, color=#{color}")
+          Phoenix.PubSub.broadcast(
+            Rzeczywiscie.PubSub,
+            @topic,
+            {:pixel_placed, x, y, color, user_id, stats}
+          )
 
-        {:noreply,
-         socket
-         |> assign(:pixels, pixels)
-         |> assign(:pixels_version, socket.assigns.pixels_version + 1)
-         |> assign(:can_place, false)
-         |> assign(:seconds_remaining, PixelCanvas.cooldown_seconds())
-         |> assign(:stats, stats)}
+          # Schedule cooldown update
+          Process.send_after(self(), :update_cooldown, 1000)
 
-      {:error, {:cooldown, seconds}} ->
-        {:noreply, put_flash(socket, :error, "Cooldown: #{seconds}s remaining")}
+          {:noreply,
+           socket
+           |> assign(:pixels, pixels)
+           |> assign(:pixels_version, socket.assigns.pixels_version + 1)
+           |> assign(:can_place, false)
+           |> assign(:seconds_remaining, PixelCanvas.cooldown_seconds())
+           |> assign(:stats, stats)}
 
-      {:error, changeset} ->
-        error_msg = format_error(changeset)
-        {:noreply, put_flash(socket, :error, error_msg)}
+        {:error, {:cooldown, seconds}} ->
+          {:noreply, put_flash(socket, :error, "Cooldown: #{seconds}s remaining")}
+
+        {:error, changeset} ->
+          error_msg = format_error(changeset)
+          {:noreply, put_flash(socket, :error, error_msg)}
+      end
     end
   end
 
