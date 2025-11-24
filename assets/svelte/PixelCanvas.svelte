@@ -116,14 +116,14 @@
       }
     }
 
-    // Draw pixels (batch fill operations)
+    // Draw pixels (batch fill operations with 1px gap)
     pixels.forEach(pixel => {
       ctx.fillStyle = pixel.color
       ctx.fillRect(
-        pixel.x * pixelSize,
-        pixel.y * pixelSize,
-        pixelSize,
-        pixelSize
+        pixel.x * pixelSize + 1,
+        pixel.y * pixelSize + 1,
+        pixelSize - 1,
+        pixelSize - 1
       )
     })
 
@@ -132,10 +132,10 @@
       ctx.globalAlpha = 0.5
       ctx.fillStyle = selectedColor
       ctx.fillRect(
-        hoveredPixel.x * pixelSize,
-        hoveredPixel.y * pixelSize,
-        pixelSize,
-        pixelSize
+        hoveredPixel.x * pixelSize + 1,
+        hoveredPixel.y * pixelSize + 1,
+        pixelSize - 1,
+        pixelSize - 1
       )
       ctx.globalAlpha = 1.0
     }
