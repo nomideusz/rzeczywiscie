@@ -17,7 +17,6 @@
   let canvasElement
   let canvasContainer
   let ctx
-  let showColorPicker = false
   let lastCursorSend = 0
   const CURSOR_THROTTLE_MS = 100  // Send cursor updates every 100ms max
 
@@ -199,113 +198,73 @@
     }
   }
 
-  function selectColor(color, event) {
-    if (event) {
-      event.stopPropagation()
-      event.preventDefault()
-    }
+  function selectColor(color) {
     selectedColor = color
     live.pushEvent("select_color", { color })
-    showColorPicker = false
-  }
-
-  function handleColorPickerClick(event) {
-    // Prevent clicks inside the color picker from closing it
-    event.stopPropagation()
   }
 </script>
 
-<div class="fixed inset-0 flex flex-col bg-white">
-  <!-- Minimal Header -->
-  <div class="bg-white border-b border-gray-200 shadow-sm">
-    <div class="px-3 py-2.5 flex flex-wrap items-center gap-2 sm:gap-3 max-w-screen-2xl mx-auto">
-      <!-- Back Link -->
-      <a
-        href="/real-estate"
-        class="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900 transition-colors flex-shrink-0"
-        title="Back to Kruk.live"
-      >
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-        </svg>
-        <span class="hidden sm:inline font-medium">Kruk.live</span>
-      </a>
-
-      <!-- Divider -->
-      <div class="h-4 w-px bg-gray-300 hidden sm:block"></div>
-
-      <!-- Title -->
-      <h1 class="text-sm font-semibold text-gray-800 flex-shrink-0">
-        Pixel Canvas
-      </h1>
-
-      <!-- Color Picker Button (Mobile) -->
-      <div class="relative sm:hidden">
-        <button
-          class="w-9 h-9 rounded-lg border-2 border-gray-200 shadow-sm hover:shadow-md transition-all hover:scale-105 active:scale-95 relative group"
-          style="background-color: {selectedColor}"
-          on:click|stopPropagation={() => showColorPicker = !showColorPicker}
-          on:touchend|preventDefault|stopPropagation={() => showColorPicker = !showColorPicker}
+<div class="fixed inset-0 flex flex-col bg-gradient-to-br from-slate-50 to-blue-50">
+  <!-- Modern Header -->
+  <div class="bg-white/80 backdrop-blur-xl border-b border-gray-200/50 shadow-sm">
+    <!-- Top Bar -->
+    <div class="px-3 py-2 flex items-center justify-between gap-3">
+      <!-- Left: Back + Title -->
+      <div class="flex items-center gap-2">
+        <a
+          href="/real-estate"
+          class="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+          title="Back to Kruk.live"
         >
-          <div class="absolute inset-0 rounded-lg ring-2 ring-blue-400 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-        </button>
+          <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+          </svg>
+        </a>
+        <div>
+          <h1 class="text-base font-bold text-gray-900 leading-none">Pixel Canvas</h1>
+          <p class="text-xs text-gray-500 hidden sm:block">{stats.total_pixels.toLocaleString()} pixels · {stats.unique_users.toLocaleString()} artists</p>
+        </div>
+      </div>
 
-        {#if showColorPicker}
-          <div
-            class="absolute top-full left-0 mt-2 p-3 bg-white border border-gray-200 rounded-xl shadow-2xl z-[60] w-64 backdrop-blur-sm"
-            on:click|stopPropagation={handleColorPickerClick}
-            on:touchstart|stopPropagation={handleColorPickerClick}
-          >
-            <div class="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Pick a color</div>
-            <div class="grid grid-cols-4 gap-2">
-              {#each colors as color}
-                <button
-                  class="aspect-square rounded-lg hover:scale-110 active:scale-95 transition-all relative group shadow-sm hover:shadow-md"
-                  class:ring-2={selectedColor === color}
-                  class:ring-blue-500={selectedColor === color}
-                  class:ring-offset-2={selectedColor === color}
-                  style="background-color: {color}"
-                  on:click|stopPropagation={(e) => selectColor(color, e)}
-                  on:touchend|preventDefault|stopPropagation={(e) => selectColor(color, e)}
-                >
-                  {#if selectedColor === color}
-                    <div class="absolute inset-0 flex items-center justify-center">
-                      <svg class="w-4 h-4 text-white drop-shadow-lg" fill="currentColor" viewBox="0 0 20 20">
-                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-                      </svg>
-                    </div>
-                  {/if}
-                </button>
-              {/each}
-            </div>
-            <div class="mt-3 pt-3 border-t border-gray-100">
-              <div class="flex items-center gap-2">
-                <div class="w-10 h-10 rounded-lg border-2 border-gray-200 shadow-inner" style="background-color: {selectedColor}"></div>
-                <div class="flex-1">
-                  <div class="text-xs text-gray-500 font-medium">Selected</div>
-                  <div class="text-xs font-mono text-gray-700">{selectedColor.toUpperCase()}</div>
-                </div>
-              </div>
-            </div>
+      <!-- Right: Cooldown Status -->
+      <div class="flex items-center gap-2">
+        {#if canPlace}
+          <div class="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold text-sm rounded-full shadow-lg shadow-green-500/30">
+            <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+            </svg>
+            <span class="hidden xs:inline">Ready</span>
+          </div>
+        {:else}
+          <div class="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 font-semibold text-sm rounded-full border border-gray-200">
+            <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span>{secondsRemaining}s</span>
           </div>
         {/if}
       </div>
+    </div>
 
-      <!-- Color Palette (Desktop) -->
-      <div class="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-gray-50 rounded-lg border border-gray-200">
+    <!-- Color Palette Bar (Mobile & Desktop) -->
+    <div class="px-3 pb-2.5 pt-1">
+      <div class="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-1">
+        <div class="text-xs font-semibold text-gray-500 flex-shrink-0 pr-1">Colors:</div>
         {#each colors as color}
           <button
-            class="w-7 h-7 rounded-md hover:scale-110 active:scale-95 transition-all relative group shadow-sm hover:shadow-md"
-            class:ring-2={selectedColor === color}
-            class:ring-blue-500={selectedColor === color}
+            class="w-10 h-10 sm:w-9 sm:h-9 rounded-xl flex-shrink-0 transition-all duration-200 relative"
+            class:ring-4={selectedColor === color}
             class:ring-offset-2={selectedColor === color}
-            style="background-color: {color}"
-            on:click={(e) => selectColor(color, e)}
+            class:scale-110={selectedColor === color}
+            class:shadow-xl={selectedColor === color}
+            style="background-color: {color}; ring-color: {color};"
+            on:click={() => selectColor(color)}
             title={color.toUpperCase()}
           >
             {#if selectedColor === color}
               <div class="absolute inset-0 flex items-center justify-center">
-                <svg class="w-3.5 h-3.5 text-white drop-shadow-lg" fill="currentColor" viewBox="0 0 20 20">
+                <svg class="w-5 h-5 text-white drop-shadow-2xl" fill="currentColor" viewBox="0 0 20 20">
                   <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
                 </svg>
               </div>
@@ -313,37 +272,13 @@
           </button>
         {/each}
       </div>
-
-      <div class="flex-1"></div>
-
-      <!-- Stats -->
-      <div class="hidden md:flex items-center gap-2 text-xs text-gray-500">
-        <span>{stats.total_pixels.toLocaleString()}</span>
-        <span>pixels</span>
-        <span class="text-gray-300">·</span>
-        <span>{stats.unique_users.toLocaleString()}</span>
-        <span>artists</span>
-      </div>
-
-      <!-- Cooldown -->
-      <div class="flex items-center gap-2 flex-shrink-0">
-        {#if canPlace}
-          <div class="px-2.5 py-1 bg-green-500 text-white font-medium text-xs rounded-md shadow-sm">
-            Ready
-          </div>
-        {:else}
-          <div class="px-2.5 py-1 bg-gray-100 text-gray-700 font-medium text-xs rounded-md border border-gray-200">
-            {secondsRemaining}s
-          </div>
-        {/if}
-      </div>
     </div>
 
     <!-- Cooldown Progress Bar -->
     {#if !canPlace}
-      <div class="h-1 bg-gray-100 relative overflow-hidden">
+      <div class="h-1 bg-gradient-to-r from-gray-100 to-gray-50 relative overflow-hidden">
         <div
-          class="h-full bg-gradient-to-r from-orange-400 to-amber-500 transition-all duration-1000 ease-linear"
+          class="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 transition-all duration-1000 ease-linear"
           style="width: {((cooldownSeconds - secondsRemaining) / cooldownSeconds) * 100}%"
         ></div>
       </div>
@@ -351,7 +286,7 @@
   </div>
 
   <!-- Canvas Area (Full Screen) -->
-  <div class="flex-1 overflow-auto bg-gray-50 relative" use:initContainer>
+  <div class="flex-1 overflow-auto relative" use:initContainer>
     <div class="relative inline-block">
       <canvas
         use:initCanvas
@@ -391,15 +326,6 @@
   </div>
 </div>
 
-<!-- Close color picker when clicking outside -->
-{#if showColorPicker}
-  <div
-    class="fixed inset-0 z-[50]"
-    on:click|stopPropagation={() => showColorPicker = false}
-    on:touchstart|stopPropagation={() => showColorPicker = false}
-  ></div>
-{/if}
-
 <style>
   :global(body) {
     overflow: hidden;
@@ -409,5 +335,15 @@
     image-rendering: pixelated;
     image-rendering: -moz-crisp-edges;
     image-rendering: crisp-edges;
+  }
+
+  /* Hide scrollbar for color palette */
+  .scrollbar-hide {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;  /* Chrome, Safari and Opera */
   }
 </style>
