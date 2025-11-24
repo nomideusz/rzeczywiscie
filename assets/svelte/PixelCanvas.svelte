@@ -91,8 +91,8 @@
     if (now - lastDraw < DRAW_THROTTLE_MS) return
     lastDraw = now
 
-    // Clear canvas with white background
-    ctx.fillStyle = '#FFFFFF'
+    // Clear canvas with subtle light gray background (creates border effect for pixels)
+    ctx.fillStyle = '#F8F8F8'
     ctx.fillRect(0, 0, canvasWidth, canvasHeight)
 
     // Draw subtle grid only when pixels are large enough (performance optimization)
@@ -283,15 +283,15 @@
       </div>
     </div>
 
-    <!-- Cooldown Progress Bar -->
-    {#if !canPlace}
-      <div class="h-px bg-gray-200 relative overflow-hidden">
+    <!-- Cooldown Progress Bar (always reserve 1px space) -->
+    <div class="h-px bg-gray-200 relative overflow-hidden">
+      {#if !canPlace}
         <div
           class="h-full bg-blue-500 transition-all duration-1000 ease-linear"
           style="width: {((cooldownSeconds - secondsRemaining) / cooldownSeconds) * 100}%"
         ></div>
-      </div>
-    {/if}
+      {/if}
+    </div>
   </div>
 
   <!-- Canvas Area (Full Screen) -->
@@ -301,8 +301,9 @@
         use:initCanvas
         width={canvasWidth}
         height={canvasHeight}
-        class="bg-white cursor-crosshair shadow-sm"
+        class="cursor-crosshair shadow-sm"
         class:cursor-not-allowed={!canPlace}
+        style="background-color: #F8F8F8;"
         on:click={handleClick}
         on:mousemove={handleMove}
         on:mouseleave={handleLeave}
