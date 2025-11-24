@@ -13,11 +13,35 @@
   let hoveredPixel = null
   let pixelSize = 5
   let canvasElement
+  let canvasContainer
   let ctx
   let showColorPicker = false
 
   $: canvasWidth = width * pixelSize
   $: canvasHeight = height * pixelSize
+
+  // Calculate responsive pixel size based on available space
+  function calculatePixelSize() {
+    if (!canvasContainer) return
+
+    const containerWidth = canvasContainer.clientWidth
+    const containerHeight = canvasContainer.clientHeight
+
+    // Calculate pixel size that fits both dimensions with some padding
+    const maxPixelWidth = Math.floor(containerWidth / width)
+    const maxPixelHeight = Math.floor(containerHeight / height)
+
+    // Use the smaller dimension to ensure it fits
+    const newPixelSize = Math.max(1, Math.min(maxPixelWidth, maxPixelHeight))
+
+    if (newPixelSize !== pixelSize) {
+      pixelSize = newPixelSize
+      // Redraw after size change
+      if (ctx) {
+        requestAnimationFrame(() => drawCanvas())
+      }
+    }
+  }
 
   // Draw canvas when pixels change (using version to force reactivity)
   $: if (ctx && pixelsVersion >= 0) {
@@ -30,6 +54,25 @@
     drawCanvas()
     return {
       destroy() {}
+    }
+  }
+
+  function initContainer(node) {
+    canvasContainer = node
+
+    // Calculate initial size
+    calculatePixelSize()
+
+    // Recalculate on window resize
+    const resizeObserver = new ResizeObserver(() => {
+      calculatePixelSize()
+    })
+    resizeObserver.observe(node)
+
+    return {
+      destroy() {
+        resizeObserver.disconnect()
+      }
     }
   }
 
@@ -286,7 +329,7 @@
   </div>
 
   <!-- Canvas Area (Full Screen) -->
-  <div class="flex-1 overflow-auto bg-gray-50">
+  <div class="flex-1 overflow-hidden bg-gray-50 flex items-center justify-center" use:initContainer>
     <canvas
       use:initCanvas
       width={canvasWidth}
