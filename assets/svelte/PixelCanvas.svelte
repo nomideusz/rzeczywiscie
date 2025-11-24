@@ -18,7 +18,9 @@
   let canvasContainer
   let ctx
   let lastCursorSend = 0
-  const CURSOR_THROTTLE_MS = 100  // Send cursor updates every 100ms max
+  let lastDraw = 0
+  const CURSOR_THROTTLE_MS = 250  // Send cursor updates every 250ms (reduced from 100ms)
+  const DRAW_THROTTLE_MS = 16  // ~60fps max
 
   $: canvasWidth = width * pixelSize
   $: canvasHeight = height * pixelSize
@@ -43,14 +45,14 @@
       pixelSize = newPixelSize
       // Redraw after size change
       if (ctx) {
-        requestAnimationFrame(() => drawCanvas())
+        drawCanvas()
       }
     }
   }
 
   // Draw canvas when pixels change (using version to force reactivity)
   $: if (ctx && pixelsVersion >= 0) {
-    requestAnimationFrame(() => drawCanvas())
+    drawCanvas()
   }
 
   function initCanvas(node) {
@@ -84,47 +86,56 @@
   function drawCanvas() {
     if (!ctx) return
 
+    // Throttle drawing to max 60fps
+    const now = Date.now()
+    if (now - lastDraw < DRAW_THROTTLE_MS) return
+    lastDraw = now
+
+    // Clear canvas with white background
     ctx.fillStyle = '#FFFFFF'
     ctx.fillRect(0, 0, canvasWidth, canvasHeight)
 
-    // Lighter grid
-    ctx.strokeStyle = '#F5F5F5'
-    ctx.lineWidth = 1
+    // Draw subtle grid only when pixels are large enough (performance optimization)
+    if (pixelSize >= 8) {
+      ctx.strokeStyle = '#F8F8F8'
+      ctx.lineWidth = 1
 
-    for (let x = 0; x <= width; x++) {
-      ctx.beginPath()
-      ctx.moveTo(x * pixelSize, 0)
-      ctx.lineTo(x * pixelSize, canvasHeight)
-      ctx.stroke()
+      // Draw grid lines every 10 pixels (not every pixel!)
+      for (let x = 0; x <= width; x += 10) {
+        ctx.beginPath()
+        ctx.moveTo(x * pixelSize, 0)
+        ctx.lineTo(x * pixelSize, canvasHeight)
+        ctx.stroke()
+      }
+
+      for (let y = 0; y <= height; y += 10) {
+        ctx.beginPath()
+        ctx.moveTo(0, y * pixelSize)
+        ctx.lineTo(canvasWidth, y * pixelSize)
+        ctx.stroke()
+      }
     }
 
-    for (let y = 0; y <= height; y++) {
-      ctx.beginPath()
-      ctx.moveTo(0, y * pixelSize)
-      ctx.lineTo(canvasWidth, y * pixelSize)
-      ctx.stroke()
-    }
-
-    // Draw pixels
+    // Draw pixels (batch fill operations)
     pixels.forEach(pixel => {
       ctx.fillStyle = pixel.color
       ctx.fillRect(
-        pixel.x * pixelSize + 1,
-        pixel.y * pixelSize + 1,
-        pixelSize - 1,
-        pixelSize - 1
+        pixel.x * pixelSize,
+        pixel.y * pixelSize,
+        pixelSize,
+        pixelSize
       )
     })
 
-    // Preview
+    // Preview hovered pixel
     if (hoveredPixel && canPlace) {
       ctx.globalAlpha = 0.5
       ctx.fillStyle = selectedColor
       ctx.fillRect(
-        hoveredPixel.x * pixelSize + 1,
-        hoveredPixel.y * pixelSize + 1,
-        pixelSize - 1,
-        pixelSize - 1
+        hoveredPixel.x * pixelSize,
+        hoveredPixel.y * pixelSize,
+        pixelSize,
+        pixelSize
       )
       ctx.globalAlpha = 1.0
     }
@@ -148,11 +159,14 @@
   function handleMove(event) {
     const { x, y } = getCoords(event.clientX, event.clientY)
     if (x >= 0 && x < width && y >= 0 && y < height) {
-      hoveredPixel = { x, y }
-      drawCanvas()
+      // Only update if pixel changed
+      if (!hoveredPixel || hoveredPixel.x !== x || hoveredPixel.y !== y) {
+        hoveredPixel = { x, y }
+        drawCanvas()
 
-      // Send cursor position (throttled)
-      sendCursorPosition(x, y)
+        // Send cursor position (throttled)
+        sendCursorPosition(x, y)
+      }
     }
   }
 
@@ -190,11 +204,14 @@
     const touch = event.touches[0]
     const { x, y } = getCoords(touch.clientX, touch.clientY)
     if (x >= 0 && x < width && y >= 0 && y < height) {
-      hoveredPixel = { x, y }
-      drawCanvas()
+      // Only update if pixel changed
+      if (!hoveredPixel || hoveredPixel.x !== x || hoveredPixel.y !== y) {
+        hoveredPixel = { x, y }
+        drawCanvas()
 
-      // Send cursor position (throttled)
-      sendCursorPosition(x, y)
+        // Send cursor position (throttled)
+        sendCursorPosition(x, y)
+      }
     }
   }
 
