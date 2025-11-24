@@ -20,18 +20,34 @@
   let lastCursorSend = 0
   let lastDraw = 0
   let isLoading = true
+  let loadedPixelCount = 0
   const CURSOR_THROTTLE_MS = 250  // Send cursor updates every 250ms (reduced from 100ms)
   const DRAW_THROTTLE_MS = 16  // ~60fps max
 
   $: canvasWidth = width * pixelSize
   $: canvasHeight = height * pixelSize
 
-  // Mark as loaded when pixels are received
-  $: if (pixels && pixels.length >= 0) {
-    // Small delay to show the loading animation
-    setTimeout(() => {
+  // Animate pixels loading one by one (like old computer games)
+  $: if (pixels !== undefined) {
+    if (pixels.length === 0) {
+      // Empty canvas, no loading needed
       isLoading = false
-    }, 300)
+    } else if (isLoading && loadedPixelCount < pixels.length) {
+      // Animate loading
+      const pixelsPerFrame = Math.max(1, Math.ceil(pixels.length / 30)) // Load over ~30 frames
+
+      const animateLoad = () => {
+        if (loadedPixelCount < pixels.length) {
+          loadedPixelCount = Math.min(loadedPixelCount + pixelsPerFrame, pixels.length)
+          drawCanvas()
+          requestAnimationFrame(animateLoad)
+        } else {
+          isLoading = false
+        }
+      }
+
+      requestAnimationFrame(animateLoad)
+    }
   }
 
   // Calculate responsive pixel size based on available space
@@ -95,10 +111,12 @@
   function drawCanvas() {
     if (!ctx) return
 
-    // Throttle drawing to max 60fps
-    const now = Date.now()
-    if (now - lastDraw < DRAW_THROTTLE_MS) return
-    lastDraw = now
+    // Throttle drawing to max 60fps (but skip throttle during loading animation)
+    if (!isLoading) {
+      const now = Date.now()
+      if (now - lastDraw < DRAW_THROTTLE_MS) return
+      lastDraw = now
+    }
 
     // Clear with white background
     ctx.fillStyle = '#FFFFFF'
@@ -125,7 +143,10 @@
     }
 
     // Draw filled pixels (with 1px inset from grid)
-    pixels.forEach(pixel => {
+    // During loading, only draw pixels up to loadedPixelCount
+    const pixelsToDraw = isLoading ? pixels.slice(0, loadedPixelCount) : pixels
+
+    pixelsToDraw.forEach(pixel => {
       ctx.fillStyle = pixel.color
       ctx.fillRect(
         pixel.x * pixelSize + 1,
@@ -135,8 +156,8 @@
       )
     })
 
-    // Preview hovered pixel
-    if (hoveredPixel && canPlace) {
+    // Preview hovered pixel (only when not loading)
+    if (hoveredPixel && canPlace && !isLoading) {
       ctx.globalAlpha = 0.6
       ctx.fillStyle = selectedColor
       ctx.fillRect(
@@ -320,24 +341,10 @@
         on:touchend={handleLeave}
       ></canvas>
 
-      <!-- Loading Overlay -->
-      {#if isLoading}
-        <div class="absolute inset-0 bg-white rounded-sm shadow-lg flex items-center justify-center">
-          <div class="text-center">
-            <div class="relative w-16 h-16 mx-auto mb-4">
-              <!-- Animated pixel grid -->
-              <div class="grid grid-cols-4 gap-1 w-full h-full animate-pulse">
-                {#each Array(16) as _, i}
-                  <div
-                    class="rounded-sm transition-all"
-                    style="background-color: {colors[i % colors.length]}; animation-delay: {i * 50}ms;"
-                  ></div>
-                {/each}
-              </div>
-            </div>
-            <div class="text-sm text-gray-500 font-medium">Loading canvas...</div>
-            <div class="text-xs text-gray-400 mt-1">{pixels.length} pixels</div>
-          </div>
+      <!-- Loading Progress Overlay -->
+      {#if isLoading && pixels.length > 0}
+        <div class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-gray-900/90 backdrop-blur-sm text-white px-4 py-2 rounded-full shadow-lg text-xs font-medium">
+          Loading {loadedPixelCount} / {pixels.length} pixels...
         </div>
       {/if}
 
