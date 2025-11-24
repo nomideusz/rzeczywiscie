@@ -19,11 +19,20 @@
   let ctx
   let lastCursorSend = 0
   let lastDraw = 0
+  let isLoading = true
   const CURSOR_THROTTLE_MS = 250  // Send cursor updates every 250ms (reduced from 100ms)
   const DRAW_THROTTLE_MS = 16  // ~60fps max
 
   $: canvasWidth = width * pixelSize
   $: canvasHeight = height * pixelSize
+
+  // Mark as loaded when pixels are received
+  $: if (pixels && pixels.length >= 0) {
+    // Small delay to show the loading animation
+    setTimeout(() => {
+      isLoading = false
+    }, 300)
+  }
 
   // Calculate responsive pixel size based on available space
   function calculatePixelSize() {
@@ -220,9 +229,9 @@
   }
 </script>
 
-<div class="fixed inset-0 flex flex-col bg-white">
+<div class="fixed inset-0 flex flex-col bg-gray-50">
   <!-- Sleek Header - Ultra Minimal -->
-  <div class="bg-white border-b border-gray-200">
+  <div class="bg-white border-b border-gray-200 relative z-10">
     <div class="px-2 sm:px-3 py-1 flex items-center gap-1 sm:gap-2">
       <!-- Back Button -->
       <a
@@ -300,8 +309,9 @@
         use:initCanvas
         width={canvasWidth}
         height={canvasHeight}
-        class="cursor-crosshair shadow-sm bg-white"
+        class="cursor-crosshair shadow-lg bg-white rounded-sm transition-opacity duration-300"
         class:cursor-not-allowed={!canPlace}
+        class:opacity-0={isLoading}
         on:click={handleClick}
         on:mousemove={handleMove}
         on:mouseleave={handleLeave}
@@ -309,6 +319,27 @@
         on:touchmove={handleTouchMove}
         on:touchend={handleLeave}
       ></canvas>
+
+      <!-- Loading Overlay -->
+      {#if isLoading}
+        <div class="absolute inset-0 bg-white rounded-sm shadow-lg flex items-center justify-center">
+          <div class="text-center">
+            <div class="relative w-16 h-16 mx-auto mb-4">
+              <!-- Animated pixel grid -->
+              <div class="grid grid-cols-4 gap-1 w-full h-full animate-pulse">
+                {#each Array(16) as _, i}
+                  <div
+                    class="rounded-sm transition-all"
+                    style="background-color: {colors[i % colors.length]}; animation-delay: {i * 50}ms;"
+                  ></div>
+                {/each}
+              </div>
+            </div>
+            <div class="text-sm text-gray-500 font-medium">Loading canvas...</div>
+            <div class="text-xs text-gray-400 mt-1">{pixels.length} pixels</div>
+          </div>
+        </div>
+      {/if}
 
       <!-- Live Cursors Overlay -->
       {#each cursors as cursor (cursor.id)}
