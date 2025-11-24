@@ -91,74 +91,52 @@
     if (now - lastDraw < DRAW_THROTTLE_MS) return
     lastDraw = now
 
-    // Clear canvas with white background (same as page background)
+    // Clear with white background
     ctx.fillStyle = '#FFFFFF'
     ctx.fillRect(0, 0, canvasWidth, canvasHeight)
 
-    // Draw subtle grid only when pixels are large enough (performance optimization)
-    if (pixelSize >= 8) {
-      ctx.strokeStyle = '#E8E8E8'
-      ctx.lineWidth = 1
+    // Always draw grid lines to show empty cells
+    ctx.strokeStyle = '#EEEEEE'
+    ctx.lineWidth = 1
 
-      // Draw grid lines every 10 pixels (not every pixel!)
-      for (let x = 0; x <= width; x += 10) {
-        ctx.beginPath()
-        ctx.moveTo(x * pixelSize, 0)
-        ctx.lineTo(x * pixelSize, canvasHeight)
-        ctx.stroke()
-      }
-
-      for (let y = 0; y <= height; y += 10) {
-        ctx.beginPath()
-        ctx.moveTo(0, y * pixelSize)
-        ctx.lineTo(canvasWidth, y * pixelSize)
-        ctx.stroke()
-      }
+    // Vertical lines
+    for (let x = 0; x <= width; x++) {
+      ctx.beginPath()
+      ctx.moveTo(x * pixelSize, 0)
+      ctx.lineTo(x * pixelSize, canvasHeight)
+      ctx.stroke()
     }
 
-    // Draw pixels with visible borders
+    // Horizontal lines
+    for (let y = 0; y <= height; y++) {
+      ctx.beginPath()
+      ctx.moveTo(0, y * pixelSize)
+      ctx.lineTo(canvasWidth, y * pixelSize)
+      ctx.stroke()
+    }
+
+    // Draw filled pixels (with 1px inset from grid)
     pixels.forEach(pixel => {
-      // Fill pixel with color
       ctx.fillStyle = pixel.color
       ctx.fillRect(
-        pixel.x * pixelSize,
-        pixel.y * pixelSize,
-        pixelSize,
-        pixelSize
-      )
-
-      // Draw border around pixel
-      ctx.strokeStyle = '#D0D0D0'
-      ctx.lineWidth = 1
-      ctx.strokeRect(
-        pixel.x * pixelSize + 0.5,
-        pixel.y * pixelSize + 0.5,
-        pixelSize - 1,
-        pixelSize - 1
+        pixel.x * pixelSize + 1,
+        pixel.y * pixelSize + 1,
+        pixelSize - 2,
+        pixelSize - 2
       )
     })
 
     // Preview hovered pixel
     if (hoveredPixel && canPlace) {
-      ctx.globalAlpha = 0.5
+      ctx.globalAlpha = 0.6
       ctx.fillStyle = selectedColor
       ctx.fillRect(
-        hoveredPixel.x * pixelSize,
-        hoveredPixel.y * pixelSize,
-        pixelSize,
-        pixelSize
+        hoveredPixel.x * pixelSize + 1,
+        hoveredPixel.y * pixelSize + 1,
+        pixelSize - 2,
+        pixelSize - 2
       )
-
-      // Border for preview
       ctx.globalAlpha = 1.0
-      ctx.strokeStyle = '#D0D0D0'
-      ctx.lineWidth = 1
-      ctx.strokeRect(
-        hoveredPixel.x * pixelSize + 0.5,
-        hoveredPixel.y * pixelSize + 0.5,
-        pixelSize - 1,
-        pixelSize - 1
-      )
     }
   }
 
