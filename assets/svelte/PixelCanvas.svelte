@@ -7,6 +7,7 @@
   export let selectedColor = "#1a1a1a"
   export let canPlace = true
   export let secondsRemaining = 0
+  export let cooldownSeconds = 60
   export let stats = { total_pixels: 0, unique_users: 0 }
   export let live
 
@@ -27,12 +28,14 @@
     const containerWidth = canvasContainer.clientWidth
     const containerHeight = canvasContainer.clientHeight
 
-    // Calculate pixel size that fits both dimensions with some padding
+    // Calculate pixel size that fits both dimensions
     const maxPixelWidth = Math.floor(containerWidth / width)
     const maxPixelHeight = Math.floor(containerHeight / height)
 
-    // Use the smaller dimension to ensure it fits
-    const newPixelSize = Math.max(1, Math.min(maxPixelWidth, maxPixelHeight))
+    // Use the smaller dimension, with a minimum of 4px for visibility
+    // On small screens, allow scrolling rather than making pixels invisible
+    const fittedSize = Math.min(maxPixelWidth, maxPixelHeight)
+    const newPixelSize = Math.max(4, fittedSize)
 
     if (newPixelSize !== pixelSize) {
       pixelSize = newPixelSize
@@ -322,14 +325,14 @@
       <div class="h-1 bg-gray-100 relative overflow-hidden">
         <div
           class="h-full bg-gradient-to-r from-orange-400 to-amber-500 transition-all duration-1000 ease-linear"
-          style="width: {((60 - secondsRemaining) / 60) * 100}%"
+          style="width: {((cooldownSeconds - secondsRemaining) / cooldownSeconds) * 100}%"
         ></div>
       </div>
     {/if}
   </div>
 
   <!-- Canvas Area (Full Screen) -->
-  <div class="flex-1 overflow-hidden bg-gray-50 flex items-center justify-center" use:initContainer>
+  <div class="flex-1 overflow-auto bg-gray-50" use:initContainer>
     <canvas
       use:initCanvas
       width={canvasWidth}

@@ -52,6 +52,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
         selectedColor: @selected_color,
         canPlace: @can_place,
         secondsRemaining: @seconds_remaining,
+        cooldownSeconds: @cooldown_seconds,
         stats: @stats
       }}
       socket={@socket}
