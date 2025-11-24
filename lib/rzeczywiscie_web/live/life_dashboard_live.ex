@@ -16,6 +16,7 @@ defmodule RzeczywiscieWeb.LifeDashboardLive do
       |> assign(:projects, load_projects())
       |> assign(:overall_progress, LifePlanning.get_overall_progress())
       |> assign(:streak, LifePlanning.calculate_streak())
+      |> assign(:urgent_tasks, LifePlanning.get_urgent_tasks())
       |> assign(:show_project_modal, false)
       |> assign(:editing_project, nil)
       |> assign(:project_form, to_form(%{}, as: "project"))
@@ -72,11 +73,59 @@ defmodule RzeczywiscieWeb.LifeDashboardLive do
           </div>
         </div>
 
+        <!-- Urgent Tasks Section -->
+        <%= if length(@urgent_tasks) > 0 do %>
+          <div class="alert alert-warning shadow-lg mb-6">
+            <div class="w-full">
+              <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <h3 class="font-bold text-lg">⏰ Urgent Tasks (<%= length(@urgent_tasks) %>)</h3>
+                </div>
+              </div>
+              <div class="space-y-2">
+                <%= for task <- Enum.take(@urgent_tasks, 5) do %>
+                  <% urgency = Rzeczywiscie.LifePlanning.Task.urgency_level(task) %>
+                  <% project = Enum.find(@projects, fn p -> p.id == task.project_id end) %>
+                  <div class="flex items-center justify-between p-2 bg-base-100 rounded">
+                    <div class="flex-1">
+                      <div class="font-medium"><%= task.title %></div>
+                      <div class="text-sm opacity-70">
+                        <%= if project, do: "#{project.emoji} #{project.name}", else: "Unknown Project" %>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <div class={"badge badge-sm " <> Rzeczywiscie.LifePlanning.Task.urgency_badge_class(urgency)}>
+                        <%= Rzeczywiscie.LifePlanning.Task.urgency_text(urgency) %>
+                      </div>
+                      <%= if task.deadline do %>
+                        <div class="text-sm opacity-70">
+                          📅 <%= Calendar.strftime(task.deadline, "%b %d") %>
+                        </div>
+                      <% end %>
+                      <a href={"/life/projects/#{task.project_id}"} class="btn btn-xs btn-ghost">View</a>
+                    </div>
+                  </div>
+                <% end %>
+                <%= if length(@urgent_tasks) > 5 do %>
+                  <div class="text-sm opacity-70 text-center mt-2">
+                    + <%= length(@urgent_tasks) - 5 %> more urgent tasks
+                  </div>
+                <% end %>
+              </div>
+            </div>
+          </div>
+        <% end %>
+
         <!-- Navigation -->
         <div class="flex justify-between items-center mb-6">
           <div class="tabs tabs-boxed">
             <a href="/life" class="tab tab-active">Dashboard</a>
             <a href="/life/check-in" class="tab">Daily Check-in</a>
+            <a href="/life/weekly-review" class="tab">Weekly Review</a>
+            <a href="/life/progress" class="tab">Analytics</a>
           </div>
           <button
             class="btn btn-primary"
@@ -363,6 +412,7 @@ defmodule RzeczywiscieWeb.LifeDashboardLive do
       socket
       |> assign(:projects, load_projects())
       |> assign(:overall_progress, LifePlanning.get_overall_progress())
+      |> assign(:urgent_tasks, LifePlanning.get_urgent_tasks())
     }
   end
 
@@ -372,6 +422,7 @@ defmodule RzeczywiscieWeb.LifeDashboardLive do
       socket
       |> assign(:projects, load_projects())
       |> assign(:overall_progress, LifePlanning.get_overall_progress())
+      |> assign(:urgent_tasks, LifePlanning.get_urgent_tasks())
     }
   end
 
@@ -381,6 +432,7 @@ defmodule RzeczywiscieWeb.LifeDashboardLive do
       socket
       |> assign(:projects, load_projects())
       |> assign(:overall_progress, LifePlanning.get_overall_progress())
+      |> assign(:urgent_tasks, LifePlanning.get_urgent_tasks())
     }
   end
 

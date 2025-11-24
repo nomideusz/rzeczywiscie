@@ -130,9 +130,24 @@ defmodule RzeczywiscieWeb.LifeProjectLive do
                             <%= task.title %>
                           </div>
 
-                          <%= if task.is_next_action && !task.completed do %>
-                            <div class="badge badge-info badge-sm mt-1">Next Action</div>
-                          <% end %>
+                          <div class="flex gap-2 mt-1">
+                            <%= if task.is_next_action && !task.completed do %>
+                              <div class="badge badge-info badge-sm">Next Action</div>
+                            <% end %>
+
+                            <% urgency = Rzeczywiscie.LifePlanning.Task.urgency_level(task) %>
+                            <%= if urgency do %>
+                              <div class={"badge badge-sm " <> Rzeczywiscie.LifePlanning.Task.urgency_badge_class(urgency)}>
+                                <%= Rzeczywiscie.LifePlanning.Task.urgency_text(urgency) %>
+                              </div>
+                            <% end %>
+
+                            <%= if task.deadline && !task.completed do %>
+                              <div class="text-xs opacity-70">
+                                📅 <%= Calendar.strftime(task.deadline, "%b %d") %>
+                              </div>
+                            <% end %>
+                          </div>
                         </div>
 
                         <!-- Actions -->
@@ -211,6 +226,21 @@ defmodule RzeczywiscieWeb.LifeProjectLive do
                       <option value={phase}><%= phase %></option>
                     <% end %>
                   </datalist>
+                </div>
+
+                <div class="form-control mb-4">
+                  <label class="label">
+                    <span class="label-text">Deadline (optional)</span>
+                  </label>
+                  <input
+                    type="date"
+                    name="task[deadline]"
+                    class="input input-bordered"
+                    value={@editing_task && @editing_task.deadline}
+                  />
+                  <label class="label">
+                    <span class="label-text-alt">Set a target date to create urgency</span>
+                  </label>
                 </div>
 
                 <div class="form-control mb-4">

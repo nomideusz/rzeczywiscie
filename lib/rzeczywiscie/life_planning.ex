@@ -5,7 +5,7 @@ defmodule Rzeczywiscie.LifePlanning do
 
   import Ecto.Query, warn: false
   alias Rzeczywiscie.Repo
-  alias Rzeczywiscie.LifePlanning.{LifeProject, Task, DailyCheckin}
+  alias Rzeczywiscie.LifePlanning.{LifeProject, Task, DailyCheckin, WeeklyReview}
 
   @topic "life_planning"
 
@@ -283,6 +283,45 @@ defmodule Rzeczywiscie.LifePlanning do
     |> Repo.one()
   end
 
+  @doc """
+  Get all tasks with deadlines that are due soon (within 7 days) or overdue.
+  """
+  def get_urgent_tasks do
+    today = Date.utc_today()
+    week_from_now = Date.add(today, 7)
+
+    Task
+    |> where([t], t.completed == false and not is_nil(t.deadline))
+    |> where([t], t.deadline <= ^week_from_now)
+    |> order_by([asc: :deadline])
+    |> Repo.all()
+  end
+
+  @doc """
+  Get overdue tasks (deadline has passed and not completed).
+  """
+  def get_overdue_tasks do
+    today = Date.utc_today()
+
+    Task
+    |> where([t], t.completed == false and not is_nil(t.deadline))
+    |> where([t], t.deadline < ^today)
+    |> order_by([asc: :deadline])
+    |> Repo.all()
+  end
+
+  @doc """
+  Get tasks due today.
+  """
+  def get_today_tasks do
+    today = Date.utc_today()
+
+    Task
+    |> where([t], t.completed == false and t.deadline == ^today)
+    |> order_by([asc: :order])
+    |> Repo.all()
+  end
+
   ## Daily Check-ins
 
   @doc """
@@ -380,5 +419,239 @@ defmodule Rzeczywiscie.LifePlanning do
         end)
         |> elem(0)
     end
+  end
+
+  ## Weekly Reviews
+
+  @doc """
+  Returns the list of weekly_reviews, ordered by week_start_date descending.
+  """
+  def list_weekly_reviews(limit \\ 12) do
+    WeeklyReview
+    |> order_by([desc: :week_start_date])
+    |> limit(^limit)
+    |> Repo.all()
+  end
+
+  @doc """
+  Gets a single weekly_review by week_start_date.
+  """
+  def get_weekly_review_by_date(week_start_date) do
+    Repo.get_by(WeeklyReview, week_start_date: week_start_date)
+  end
+
+  @doc """
+  Gets this week's review.
+  """
+  def get_this_week_review do
+    get_weekly_review_by_date(WeeklyReview.week_start(Date.utc_today()))
+  end
+
+  @doc """
+  Creates a weekly_review.
+  """
+  def create_weekly_review(attrs \\ %{}) do
+    %WeeklyReview{}
+    |> WeeklyReview.changeset(attrs)
+    |> Repo.insert()
+    |> tap(fn
+      {:ok, review} -> broadcast_update(review, :weekly_review_created)
+      _ -> :ok
+    end)
+  end
+
+  @doc """
+  Updates a weekly_review.
+  """
+  def update_weekly_review(%WeeklyReview{} = weekly_review, attrs) do
+    weekly_review
+    |> WeeklyReview.changeset(attrs)
+    |> Repo.update()
+    |> tap(fn
+      {:ok, review} -> broadcast_update(review, :weekly_review_updated)
+      _ -> :ok
+    end)
+  end
+
+  @doc """
+  Creates or updates this week's review.
+  """
+  def upsert_this_week_review(attrs) do
+    week_start = WeeklyReview.week_start(Date.utc_today())
+
+    case get_weekly_review_by_date(week_start) do
+      nil -> create_weekly_review(Map.put(attrs, :week_start_date, week_start))
+      review -> update_weekly_review(review, attrs)
+    end
+  end
+
+  @doc """
+  Returns an `%Ecto.Changeset{}` for tracking weekly_review changes.
+  """
+  def change_weekly_review(%WeeklyReview{} = weekly_review, attrs \\ %{}) do
+    WeeklyReview.changeset(weekly_review, attrs)
+  end
+
+  @doc """
+  Gets statistics for the current week.
+  Returns tasks completed this week, projects with activity, etc.
+  """
+  def get_week_stats(week_start_date \\ nil) do
+    week_start = week_start_date || WeeklyReview.week_start(Date.utc_today())
+    week_end = Date.add(week_start, 6)
+
+    # Get tasks completed this week
+    completed_this_week =
+      Task
+      |> where([t], not is_nil(t.completed_at))
+      |> where([t], fragment("DATE(?)", t.completed_at) >= ^week_start)
+      |> where([t], fragment("DATE(?)", t.completed_at) <= ^week_end)
+      |> Repo.all()
+
+    # Get unique projects with activity
+    active_project_ids =
+      completed_this_week
+      |> Enum.map(& &1.project_id)
+      |> Enum.uniq()
+
+    # Get stalled projects (no tasks completed in 2+ weeks)
+    two_weeks_ago = Date.add(Date.utc_today(), -14)
+
+    all_projects = list_projects()
+
+    stalled_projects =
+      all_projects
+      |> Enum.filter(fn project ->
+        tasks = list_tasks(project.id)
+        has_incomplete = Enum.any?(tasks, fn t -> !t.completed end)
+
+        last_completion =
+          tasks
+          |> Enum.filter(& &1.completed_at)
+          |> Enum.map(& DateTime.to_date(&1.completed_at))
+          |> Enum.max(Date, fn -> Date.add(Date.utc_today(), -365) end)
+
+        has_incomplete && Date.compare(last_completion, two_weeks_ago) == :lt
+      end)
+
+    %{
+      completed_tasks_count: length(completed_this_week),
+      active_projects_count: length(active_project_ids),
+      active_project_ids: active_project_ids,
+      stalled_projects: stalled_projects,
+      week_start: week_start,
+      week_end: week_end
+    }
+  end
+
+  ## Progress Analytics
+
+  @doc """
+  Gets completion trend data for the last N days.
+  Returns a list of %{date, completed_count} maps.
+  """
+  def get_completion_trend(days_back \\ 30) do
+    start_date = Date.add(Date.utc_today(), -days_back)
+
+    Task
+    |> where([t], not is_nil(t.completed_at))
+    |> where([t], fragment("DATE(?)", t.completed_at) >= ^start_date)
+    |> select([t], %{
+      date: fragment("DATE(?)", t.completed_at),
+      count: count(t.id)
+    })
+    |> group_by([t], fragment("DATE(?)", t.completed_at))
+    |> order_by([asc: fragment("DATE(?)", :completed_at)])
+    |> Repo.all()
+  end
+
+  @doc """
+  Gets weekly completion stats for the last N weeks.
+  Returns a list of %{week_start, completed_count} maps.
+  """
+  def get_weekly_completion_trend(weeks_back \\ 12) do
+    start_date = Date.add(Date.utc_today(), -(weeks_back * 7))
+
+    completed_tasks =
+      Task
+      |> where([t], not is_nil(t.completed_at))
+      |> where([t], fragment("DATE(?)", t.completed_at) >= ^start_date)
+      |> select([t], fragment("DATE(?)", t.completed_at))
+      |> Repo.all()
+
+    # Group by week
+    completed_tasks
+    |> Enum.group_by(fn date ->
+      WeeklyReview.week_start(date)
+    end)
+    |> Enum.map(fn {week_start, dates} ->
+      %{week_start: week_start, count: length(dates)}
+    end)
+    |> Enum.sort_by(& &1.week_start, Date)
+  end
+
+  @doc """
+  Gets completion stats per project.
+  Returns a list of %{project_name, emoji, completed_count, total_count, completion_rate}.
+  """
+  def get_project_completion_stats do
+    projects = list_projects()
+
+    projects
+    |> Enum.map(fn project ->
+      tasks = list_tasks(project.id)
+      total = length(tasks)
+      completed = Enum.count(tasks, & &1.completed)
+      completion_rate = if total > 0, do: completed / total * 100, else: 0
+
+      %{
+        project_id: project.id,
+        project_name: project.name,
+        emoji: project.emoji || "📋",
+        completed_count: completed,
+        total_count: total,
+        completion_rate: Float.round(completion_rate, 1)
+      }
+    end)
+    |> Enum.sort_by(& &1.completion_rate, :desc)
+  end
+
+  @doc """
+  Gets task completion velocity (average tasks completed per week).
+  """
+  def get_completion_velocity(weeks_back \\ 4) do
+    start_date = Date.add(Date.utc_today(), -(weeks_back * 7))
+
+    completed_count =
+      Task
+      |> where([t], not is_nil(t.completed_at))
+      |> where([t], fragment("DATE(?)", t.completed_at) >= ^start_date)
+      |> select([t], count(t.id))
+      |> Repo.one()
+
+    velocity = if weeks_back > 0, do: completed_count / weeks_back, else: 0
+    Float.round(velocity, 1)
+  end
+
+  @doc """
+  Gets productivity insights and statistics.
+  """
+  def get_productivity_insights do
+    total_projects = length(list_projects())
+    total_tasks = Repo.aggregate(Task, :count, :id)
+    completed_tasks = Repo.one(from t in Task, where: t.completed == true, select: count(t.id))
+    overdue_count = length(get_overdue_tasks())
+    urgent_count = length(get_urgent_tasks())
+
+    %{
+      total_projects: total_projects,
+      total_tasks: total_tasks,
+      completed_tasks: completed_tasks,
+      pending_tasks: total_tasks - completed_tasks,
+      completion_rate: if(total_tasks > 0, do: Float.round(completed_tasks / total_tasks * 100, 1), else: 0),
+      overdue_count: overdue_count,
+      urgent_count: urgent_count,
+      velocity: get_completion_velocity(4)
+    }
   end
 end
