@@ -22,11 +22,10 @@ defmodule Rzeczywiscie.PixelCanvas.Pixel do
     |> unique_constraint([:x, :y])
   end
 
-  # Modern 16-color palette (curated for aesthetics)
+  # Modern 15-color palette (curated for aesthetics, no white)
   defp valid_colors do
     [
       "#1a1a1a",  # Rich Black
-      "#ffffff",  # Pure White
       "#ef4444",  # Soft Red
       "#10b981",  # Emerald
       "#3b82f6",  # Blue
