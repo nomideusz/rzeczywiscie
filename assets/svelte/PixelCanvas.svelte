@@ -91,13 +91,13 @@
     if (now - lastDraw < DRAW_THROTTLE_MS) return
     lastDraw = now
 
-    // Clear canvas with subtle gray background (creates visible border effect for pixels)
-    ctx.fillStyle = '#E8E8E8'
+    // Clear canvas with white background (same as page background)
+    ctx.fillStyle = '#FFFFFF'
     ctx.fillRect(0, 0, canvasWidth, canvasHeight)
 
     // Draw subtle grid only when pixels are large enough (performance optimization)
     if (pixelSize >= 8) {
-      ctx.strokeStyle = '#E0E0E0'
+      ctx.strokeStyle = '#E8E8E8'
       ctx.lineWidth = 1
 
       // Draw grid lines every 10 pixels (not every pixel!)
@@ -116,12 +116,23 @@
       }
     }
 
-    // Draw pixels (batch fill operations with 1px gap)
+    // Draw pixels with visible borders
     pixels.forEach(pixel => {
+      // Fill pixel with color
       ctx.fillStyle = pixel.color
       ctx.fillRect(
-        pixel.x * pixelSize + 1,
-        pixel.y * pixelSize + 1,
+        pixel.x * pixelSize,
+        pixel.y * pixelSize,
+        pixelSize,
+        pixelSize
+      )
+
+      // Draw border around pixel
+      ctx.strokeStyle = '#D0D0D0'
+      ctx.lineWidth = 1
+      ctx.strokeRect(
+        pixel.x * pixelSize + 0.5,
+        pixel.y * pixelSize + 0.5,
         pixelSize - 1,
         pixelSize - 1
       )
@@ -132,12 +143,22 @@
       ctx.globalAlpha = 0.5
       ctx.fillStyle = selectedColor
       ctx.fillRect(
-        hoveredPixel.x * pixelSize + 1,
-        hoveredPixel.y * pixelSize + 1,
+        hoveredPixel.x * pixelSize,
+        hoveredPixel.y * pixelSize,
+        pixelSize,
+        pixelSize
+      )
+
+      // Border for preview
+      ctx.globalAlpha = 1.0
+      ctx.strokeStyle = '#D0D0D0'
+      ctx.lineWidth = 1
+      ctx.strokeRect(
+        hoveredPixel.x * pixelSize + 0.5,
+        hoveredPixel.y * pixelSize + 0.5,
         pixelSize - 1,
         pixelSize - 1
       )
-      ctx.globalAlpha = 1.0
     }
   }
 
@@ -295,15 +316,14 @@
   </div>
 
   <!-- Canvas Area (Full Screen) -->
-  <div class="flex-1 overflow-auto relative p-4" use:initContainer>
-    <div class="relative inline-block mx-auto">
+  <div class="flex-1 overflow-auto relative p-4 flex items-start justify-center" use:initContainer>
+    <div class="relative">
       <canvas
         use:initCanvas
         width={canvasWidth}
         height={canvasHeight}
-        class="cursor-crosshair shadow-sm"
+        class="cursor-crosshair shadow-sm bg-white"
         class:cursor-not-allowed={!canPlace}
-        style="background-color: #E8E8E8;"
         on:click={handleClick}
         on:mousemove={handleMove}
         on:mouseleave={handleLeave}
