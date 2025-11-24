@@ -28,13 +28,14 @@
   $: canvasHeight = height * pixelSize
 
   // Animate pixels loading one by one (like old computer games)
+  // But don't block interaction - load in background
   $: if (pixels !== undefined) {
     if (pixels.length === 0) {
       // Empty canvas, no loading needed
       isLoading = false
     } else if (isLoading && loadedPixelCount < pixels.length) {
-      // Animate loading
-      const pixelsPerFrame = Math.max(1, Math.ceil(pixels.length / 30)) // Load over ~30 frames
+      // Animate loading in background (faster pace)
+      const pixelsPerFrame = Math.max(10, Math.ceil(pixels.length / 20)) // Faster load: ~20 frames
 
       const animateLoad = () => {
         if (loadedPixelCount < pixels.length) {
@@ -156,8 +157,8 @@
       )
     })
 
-    // Preview hovered pixel (only when not loading)
-    if (hoveredPixel && canPlace && !isLoading) {
+    // Preview hovered pixel
+    if (hoveredPixel && canPlace) {
       ctx.globalAlpha = 0.6
       ctx.fillStyle = selectedColor
       ctx.fillRect(
@@ -330,9 +331,8 @@
         use:initCanvas
         width={canvasWidth}
         height={canvasHeight}
-        class="cursor-crosshair shadow-lg bg-white rounded-sm transition-opacity duration-300"
+        class="cursor-crosshair shadow-lg bg-white rounded-sm"
         class:cursor-not-allowed={!canPlace}
-        class:opacity-0={isLoading}
         on:click={handleClick}
         on:mousemove={handleMove}
         on:mouseleave={handleLeave}
