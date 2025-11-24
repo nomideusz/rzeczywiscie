@@ -204,39 +204,39 @@
   }
 </script>
 
-<div class="fixed inset-0 flex flex-col bg-gradient-to-br from-slate-50 to-blue-50">
-  <!-- Compact Header - Everything in One Row -->
-  <div class="bg-white/90 backdrop-blur-xl border-b border-gray-200/50 shadow-sm">
-    <div class="px-2 sm:px-3 py-1.5 flex items-center gap-1.5 sm:gap-3">
+<div class="fixed inset-0 flex flex-col bg-white">
+  <!-- Sleek Header - Ultra Minimal -->
+  <div class="bg-white border-b border-gray-200">
+    <div class="px-2 sm:px-3 py-1 flex items-center gap-1 sm:gap-2">
       <!-- Back Button -->
       <a
         href="/real-estate"
-        class="p-1 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
-        title="Back to Kruk.live"
+        class="p-1 hover:bg-gray-50 rounded transition-colors flex-shrink-0"
+        title="Back"
       >
-        <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
         </svg>
       </a>
 
       <!-- Title -->
-      <h1 class="text-sm font-bold text-gray-900 flex-shrink-0 hidden sm:block">Pixel Canvas</h1>
+      <h1 class="text-xs font-semibold text-gray-700 flex-shrink-0 hidden sm:block">Pixel Canvas</h1>
 
       <!-- Color Palette -->
-      <div class="flex items-center gap-1 overflow-x-auto scrollbar-hide flex-1 px-1 py-1">
+      <div class="flex items-center gap-0.5 overflow-x-auto scrollbar-hide flex-1 px-0.5">
         {#each colors as color}
           <button
-            class="w-7 h-7 rounded-lg flex-shrink-0 transition-all duration-200 relative"
-            class:ring-2={selectedColor === color}
-            class:ring-offset-1={selectedColor === color}
-            class:scale-105={selectedColor === color}
-            style="background-color: {color}; {selectedColor === color ? `box-shadow: 0 0 0 2px white, 0 0 0 4px ${color};` : ''}"
+            class="w-5 h-5 sm:w-6 sm:h-6 rounded flex-shrink-0 transition-all duration-150 relative border border-gray-200/50"
+            class:scale-110={selectedColor === color}
+            class:border-2={selectedColor === color}
+            class:border-gray-800={selectedColor === color}
+            style="background-color: {color};"
             on:click={() => selectColor(color)}
             title={color.toUpperCase()}
           >
             {#if selectedColor === color}
               <div class="absolute inset-0 flex items-center justify-center">
-                <svg class="w-3.5 h-3.5 text-white drop-shadow-lg" fill="currentColor" viewBox="0 0 20 20">
+                <svg class="w-3 h-3 text-white filter drop-shadow" fill="currentColor" viewBox="0 0 20 20">
                   <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
                 </svg>
               </div>
@@ -245,25 +245,22 @@
         {/each}
       </div>
 
-      <!-- Stats (Desktop only) -->
-      <div class="hidden lg:flex items-center gap-1.5 text-xs text-gray-500 flex-shrink-0">
+      <!-- Stats -->
+      <div class="hidden lg:flex items-center gap-1 text-[10px] text-gray-400 flex-shrink-0">
         <span>{stats.total_pixels.toLocaleString()}</span>
-        <span class="text-gray-300">·</span>
+        <span>·</span>
         <span>{stats.unique_users}</span>
       </div>
 
       <!-- Cooldown Status -->
       <div class="flex-shrink-0">
         {#if canPlace}
-          <div class="flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold text-xs rounded-full">
-            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-            </svg>
-            <span class="hidden sm:inline">Go</span>
+          <div class="px-2 py-0.5 bg-green-500 text-white font-medium text-[10px] rounded">
+            ✓
           </div>
         {:else}
-          <div class="flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-700 font-semibold text-xs rounded-full border border-gray-200">
-            <span>{secondsRemaining}s</span>
+          <div class="px-2 py-0.5 bg-gray-200 text-gray-600 font-medium text-[10px] rounded">
+            {secondsRemaining}s
           </div>
         {/if}
       </div>
@@ -271,9 +268,9 @@
 
     <!-- Cooldown Progress Bar -->
     {#if !canPlace}
-      <div class="h-0.5 bg-gray-100 relative overflow-hidden">
+      <div class="h-px bg-gray-200 relative overflow-hidden">
         <div
-          class="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 transition-all duration-1000 ease-linear"
+          class="h-full bg-blue-500 transition-all duration-1000 ease-linear"
           style="width: {((cooldownSeconds - secondsRemaining) / cooldownSeconds) * 100}%"
         ></div>
       </div>
