@@ -26,7 +26,27 @@
 
   onMount(() => {
     isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0
-    
+
+    // Calculate appropriate zoom for mobile to fit screen
+    if (isMobile) {
+      const viewportWidth = window.innerWidth
+      const viewportHeight = window.innerHeight
+      const toolbarHeight = 120 // Approximate height of toolbar + padding + header
+
+      // Calculate zoom to fit width (with padding)
+      const maxCanvasWidth = viewportWidth - 32
+      const maxCanvasHeight = viewportHeight - toolbarHeight
+      const fullCanvasWidth = width * pixelSize
+      const fullCanvasHeight = height * pixelSize
+
+      const zoomByWidth = maxCanvasWidth / fullCanvasWidth
+      const zoomByHeight = maxCanvasHeight / fullCanvasHeight
+      const calculatedZoom = Math.min(zoomByWidth, zoomByHeight)
+
+      // Clamp zoom between 0.25 and 0.8, prefer fitting to screen
+      zoom = Math.min(0.8, Math.max(0.25, calculatedZoom))
+    }
+
     const savedColor = localStorage.getItem('pixels_selected_color')
     if (savedColor && colors.includes(savedColor)) {
       selectedColor = savedColor
@@ -206,10 +226,10 @@
 
 <svelte:window onkeydown={handleKeyDown} onclick={handleClickOutside} />
 
-<div class="bg-base-200">
-  <div class="container mx-auto px-4 py-3">
+<div class="bg-base-200 min-h-screen">
+  <div class="container mx-auto px-4 py-3 max-w-full overflow-x-hidden">
     <!-- Compact toolbar -->
-    <div class="flex items-center justify-between gap-3">
+    <div class="flex items-center justify-between gap-3 max-w-full">
       <!-- Left: Current color (click to expand on mobile) + desktop palette -->
       <div class="relative flex items-center gap-2">
         <!-- Current color button -->
@@ -272,11 +292,11 @@
     </div>
 
     <!-- Canvas wrapper -->
-    <div class="flex justify-center mt-3">
-      <div class="relative inline-block">
+    <div class="flex justify-center items-start mt-3 w-full overflow-x-auto">
+      <div class="relative inline-block mx-auto">
         <canvas
           use:initCanvas
-          class="bg-white shadow-lg cursor-crosshair block"
+          class="bg-white shadow-lg cursor-crosshair block mx-auto touch-none"
           onclick={handleClick}
           onmousemove={handleMove}
           onmouseleave={handleLeave}
@@ -284,7 +304,7 @@
           ontouchmove={handleTouchMove}
           ontouchend={handleTouchEnd}
         ></canvas>
-        
+
         <!-- Coordinates overlay -->
         {#if hoveredPixel}
           <div class="absolute top-2 right-2 px-2 py-1 bg-black/60 text-white text-xs font-mono rounded">
