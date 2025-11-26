@@ -140,6 +140,25 @@ defmodule RzeczywiscieWeb.LiveWorldLive do
     {:noreply, socket}
   end
 
+  def handle_event("update_location", %{"lat" => lat, "lng" => lng, "city" => city}, socket) do
+    # Update current user's location with browser geolocation
+    updated_user =
+      socket.assigns.current_user
+      |> Map.put(:lat, lat)
+      |> Map.put(:lng, lng)
+      |> Map.put(:city, city)
+
+    # Update presence with new location
+    RzeczywiscieWeb.Presence.update(
+      self(),
+      @presence_topic,
+      socket.assigns.current_user.id,
+      updated_user
+    )
+
+    {:noreply, assign(socket, :current_user, updated_user)}
+  end
+
   # Handle pin broadcasts
   def handle_info({:pin_created, pin}, socket) do
     pins = [pin | socket.assigns.pins]

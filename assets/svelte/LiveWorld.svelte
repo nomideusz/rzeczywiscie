@@ -40,6 +40,41 @@
             return
         }
 
+        // Try to get accurate browser location
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const lat = position.coords.latitude
+                    const lng = position.coords.longitude
+
+                    // Reverse geocode to get city name
+                    fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${googleMapsApiKey}`)
+                        .then(res => res.json())
+                        .then(data => {
+                            let city = 'Unknown'
+                            if (data.results && data.results.length > 0) {
+                                const addressComponents = data.results[0].address_components
+                                const cityComponent = addressComponents.find(c =>
+                                    c.types.includes('locality') || c.types.includes('administrative_area_level_2')
+                                )
+                                if (cityComponent) city = cityComponent.long_name
+                            }
+
+                            // Update server with accurate location
+                            live.pushEvent("update_location", { lat, lng, city }, () => {})
+                        })
+                        .catch(() => {
+                            // If geocoding fails, still send coordinates without city
+                            live.pushEvent("update_location", { lat, lng, city: 'Unknown' }, () => {})
+                        })
+                },
+                (error) => {
+                    console.log('Geolocation permission denied or unavailable:', error.message)
+                },
+                { timeout: 10000, maximumAge: 300000 }
+            )
+        }
+
         const script = document.createElement('script')
         script.src = `https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&callback=initMap`
         script.async = true
@@ -79,12 +114,18 @@
         document.addEventListener('paste', handlePaste)
         document.addEventListener('keydown', handleKeydown)
         window.openLightbox = (src) => lightboxImage = src
+        window.deletePin = (pinId) => {
+            if (confirm('Delete this pin?')) {
+                live.pushEvent("delete_pin", { pin_id: pinId }, () => {})
+            }
+        }
 
         return () => {
             if (script.parentNode) document.head.removeChild(script)
             document.removeEventListener('paste', handlePaste)
             document.removeEventListener('keydown', handleKeydown)
             delete window.openLightbox
+            delete window.deletePin
         }
     })
 
@@ -100,11 +141,28 @@
         map = new google.maps.Map(mapElement, {
             zoom: currentUser.lat ? 5 : 2,
             center: center,
-            styles: [{ featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] }],
-            mapTypeControl: true,
-            mapTypeControlOptions: {
-                position: google.maps.ControlPosition.TOP_RIGHT
-            },
+            styles: [
+                { elementType: "geometry", stylers: [{ color: "#1a1a2e" }] },
+                { elementType: "labels.text.stroke", stylers: [{ color: "#0f0f1e" }] },
+                { elementType: "labels.text.fill", stylers: [{ color: "#8b92ab" }] },
+                { featureType: "administrative", elementType: "geometry.stroke", stylers: [{ color: "#2d3561" }] },
+                { featureType: "administrative.land_parcel", elementType: "labels", stylers: [{ visibility: "off" }] },
+                { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#c4c7d9" }] },
+                { featureType: "poi", elementType: "labels.text", stylers: [{ visibility: "off" }] },
+                { featureType: "poi", elementType: "geometry", stylers: [{ color: "#232844" }] },
+                { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#1f3a3a" }] },
+                { featureType: "poi.park", elementType: "labels.text.fill", stylers: [{ color: "#4a7c59" }] },
+                { featureType: "road", elementType: "geometry", stylers: [{ color: "#2a2f4d" }] },
+                { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#1f2339" }] },
+                { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#3a3f5c" }] },
+                { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#2a2f4d" }] },
+                { featureType: "road.highway", elementType: "labels.text.fill", stylers: [{ color: "#b8bfdb" }] },
+                { featureType: "transit", stylers: [{ visibility: "off" }] },
+                { featureType: "transit.line", elementType: "geometry", stylers: [{ color: "#2a2f4d" }] },
+                { featureType: "water", elementType: "geometry", stylers: [{ color: "#0f1929" }] },
+                { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#4a6d8c" }] }
+            ],
+            mapTypeControl: false,
             streetViewControl: false,
             fullscreenControl: true,
             fullscreenControlOptions: {
@@ -230,9 +288,13 @@
 
     function getPinInfoHTML(pin) {
         const time = new Date(pin.created_at * 1000).toLocaleString()
+        const isOwnPin = pin.user_name === currentUser.name && pin.user_color === currentUser.color
         return `
             <div style="padding: 12px; min-width: 200px; max-width: 280px; font-family: system-ui;">
-                <div style="font-size: 28px; margin-bottom: 10px;">${pin.emoji}</div>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                    <div style="font-size: 28px;">${pin.emoji}</div>
+                    ${isOwnPin ? `<button onclick="window.deletePin(${pin.id})" style="background: #ef4444; color: white; border: none; padding: 4px 8px; font-size: 11px; font-weight: bold; cursor: pointer; border-radius: 2px;">Delete</button>` : ''}
+                </div>
                 ${pin.image_data ? `<img src="${pin.image_data}" onclick="window.openLightbox('${pin.image_data}')" style="width: 100%; max-height: 180px; object-fit: contain; background: #f5f5f5; margin-bottom: 10px; cursor: pointer;" />` : ''}
                 ${pin.message ? `<p style="margin: 0 0 10px; font-size: 13px;">${pin.message}</p>` : ''}
                 <div style="font-size: 11px; color: #666; padding-top: 10px; border-top: 1px solid #ddd;">
