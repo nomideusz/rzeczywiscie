@@ -34,7 +34,6 @@
   let panStart = { x: 0, y: 0 }
   let scrollStart = { x: 0, y: 0 }
 
-  // Center the scroll position
   function centerCanvas() {
     if (!scrollContainer) return
     
@@ -43,21 +42,16 @@
     const clientWidth = scrollContainer.clientWidth
     const clientHeight = scrollContainer.clientHeight
     
-    // Center horizontally and vertically
     scrollContainer.scrollLeft = (scrollWidth - clientWidth) / 2
     scrollContainer.scrollTop = (scrollHeight - clientHeight) / 2
   }
 
-  // Detect mobile and check if canvas is scrollable
   onMount(() => {
     isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0
     
-    // Set default zoom higher on mobile so pixels are visible
     if (isMobile) {
       zoom = 2
-      // Redraw with new zoom and center after render
       if (ctx) drawCanvas()
-      // Center canvas after a short delay to let it render
       setTimeout(centerCanvas, 100)
     }
     
@@ -67,24 +61,19 @@
       live.pushEvent("select_color", { color: savedColor })
     }
 
-    // Check if user has seen scroll hint before
     hasScrolled = localStorage.getItem('pixels_has_scrolled') === 'true'
-
-    // Check scrollability after a short delay to let canvas render
     setTimeout(checkScrollability, 500)
   })
 
   function checkScrollability() {
     if (!scrollContainer) return
     
-    // Add a small threshold (5px) to avoid false positives from rounding
     const threshold = 5
     const isScrollable = scrollContainer.scrollWidth > scrollContainer.clientWidth + threshold ||
                          scrollContainer.scrollHeight > scrollContainer.clientHeight + threshold
     
     canScroll = isScrollable
     
-    // Show hint briefly if scrollable and user hasn't scrolled before
     if (isScrollable && !hasScrolled && isMobile) {
       showScrollHint = true
       setTimeout(() => {
@@ -103,14 +92,11 @@
     }
   }
 
-  // Cooldown progress (0 to 1)
   $: cooldownProgress = canPlace ? 1 : (cooldownSeconds - secondsRemaining) / cooldownSeconds
 
-  // Calculate responsive pixel size based on available space
   function calculatePixelSize() {
     if (!canvasContainer) return
 
-    // Account for padding: 2rem (32px) each side = 64px total
     const padding = 64
     const containerWidth = canvasContainer.clientWidth - padding
     const containerHeight = canvasContainer.clientHeight - padding
@@ -118,7 +104,6 @@
     const maxPixelWidth = Math.floor(containerWidth / width)
     const maxPixelHeight = Math.floor(containerHeight / height)
 
-    // Fit canvas nicely in viewport
     const fittedSize = Math.min(maxPixelWidth, maxPixelHeight)
     const newPixelSize = Math.max(2, Math.min(8, fittedSize))
 
@@ -128,7 +113,6 @@
     }
   }
 
-  // Draw canvas when pixels change
   $: if (ctx && pixelsVersion >= 0) {
     drawCanvas()
   }
@@ -153,7 +137,6 @@
   function initScrollContainer(node) {
     scrollContainer = node
     
-    // Listen for scroll to dismiss hint
     const handleScroll = () => onUserScrolled()
     node.addEventListener('scroll', handleScroll, { passive: true })
     
@@ -179,8 +162,7 @@
     ctx.fillStyle = '#FFFFFF'
     ctx.fillRect(0, 0, actualWidth, actualHeight)
 
-    // Draw grid - use single path for better performance and appearance
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.06)'
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)'
     ctx.lineWidth = 1
     ctx.beginPath()
 
@@ -198,7 +180,6 @@
 
     ctx.stroke()
 
-    // Draw pixels with 1px inset to show grid border on all sides
     const inset = Math.max(1, Math.round(effectivePixelSize * 0.08))
     const pixelDrawSize = Math.max(1, effectivePixelSize - inset * 2)
     
@@ -212,7 +193,6 @@
       )
     })
 
-    // Preview hovered pixel with same inset
     if (hoveredPixel && canPlace && !isPanning) {
       ctx.globalAlpha = 0.5
       ctx.fillStyle = selectedColor
@@ -305,14 +285,14 @@
   // Touch handling
   let lastTouchDistance = 0
   let touchPanStart = null
-  let singleTouchStart = null  // Track single touch start position
-  let touchMoved = false       // Track if touch moved significantly
-  const TAP_THRESHOLD = 10     // Max pixels moved to count as tap
+  let singleTouchStart = null
+  let touchMoved = false
+  const TAP_THRESHOLD = 10
 
   function handleTouchStart(event) {
     if (event.touches.length === 2) {
       event.preventDefault()
-      singleTouchStart = null  // Cancel single touch if second finger added
+      singleTouchStart = null
       touchMoved = true
       const touch1 = event.touches[0]
       const touch2 = event.touches[1]
@@ -372,7 +352,6 @@
     } else if (event.touches.length === 1) {
       const touch = event.touches[0]
       
-      // Check if moved beyond tap threshold
       if (singleTouchStart) {
         const dx = touch.clientX - singleTouchStart.clientX
         const dy = touch.clientY - singleTouchStart.clientY
@@ -393,7 +372,6 @@
   }
 
   function handleTouchEnd(event) {
-    // Place pixel only if it was a tap (no significant movement) and can place
     if (singleTouchStart && !touchMoved && canPlace && hoveredPixel) {
       const { x, y } = hoveredPixel
       if (x >= 0 && x < width && y >= 0 && y < height) {
@@ -419,7 +397,6 @@
   function adjustZoom(delta) {
     zoom = Math.max(0.5, Math.min(3, zoom + delta))
     drawCanvas()
-    // Recheck scrollability after zoom change
     setTimeout(checkScrollability, 100)
   }
 
@@ -443,25 +420,23 @@
 
   function openPalette() {
     showPalette = true
-    showUI = true
-    if (uiTimeout) clearTimeout(uiTimeout)
   }
 </script>
 
 <svelte:window on:keydown={handleKeyDown} on:mouseup={handleMouseUp} on:click={handleClickOutside} />
 
-<div class="fixed inset-0 flex flex-col bg-neutral-100">
-  <!-- Canvas Area - full screen -->
+<div class="fixed inset-0 flex flex-col bg-base-200">
+  <!-- Canvas Area -->
   <div 
     class="flex-1 overflow-auto"
     use:initScrollContainer
     use:initContainer
   >
     <div class="flex items-center justify-center min-h-full" style="min-width: max-content; padding: 2rem;">
-      <div class="relative">
+      <div class="relative border-2 border-base-content">
         <canvas
           use:initCanvas
-          class="shadow-2xl rounded-sm bg-white {isPanning ? 'cursor-grabbing' : 'cursor-crosshair'}"
+          class="bg-white {isPanning ? 'cursor-grabbing' : 'cursor-crosshair'}"
           on:mousedown={handleMouseDown}
           on:click={handleClick}
           on:mousemove={handleMove}
@@ -479,7 +454,7 @@
             style="left: {cursor.x * pixelSize * zoom}px; top: {cursor.y * pixelSize * zoom}px;"
           >
             <div
-              class="w-2 h-2 rounded-full border border-white shadow"
+              class="w-2 h-2 border-2 border-white"
               style="background-color: {cursor.color}"
             ></div>
           </div>
@@ -490,11 +465,9 @@
     <!-- Scroll hint overlay -->
     {#if showScrollHint && canScroll}
       <div class="absolute inset-0 pointer-events-none flex items-center justify-center">
-        <div class="bg-black/70 text-white px-4 py-3 rounded-2xl flex items-center gap-3 animate-hint">
-          <svg class="w-6 h-6 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
-          </svg>
-          <span class="text-sm">Drag to explore</span>
+        <div class="bg-base-content text-base-100 px-4 py-3 flex items-center gap-3 animate-hint font-bold text-sm uppercase tracking-wide">
+          <span>↔</span>
+          <span>Drag to explore</span>
         </div>
       </div>
     {/if}
@@ -503,7 +476,7 @@
   <!-- UI Container -->
   <div class="contents">
     
-    <!-- Color picker - bottom center on mobile, bottom left on desktop -->
+    <!-- Color picker -->
     <div 
       class="fixed z-50 {isMobile ? 'bottom-4 left-1/2 -translate-x-1/2' : 'bottom-6 left-6'}"
     >
@@ -512,52 +485,45 @@
         {#if !isMobile}
           <a 
             href="/" 
-            class="w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center text-neutral-400 hover:text-neutral-900 transition-colors"
+            class="w-10 h-10 bg-base-100 border-2 border-base-content flex items-center justify-center text-base-content hover:bg-base-content hover:text-base-100 transition-colors"
           >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-            </svg>
+            ←
           </a>
         {/if}
 
         <!-- Expanded palette -->
         {#if showPalette}
-          <div class="absolute {isMobile ? 'bottom-16 left-1/2 -translate-x-1/2' : 'bottom-16 left-0'} bg-white rounded-2xl shadow-2xl p-4 animate-in">
-            <div class="flex flex-wrap gap-2 justify-center" style="width: 200px;">
+          <div class="absolute {isMobile ? 'bottom-16 left-1/2 -translate-x-1/2' : 'bottom-16 left-0'} bg-base-100 border-2 border-base-content p-3 animate-in">
+            <div class="flex flex-wrap gap-1 justify-center" style="width: 200px;">
               {#each colors as color, i}
                 <button
-                  class="group relative w-9 h-9 rounded-lg transition-all active:scale-95 {selectedColor === color ? 'ring-2 ring-neutral-900 ring-offset-2' : ''}"
+                  class="w-8 h-8 transition-all cursor-pointer {selectedColor === color ? 'ring-2 ring-base-content ring-offset-1' : 'hover:scale-110'}"
                   style="background-color: {color};"
                   on:click={() => selectColor(color)}
                 >
-                  {#if i < 10 && !isMobile}
-                    <span class="absolute -top-1 -right-1 w-4 h-4 bg-neutral-900 text-white text-[10px] font-medium rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      {i < 9 ? i + 1 : 0}
-                    </span>
-                  {/if}
                 </button>
               {/each}
             </div>
             {#if !isMobile}
-              <p class="text-[10px] text-neutral-400 mt-3 text-center">1-0 for first 10 colors</p>
+              <p class="text-[9px] font-bold uppercase tracking-wide opacity-40 mt-2 text-center">Press 1-0 for colors</p>
             {/if}
           </div>
         {/if}
 
-        <!-- Current color button -->
+        <!-- Current color button with cooldown -->
         <button
-          class="w-14 h-14 sm:w-12 sm:h-12 rounded-full shadow-lg transition-all active:scale-95 relative overflow-hidden"
+          class="w-14 h-14 sm:w-12 sm:h-12 border-2 border-base-content transition-all cursor-pointer relative overflow-hidden"
           style="background-color: {selectedColor};"
           on:click={openPalette}
         >
           <svg class="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 36 36">
-            <circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="3"/>
-            <circle cx="18" cy="18" r="16" fill="none" stroke="white" stroke-width="3"
-              stroke-dasharray="100" stroke-dashoffset={100 - cooldownProgress * 100} stroke-linecap="round"
+            <rect x="0" y="0" width="36" height="36" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="4"/>
+            <rect x="0" y="0" width="36" height="36" fill="none" stroke="white" stroke-width="4"
+              stroke-dasharray="144" stroke-dashoffset={144 - cooldownProgress * 144}
               class="transition-all duration-1000 ease-linear"/>
           </svg>
           {#if !canPlace}
-            <span class="absolute inset-0 flex items-center justify-center text-white text-sm font-bold drop-shadow">
+            <span class="absolute inset-0 flex items-center justify-center text-white text-sm font-black drop-shadow">
               {secondsRemaining}
             </span>
           {/if}
@@ -565,41 +531,39 @@
 
         <!-- Zoom controls - inline on mobile -->
         {#if isMobile}
-          <div class="bg-white rounded-full shadow-lg flex items-center overflow-hidden">
-            <button class="w-10 h-10 text-neutral-600 active:bg-neutral-100 text-lg font-medium" on:click={() => adjustZoom(-0.25)}>−</button>
-            <button class="w-10 h-10 text-neutral-600 active:bg-neutral-100 text-lg font-medium" on:click={() => adjustZoom(0.25)}>+</button>
+          <div class="bg-base-100 border-2 border-base-content flex items-center">
+            <button class="w-10 h-10 text-base-content active:bg-base-200 text-lg font-bold cursor-pointer" on:click={() => adjustZoom(-0.25)}>−</button>
+            <button class="w-10 h-10 text-base-content active:bg-base-200 text-lg font-bold cursor-pointer border-l-2 border-base-content" on:click={() => adjustZoom(0.25)}>+</button>
           </div>
         {/if}
       </div>
     </div>
 
-    <!-- Desktop zoom controls - bottom right -->
+    <!-- Desktop zoom controls -->
     {#if !isMobile}
       <div class="fixed bottom-6 right-6 flex items-center gap-2">
-        <div class="bg-white rounded-full shadow-lg flex items-center overflow-hidden">
-          <button class="w-10 h-10 text-neutral-600 hover:bg-neutral-50 text-lg font-medium transition-colors" on:click={() => adjustZoom(-0.25)}>−</button>
-          <span class="text-xs text-neutral-500 w-12 text-center font-medium">{Math.round(zoom * 100)}%</span>
-          <button class="w-10 h-10 text-neutral-600 hover:bg-neutral-50 text-lg font-medium transition-colors" on:click={() => adjustZoom(0.25)}>+</button>
+        <div class="bg-base-100 border-2 border-base-content flex items-center">
+          <button class="w-10 h-10 text-base-content hover:bg-base-200 text-lg font-bold transition-colors cursor-pointer" on:click={() => adjustZoom(-0.25)}>−</button>
+          <span class="text-xs font-bold w-14 text-center">{Math.round(zoom * 100)}%</span>
+          <button class="w-10 h-10 text-base-content hover:bg-base-200 text-lg font-bold transition-colors cursor-pointer border-l-2 border-base-content" on:click={() => adjustZoom(0.25)}>+</button>
         </div>
       </div>
     {/if}
 
-    <!-- Stats - top left, smaller on mobile -->
+    <!-- Stats -->
     <div 
       class="fixed z-50 {isMobile ? 'top-2 left-2' : 'top-6 left-6'}"
     >
-      <div class="bg-white/90 backdrop-blur rounded-xl shadow-lg {isMobile ? 'px-3 py-2' : 'px-4 py-3'}">
-        <div class="flex items-center gap-2">
+      <div class="bg-base-100 border-2 border-base-content {isMobile ? 'px-3 py-2' : 'px-4 py-3'}">
+        <div class="flex items-center gap-3">
           {#if isMobile}
-            <a href="/" class="text-neutral-400">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-              </svg>
-            </a>
+            <a href="/" class="text-base-content font-bold">←</a>
           {/if}
           <div>
-            <h1 class="{isMobile ? 'text-xs' : 'text-sm'} font-semibold text-neutral-900">Pixels</h1>
-            <p class="{isMobile ? 'text-[10px]' : 'text-xs'} text-neutral-500">{stats.total_pixels.toLocaleString()} · {stats.unique_users} artists</p>
+            <h1 class="{isMobile ? 'text-xs' : 'text-sm'} font-black uppercase tracking-tight">Pixels</h1>
+            <p class="{isMobile ? 'text-[9px]' : 'text-[10px]'} font-bold uppercase tracking-wide opacity-50">
+              {stats.total_pixels.toLocaleString()} placed · {stats.unique_users} artists
+            </p>
           </div>
         </div>
       </div>
@@ -607,7 +571,7 @@
 
     <!-- Coordinates - only on desktop -->
     {#if hoveredPixel && !isMobile}
-      <div class="fixed top-6 right-6 bg-neutral-900 text-white px-3 py-2 rounded-lg text-xs font-mono">
+      <div class="fixed top-6 right-6 bg-base-content text-base-100 px-3 py-2 text-xs font-mono font-bold">
         {hoveredPixel.x}, {hoveredPixel.y}
       </div>
     {/if}
@@ -649,14 +613,5 @@
     10% { opacity: 1; transform: scale(1); }
     80% { opacity: 1; }
     100% { opacity: 0; }
-  }
-
-  .animate-bounce-x {
-    animation: bounceX 1.5s ease-in-out infinite;
-  }
-
-  @keyframes bounceX {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-4px); }
   }
 </style>

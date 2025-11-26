@@ -12,7 +12,6 @@
     let userMarkers = new Map()
     let pinMarkers = new Map()
     let cursorMarkers = new Map()
-    let selectedUser = null
     let showPinModal = false
     let newPinMessage = ""
     let newPinEmoji = "📍"
@@ -27,7 +26,7 @@
     let newChatMessage = ""
 
     // Stats
-    let showStats = false
+    let showStats = true
     let stats = {
         usersOnline: 0,
         totalPins: 0,
@@ -42,7 +41,6 @@
 
     const emojis = ["📍", "⭐", "❤️", "🎉", "🎯", "🔥", "💡", "🌍", "🚀", "🎨"]
 
-    // Load Google Maps
     onMount(() => {
         if (!googleMapsApiKey) {
             console.warn("Google Maps API key not provided. Map will not load.")
@@ -60,20 +58,15 @@
 
         document.head.appendChild(script)
 
-        // Subscribe to LiveView events
         live.handleEvent("pin_created", handlePinCreated)
         live.handleEvent("pin_deleted", handlePinDeleted)
         live.handleEvent("presence_update", handlePresenceUpdate)
         live.handleEvent("cursor_move", handleCursorMove)
         live.handleEvent("chat_message", handleChatMessage)
 
-        // Update durations every second
         durationInterval = setInterval(updateDurations, 1000)
-
-        // Update stats
         updateStats()
 
-        // Listen for clipboard paste events
         const handlePaste = (e) => {
             const items = e.clipboardData?.items;
             if (!items) return;
@@ -92,7 +85,6 @@
 
         document.addEventListener('paste', handlePaste);
 
-        // Listen for ESC key to close lightbox
         const handleKeydown = (e) => {
             if (e.key === 'Escape' && lightboxImage) {
                 lightboxImage = null;
@@ -101,7 +93,6 @@
 
         document.addEventListener('keydown', handleKeydown);
 
-        // Make openLightbox available globally for info window images
         window.openLightbox = (imageSrc) => {
             lightboxImage = imageSrc;
         };
@@ -123,7 +114,6 @@
     })
 
     function updateDurations() {
-        // This will trigger a re-render which updates all duration displays
         users = users
     }
 
@@ -155,12 +145,10 @@
 
         isMapLoaded = true
 
-        // Add click listener to drop pins
         map.addListener('click', (e) => {
             openPinModal(e.latLng.lat(), e.latLng.lng())
         })
 
-        // Add mouse move listener for cursor tracking
         let throttleTimeout
         map.addListener('mousemove', (e) => {
             if (!throttleTimeout) {
@@ -174,7 +162,6 @@
             }
         })
 
-        // Render existing users and pins
         renderUsers()
         renderPins()
     }
@@ -182,11 +169,9 @@
     function renderUsers() {
         if (!isMapLoaded) return
 
-        // Clear old markers
         userMarkers.forEach(marker => marker.setMap(null))
         userMarkers.clear()
 
-        // Add current user marker
         if (currentUser.lat && currentUser.lng) {
             const marker = new google.maps.Marker({
                 position: { lat: currentUser.lat, lng: currentUser.lng },
@@ -215,7 +200,6 @@
             userMarkers.set(currentUser.id, marker)
         }
 
-        // Add other users
         users.filter(u => u.id !== currentUser.id).forEach(user => {
             if (user.lat && user.lng) {
                 const marker = new google.maps.Marker({
@@ -250,7 +234,6 @@
     function renderPins() {
         if (!isMapLoaded) return
 
-        // Clear old pin markers
         pinMarkers.forEach(marker => marker.setMap(null))
         pinMarkers.clear()
 
@@ -284,14 +267,14 @@
         const duration = getDuration(user.joined_at)
 
         return `
-            <div style="padding: 8px; min-width: 200px;">
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                    <div style="width: 16px; height: 16px; border-radius: 50%; background: ${user.color};"></div>
-                    <strong>${user.name}</strong>
-                    ${isCurrentUser ? '<span style="color: #10B981;">(You)</span>' : ''}
+            <div style="padding: 12px; min-width: 220px; font-family: system-ui, sans-serif;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 2px solid #1a1a1a;">
+                    <div style="width: 20px; height: 20px; background: ${user.color};"></div>
+                    <strong style="font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">${user.name}</strong>
+                    ${isCurrentUser ? '<span style="color: #10B981; font-size: 10px; font-weight: bold;">(YOU)</span>' : ''}
                 </div>
-                <div style="font-size: 13px; color: #666; line-height: 1.6;">
-                    <div>${flag} ${user.city}, ${user.country}</div>
+                <div style="font-size: 12px; color: #333; line-height: 1.8;">
+                    <div style="font-weight: 600;">${flag} ${user.city}, ${user.country}</div>
                     <div>🕐 ${localTime}</div>
                     <div>⏱️ Online: ${duration}</div>
                 </div>
@@ -304,14 +287,14 @@
         const time = new Date(pin.created_at * 1000).toLocaleString()
 
         return `
-            <div style="padding: 8px; min-width: 200px; max-width: 300px;">
-                <div style="font-size: 24px; margin-bottom: 8px;">${pin.emoji}</div>
-                ${pin.image_data ? `<img src="${pin.image_data}" onclick="window.openLightbox('${pin.image_data}')" style="width: 100%; max-height: 200px; object-fit: contain; background: #f3f4f6; border-radius: 8px; margin-bottom: 8px; cursor: pointer; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'" />` : ''}
-                ${pin.message ? `<p style="margin: 8px 0;">${pin.message}</p>` : ''}
-                <div style="font-size: 12px; color: #666;">
-                    <div style="display: flex; align-items: center; gap: 4px;">
-                        <div style="width: 12px; height: 12px; border-radius: 50%; background: ${pin.user_color};"></div>
-                        ${pin.user_name}
+            <div style="padding: 12px; min-width: 220px; max-width: 300px; font-family: system-ui, sans-serif;">
+                <div style="font-size: 28px; margin-bottom: 12px;">${pin.emoji}</div>
+                ${pin.image_data ? `<img src="${pin.image_data}" onclick="window.openLightbox('${pin.image_data}')" style="width: 100%; max-height: 200px; object-fit: contain; background: #f3f4f6; margin-bottom: 12px; cursor: pointer;" />` : ''}
+                ${pin.message ? `<p style="margin: 0 0 12px 0; font-size: 14px;">${pin.message}</p>` : ''}
+                <div style="font-size: 11px; color: #666; padding-top: 12px; border-top: 1px solid #ddd;">
+                    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                        <div style="width: 12px; height: 12px; background: ${pin.user_color};"></div>
+                        <span style="font-weight: 600;">${pin.user_name}</span>
                     </div>
                     <div>${flag} ${pin.city || 'Unknown'}</div>
                     <div>${time}</div>
@@ -379,7 +362,6 @@
 
     function handleChatMessage(data) {
         chatMessages = [...chatMessages, data]
-        // Auto-scroll chat to bottom
         setTimeout(() => {
             const chatContainer = document.getElementById('chat-messages')
             if (chatContainer) {
@@ -420,13 +402,11 @@
     }
 
     function processImageFile(file) {
-        // Check file size (max 3MB)
         if (file.size > 3 * 1024 * 1024) {
             alert('Image must be smaller than 3MB')
             return
         }
 
-        // Check file type
         if (!file.type.startsWith('image/')) {
             alert('Please select an image file')
             return
@@ -434,7 +414,6 @@
 
         const reader = new FileReader()
         reader.onload = (e) => {
-            // Only add to pin modal if it's currently open
             if (showPinModal) {
                 newPinImage = e.target.result
                 newPinImagePreview = e.target.result
@@ -498,32 +477,32 @@
     }
 </script>
 
-<div class="min-h-screen bg-gray-50 relative">
+<div class="min-h-screen bg-base-200 relative">
     <!-- Header -->
-    <div class="bg-white shadow-sm border-b border-gray-200">
-        <div class="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
+    <div class="bg-base-100 border-b-4 border-base-content relative z-20">
+        <div class="container mx-auto px-4 py-4">
             <div class="flex items-center justify-between flex-wrap gap-4">
                 <div>
-                    <h1 class="text-2xl font-bold text-gray-900">🌍 Live World</h1>
-                    <p class="text-sm text-gray-500">Real-time global presence map</p>
+                    <h1 class="text-xl md:text-2xl font-black uppercase tracking-tight">Live World</h1>
+                    <p class="text-xs font-bold uppercase tracking-wide opacity-60">Real-time global presence</p>
                 </div>
-                <div class="flex items-center gap-3 flex-wrap">
+                <div class="flex items-center gap-2">
                     <button
-                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
+                        class="px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content transition-colors cursor-pointer {showChat ? 'bg-base-content text-base-100' : 'hover:bg-base-content hover:text-base-100'}"
                         onclick={() => showChat = !showChat}
                     >
                         💬 Chat {chatMessages.length > 0 ? `(${chatMessages.length})` : ''}
                     </button>
                     <button
-                        class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium transition-colors"
+                        class="px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content transition-colors cursor-pointer {showStats ? 'bg-base-content text-base-100' : 'hover:bg-base-content hover:text-base-100'}"
                         onclick={() => showStats = !showStats}
                     >
                         📊 Stats
                     </button>
                     {#if currentUser.name}
-                        <div class="flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-lg">
-                            <div class="w-3 h-3 rounded-full" style="background: {currentUser.color}"></div>
-                            <span class="text-sm font-medium">{currentUser.name}</span>
+                        <div class="flex items-center gap-2 px-3 py-2 border-2 border-base-content">
+                            <div class="w-3 h-3" style="background: {currentUser.color}"></div>
+                            <span class="text-xs font-bold uppercase">{currentUser.name}</span>
                         </div>
                     {/if}
                 </div>
@@ -532,38 +511,38 @@
     </div>
 
     <!-- Map Container -->
-    <div class="relative" style="height: calc(100vh - 100px);">
+    <div class="relative" style="height: calc(100vh - 80px);">
         <div bind:this={mapElement} class="w-full h-full"></div>
 
         {#if !googleMapsApiKey}
-            <div class="absolute inset-0 flex items-center justify-center bg-gray-100">
-                <div class="text-center">
-                    <div class="text-6xl mb-4">🗺️</div>
-                    <h2 class="text-xl font-semibold text-gray-700 mb-2">Google Maps API Key Required</h2>
-                    <p class="text-gray-500">Please configure your Google Maps API key to use this feature.</p>
+            <div class="absolute inset-0 flex items-center justify-center bg-base-200">
+                <div class="bg-base-100 border-2 border-base-content p-8 text-center">
+                    <div class="text-5xl mb-4">🗺️</div>
+                    <h2 class="text-lg font-black uppercase tracking-wide mb-2">API Key Required</h2>
+                    <p class="text-xs opacity-60">Configure your Google Maps API key to use this feature.</p>
                 </div>
             </div>
         {/if}
 
         <!-- Stats Panel -->
         {#if showStats}
-            <div class="absolute top-4 left-4 bg-white rounded-lg shadow-lg p-4 max-w-xs z-10">
-                <h3 class="font-semibold mb-3 flex items-center justify-between">
-                    📊 Live Stats
-                    <button class="text-gray-400 hover:text-gray-600" onclick={() => showStats = false}>✕</button>
-                </h3>
-                <div class="space-y-2 text-sm">
+            <div class="absolute top-4 left-4 bg-base-100 border-2 border-base-content z-10 min-w-[200px]">
+                <div class="px-4 py-2 border-b-2 border-base-content bg-base-200 flex items-center justify-between">
+                    <span class="text-xs font-bold uppercase tracking-wide">Live Stats</span>
+                    <button class="text-xs opacity-50 hover:opacity-100 cursor-pointer" onclick={() => showStats = false}>✕</button>
+                </div>
+                <div class="p-4 space-y-3">
                     <div class="flex justify-between items-center">
-                        <span class="text-gray-600">👥 Users Online:</span>
-                        <span class="font-bold text-green-600">{stats.usersOnline}</span>
+                        <span class="text-xs font-bold uppercase tracking-wide opacity-60">Online</span>
+                        <span class="text-lg font-black text-success">{stats.usersOnline}</span>
                     </div>
                     <div class="flex justify-between items-center">
-                        <span class="text-gray-600">📍 Total Pins:</span>
-                        <span class="font-bold text-blue-600">{stats.totalPins}</span>
+                        <span class="text-xs font-bold uppercase tracking-wide opacity-60">Pins</span>
+                        <span class="text-lg font-black text-primary">{stats.totalPins}</span>
                     </div>
                     <div class="flex justify-between items-center">
-                        <span class="text-gray-600">🌍 Countries:</span>
-                        <span class="font-bold text-purple-600">{stats.countries.size}</span>
+                        <span class="text-xs font-bold uppercase tracking-wide opacity-60">Countries</span>
+                        <span class="text-lg font-black text-secondary">{stats.countries.size}</span>
                     </div>
                 </div>
             </div>
@@ -571,38 +550,38 @@
 
         <!-- Chat Panel -->
         {#if showChat}
-            <div class="absolute top-4 right-4 bg-white rounded-lg shadow-lg w-80 max-h-[500px] flex flex-col z-10">
-                <div class="p-4 border-b flex items-center justify-between">
-                    <h3 class="font-semibold">💬 Global Chat</h3>
-                    <button class="text-gray-400 hover:text-gray-600" onclick={() => showChat = false}>✕</button>
+            <div class="absolute top-4 right-4 bg-base-100 border-2 border-base-content w-80 max-h-[500px] flex flex-col z-10">
+                <div class="px-4 py-2 border-b-2 border-base-content bg-base-200 flex items-center justify-between">
+                    <span class="text-xs font-bold uppercase tracking-wide">Global Chat</span>
+                    <button class="text-xs opacity-50 hover:opacity-100 cursor-pointer" onclick={() => showChat = false}>✕</button>
                 </div>
                 <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-2 min-h-[200px] max-h-[300px]">
                     {#if chatMessages.length === 0}
-                        <p class="text-gray-400 text-sm text-center py-8">No messages yet. Start the conversation!</p>
+                        <p class="text-xs text-center py-8 opacity-40">No messages yet</p>
                     {/if}
                     {#each chatMessages as msg}
-                        <div class="bg-gray-50 rounded-lg p-2">
+                        <div class="border border-base-content/20 p-2">
                             <div class="flex items-center gap-2 mb-1">
-                                <div class="w-2 h-2 rounded-full" style="background: {msg.color}"></div>
-                                <span class="text-xs font-semibold">{msg.user_name}</span>
-                                <span class="text-xs text-gray-400">{new Date(msg.timestamp * 1000).toLocaleTimeString()}</span>
+                                <div class="w-2 h-2" style="background: {msg.color}"></div>
+                                <span class="text-[10px] font-bold uppercase">{msg.user_name}</span>
+                                <span class="text-[10px] opacity-40">{new Date(msg.timestamp * 1000).toLocaleTimeString()}</span>
                             </div>
-                            <p class="text-sm">{msg.message}</p>
+                            <p class="text-xs">{msg.message}</p>
                         </div>
                     {/each}
                 </div>
-                <form onsubmit={(e) => { e.preventDefault(); sendChatMessage(); }} class="p-4 border-t">
+                <form onsubmit={(e) => { e.preventDefault(); sendChatMessage(); }} class="p-3 border-t-2 border-base-content">
                     <div class="flex gap-2">
                         <input
                             type="text"
                             bind:value={newChatMessage}
                             placeholder="Type a message..."
-                            class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                            class="flex-1 px-3 py-2 text-xs border-2 border-base-content bg-base-100 focus:border-primary focus:outline-none"
                             maxlength="200"
                         />
                         <button
                             type="submit"
-                            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                            class="px-4 py-2 text-xs font-bold uppercase bg-base-content text-base-100 cursor-pointer"
                         >
                             Send
                         </button>
@@ -611,82 +590,85 @@
             </div>
         {/if}
 
-        <!-- Instructions (moved to bottom left) -->
-        <div class="absolute bottom-4 left-4 bg-white rounded-lg shadow-lg p-4 max-w-sm z-10">
-            <h3 class="font-semibold mb-2">How to use:</h3>
-            <ul class="text-sm space-y-1 text-gray-600">
-                <li>👆 <strong>Click</strong> on the map to drop a pin</li>
-                <li>🔴 <strong>Colored dots</strong> are online users</li>
-                <li>🖱️ <strong>Hover</strong> to see live cursors</li>
-                <li>💬 <strong>Chat</strong> with everyone in real-time</li>
-                <li>📊 <strong>Stats</strong> show live activity</li>
+        <!-- Instructions -->
+        <div class="absolute bottom-4 left-4 bg-base-100 border-2 border-base-content p-4 max-w-xs z-10">
+            <div class="text-xs font-bold uppercase tracking-wide mb-2 opacity-60">How to use</div>
+            <ul class="text-xs space-y-1 opacity-80">
+                <li>👆 Click map to drop a pin</li>
+                <li>🔴 Colored dots = online users</li>
+                <li>🖱️ Hover to see live cursors</li>
+                <li>💬 Chat with everyone in real-time</li>
             </ul>
         </div>
     </div>
 
     <!-- Pin Modal -->
     {#if showPinModal}
-        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onclick={() => showPinModal = false}>
-            <div class="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4" onclick={(e) => e.stopPropagation()}>
-                <h3 class="text-lg font-semibold mb-4">Drop a Pin 📍</h3>
+        <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onclick={() => showPinModal = false}>
+            <div class="bg-base-100 border-2 border-base-content max-w-md w-full" onclick={(e) => e.stopPropagation()}>
+                <div class="px-4 py-3 border-b-2 border-base-content bg-base-200">
+                    <h3 class="text-sm font-bold uppercase tracking-wide">Drop a Pin</h3>
+                </div>
+                
+                <div class="p-4 space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wide opacity-60 mb-2">Emoji</label>
+                        <div class="flex gap-2 flex-wrap">
+                            {#each emojis as emoji}
+                                <button
+                                    class="text-2xl p-2 border-2 transition-colors cursor-pointer {newPinEmoji === emoji ? 'border-base-content bg-base-200' : 'border-transparent hover:border-base-content/30'}"
+                                    onclick={() => newPinEmoji = emoji}
+                                >
+                                    {emoji}
+                                </button>
+                            {/each}
+                        </div>
+                    </div>
 
-                <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Choose an emoji</label>
-                    <div class="flex gap-2 flex-wrap">
-                        {#each emojis as emoji}
-                            <button
-                                class="text-2xl p-2 rounded hover:bg-gray-100 {newPinEmoji === emoji ? 'bg-blue-100 ring-2 ring-blue-500' : ''}"
-                                onclick={() => newPinEmoji = emoji}
-                            >
-                                {emoji}
-                            </button>
-                        {/each}
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wide opacity-60 mb-2">Message (optional)</label>
+                        <textarea
+                            bind:value={newPinMessage}
+                            class="w-full px-3 py-2 text-sm border-2 border-base-content bg-base-100 focus:border-primary focus:outline-none"
+                            rows="3"
+                            placeholder="Leave a message..."
+                            maxlength="200"
+                        ></textarea>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wide opacity-60 mb-2">Photo (optional, max 3MB)</label>
+                        {#if newPinImagePreview}
+                            <div class="relative">
+                                <img src={newPinImagePreview} alt="Preview" class="w-full h-40 object-contain bg-base-200 border-2 border-base-content" />
+                                <button
+                                    class="absolute top-2 right-2 w-8 h-8 bg-error text-error-content font-bold cursor-pointer"
+                                    onclick={removeImage}
+                                    type="button"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                        {:else}
+                            <input
+                                type="file"
+                                accept="image/*"
+                                onchange={handleImageSelect}
+                                class="w-full px-3 py-2 text-xs border-2 border-base-content bg-base-100"
+                            />
+                        {/if}
                     </div>
                 </div>
 
-                <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Message (optional)</label>
-                    <textarea
-                        bind:value={newPinMessage}
-                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        rows="3"
-                        placeholder="Leave a message..."
-                        maxlength="200"
-                    ></textarea>
-                </div>
-
-                <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Photo (optional, max 3MB)</label>
-                    {#if newPinImagePreview}
-                        <div class="relative">
-                            <img src={newPinImagePreview} alt="Preview" class="w-full h-40 object-contain bg-gray-100 rounded-lg" />
-                            <button
-                                class="absolute top-2 right-2 bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-red-600"
-                                onclick={removeImage}
-                                type="button"
-                            >
-                                ✕
-                            </button>
-                        </div>
-                    {:else}
-                        <input
-                            type="file"
-                            accept="image/*"
-                            onchange={handleImageSelect}
-                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                        />
-                    {/if}
-                </div>
-
-                <div class="flex gap-3">
+                <div class="flex gap-2 p-4 border-t-2 border-base-content">
                     <button
-                        class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                        class="flex-1 px-4 py-3 text-xs font-bold uppercase tracking-wide bg-base-content text-base-100 cursor-pointer"
                         onclick={dropPin}
                     >
                         Drop Pin
                     </button>
                     <button
-                        class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                        class="px-4 py-3 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-200 cursor-pointer"
                         onclick={() => showPinModal = false}
                     >
                         Cancel
@@ -699,13 +681,13 @@
     <!-- Image Lightbox -->
     {#if lightboxImage}
         <div
-            class="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-[9999] p-4"
+            class="fixed inset-0 bg-black/90 flex items-center justify-center z-[9999] p-4"
             onclick={closeLightbox}
             role="dialog"
             aria-modal="true"
         >
             <button
-                class="absolute top-4 right-4 text-white text-4xl hover:text-gray-300 z-10"
+                class="absolute top-4 right-4 w-12 h-12 bg-base-100 text-base-content text-2xl font-bold hover:bg-base-200 cursor-pointer"
                 onclick={closeLightbox}
                 aria-label="Close"
             >

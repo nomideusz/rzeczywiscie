@@ -19,11 +19,11 @@
     ];
 
     const brushSizes = [
-        { size: 1, label: 'Thin' },
-        { size: 3, label: 'Normal' },
-        { size: 6, label: 'Medium' },
-        { size: 10, label: 'Thick' },
-        { size: 15, label: 'Extra' }
+        { size: 1, label: 'XS' },
+        { size: 3, label: 'S' },
+        { size: 6, label: 'M' },
+        { size: 10, label: 'L' },
+        { size: 15, label: 'XL' }
     ];
 
     onMount(() => {
@@ -31,33 +31,27 @@
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
 
-        // Listen for loading existing strokes
         window.addEventListener('phx:load_strokes', (e) => {
             loadStrokes(e.detail.strokes);
         });
 
-        // Listen for drawing events from other users
         window.addEventListener('phx:draw_stroke', (e) => {
             drawStroke(e.detail);
         });
 
-        // Listen for clear canvas events
         window.addEventListener('phx:clear_canvas', () => {
             clearCanvas();
         });
 
-        // Listen for cursor updates from other users
         window.addEventListener('phx:cursor_move', (e) => {
             updateCursor(e.detail);
         });
 
-        // Listen for cursor removal
         window.addEventListener('phx:cursor_remove', (e) => {
             delete cursors[e.detail.user_id];
             cursors = cursors;
         });
 
-        // Request existing strokes from server now that we're ready
         live.pushEvent('request_strokes', {});
     });
 
@@ -67,7 +61,6 @@
         ctx.beginPath();
         ctx.moveTo(pos.x, pos.y);
 
-        // Send starting position to server
         live.pushEvent('draw_stroke', {
             x: pos.x,
             y: pos.y,
@@ -82,13 +75,11 @@
 
         const pos = getMousePos(e);
 
-        // Draw locally
         ctx.strokeStyle = currentColor;
         ctx.lineWidth = brushSize;
         ctx.lineTo(pos.x, pos.y);
         ctx.stroke();
 
-        // Broadcast to other users
         live.pushEvent('draw_stroke', {
             x: pos.x,
             y: pos.y,
@@ -103,7 +94,6 @@
             isDrawing = false;
             ctx.beginPath();
 
-            // Signal end of stroke
             live.pushEvent('draw_stroke', {
                 type: 'end'
             });
@@ -131,10 +121,8 @@
     }
 
     function loadStrokes(strokes) {
-        // Replay all strokes from server state
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Strokes are stored newest first, so reverse to get chronological order
         const chronological = [...strokes].reverse();
 
         chronological.forEach(stroke => {
@@ -144,7 +132,6 @@
 
     function drawStroke(data) {
         if (data.type === 'start') {
-            // Start a new path
             ctx.beginPath();
             ctx.strokeStyle = data.color;
             ctx.lineWidth = data.size;
@@ -153,12 +140,10 @@
         }
 
         if (data.type === 'end') {
-            // End current path
             ctx.beginPath();
             return;
         }
 
-        // Draw stroke
         ctx.strokeStyle = data.color;
         ctx.lineWidth = data.size;
         ctx.lineTo(data.x, data.y);
@@ -166,8 +151,10 @@
     }
 
     function handleClearCanvas() {
-        clearCanvas();
-        live.pushEvent('clear_canvas', {});
+        if (confirm('Clear the entire canvas? This cannot be undone.')) {
+            clearCanvas();
+            live.pushEvent('clear_canvas', {});
+        }
     }
 
     function clearCanvas() {
@@ -192,85 +179,97 @@
     }
 </script>
 
-<div class="flex flex-col items-center gap-4 p-4 bg-base-200 min-h-screen">
-    <div class="text-center">
-        <h1 class="text-4xl font-bold mb-2">🎨 Collaborative Drawing Board</h1>
-        <p class="text-base-content/70">Draw together in real-time!</p>
-    </div>
+<div class="min-h-screen bg-base-200">
+    <!-- Header -->
+    <div class="bg-base-100 border-b-4 border-base-content">
+        <div class="container mx-auto px-4 py-4">
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div>
+                    <h1 class="text-xl md:text-2xl font-black uppercase tracking-tight">Drawing Board</h1>
+                    <p class="text-xs font-bold uppercase tracking-wide opacity-60">Collaborative real-time canvas</p>
+                </div>
 
-    <!-- Toolbar -->
-    <div class="flex flex-wrap gap-4 items-center justify-center bg-base-100 p-4 rounded-lg shadow-lg">
-        <!-- Color Picker -->
-        <div class="flex gap-2 items-center">
-            <span class="font-semibold">Color:</span>
-            <div class="flex gap-1">
-                {#each colors as color}
-                    <button
-                        class="w-8 h-8 rounded border-2 transition-all hover:scale-110"
-                        class:border-primary={currentColor === color}
-                        class:border-base-300={currentColor !== color}
-                        style="background-color: {color}"
-                        onclick={() => currentColor = color}
-                    ></button>
-                {/each}
-            </div>
-        </div>
+                <!-- Toolbar -->
+                <div class="flex flex-wrap items-center gap-3">
+                    <!-- Color Picker -->
+                    <div class="flex items-center gap-2">
+                        <span class="text-[10px] font-bold uppercase tracking-wide opacity-50 hidden sm:inline">Color:</span>
+                        <div class="flex border-2 border-base-content">
+                            {#each colors as color}
+                                <button
+                                    class="w-6 h-6 sm:w-7 sm:h-7 transition-all cursor-pointer {currentColor === color ? 'ring-2 ring-offset-1 ring-base-content scale-110 z-10' : ''}"
+                                    style="background-color: {color}; {color === '#FFFFFF' ? 'border-right: 1px solid rgba(0,0,0,0.1);' : ''}"
+                                    onclick={() => currentColor = color}
+                                ></button>
+                            {/each}
+                        </div>
+                    </div>
 
-        <!-- Brush Size -->
-        <div class="flex gap-2 items-center">
-            <span class="font-semibold">Brush:</span>
-            <div class="flex gap-1">
-                {#each brushSizes as brush}
-                    <button
-                        class="btn btn-sm"
-                        class:btn-primary={brushSize === brush.size}
-                        class:btn-ghost={brushSize !== brush.size}
-                        onclick={() => brushSize = brush.size}
+                    <!-- Brush Size -->
+                    <div class="flex items-center gap-2">
+                        <span class="text-[10px] font-bold uppercase tracking-wide opacity-50 hidden sm:inline">Size:</span>
+                        <div class="flex border-2 border-base-content">
+                            {#each brushSizes as brush}
+                                <button
+                                    class="px-2 sm:px-3 py-1 text-xs font-bold transition-colors cursor-pointer {brushSize === brush.size ? 'bg-base-content text-base-100' : 'hover:bg-base-200'}"
+                                    onclick={() => brushSize = brush.size}
+                                >
+                                    {brush.label}
+                                </button>
+                            {/each}
+                        </div>
+                    </div>
+
+                    <!-- Clear Button -->
+                    <button 
+                        class="px-3 py-1 text-xs font-bold uppercase tracking-wide border-2 border-error text-error hover:bg-error hover:text-error-content transition-colors cursor-pointer"
+                        onclick={handleClearCanvas}
                     >
-                        {brush.label}
+                        Clear
                     </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Canvas Area -->
+    <div class="container mx-auto px-4 py-6">
+        <div class="bg-base-100 border-2 border-base-content p-2 inline-block">
+            <div class="relative">
+                <canvas
+                    bind:this={canvas}
+                    width={canvasWidth}
+                    height={canvasHeight}
+                    class="bg-white cursor-crosshair max-w-full"
+                    style="max-height: calc(100vh - 200px); width: auto; height: auto;"
+                    onmousedown={startDrawing}
+                    onmousemove={(e) => { handleMouseMove(e); draw(e); }}
+                    onmouseup={stopDrawing}
+                    onmouseleave={stopDrawing}
+                    ontouchstart={startDrawing}
+                    ontouchmove={draw}
+                    ontouchend={stopDrawing}
+                ></canvas>
+
+                <!-- Other users' cursors -->
+                {#each Object.entries(cursors) as [userId, cursor]}
+                    <div
+                        class="absolute w-3 h-3 rounded-full pointer-events-none transition-all duration-75 border-2 border-white"
+                        style="
+                            left: {(cursor.x / canvasWidth) * 100}%;
+                            top: {(cursor.y / canvasHeight) * 100}%;
+                            background-color: {cursor.color};
+                            transform: translate(-50%, -50%);
+                            box-shadow: 0 0 8px {cursor.color};
+                        "
+                    ></div>
                 {/each}
             </div>
         </div>
 
-        <!-- Clear Button -->
-        <button class="btn btn-error btn-sm" onclick={handleClearCanvas}>
-            Clear Canvas
-        </button>
-    </div>
-
-    <!-- Canvas Container -->
-    <div class="relative bg-white rounded-lg shadow-2xl">
-        <canvas
-            bind:this={canvas}
-            width={canvasWidth}
-            height={canvasHeight}
-            class="border-4 border-base-300 rounded-lg cursor-crosshair"
-            onmousedown={startDrawing}
-            onmousemove={(e) => { handleMouseMove(e); draw(e); }}
-            onmouseup={stopDrawing}
-            onmouseleave={stopDrawing}
-            ontouchstart={startDrawing}
-            ontouchmove={draw}
-            ontouchend={stopDrawing}
-        ></canvas>
-
-        <!-- Other users' cursors -->
-        {#each Object.entries(cursors) as [userId, cursor]}
-            <div
-                class="absolute w-4 h-4 rounded-full pointer-events-none transition-all duration-75"
-                style="
-                    left: {(cursor.x / canvasWidth) * 100}%;
-                    top: {(cursor.y / canvasHeight) * 100}%;
-                    background-color: {cursor.color};
-                    transform: translate(-50%, -50%);
-                    box-shadow: 0 0 10px {cursor.color};
-                "
-            ></div>
-        {/each}
-    </div>
-
-    <div class="text-sm text-base-content/60">
-        Tip: Open this page in multiple browser windows to see real-time collaboration!
+        <!-- Tip -->
+        <div class="mt-4 text-[10px] font-bold uppercase tracking-wide opacity-40">
+            Tip: Open in multiple windows to collaborate in real-time
+        </div>
     </div>
 </div>
