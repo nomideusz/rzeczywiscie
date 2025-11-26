@@ -198,29 +198,44 @@
 
     ctx.stroke()
 
-    // Draw pixels with 1px inset to show grid border on all sides
-    const inset = Math.max(1, Math.round(effectivePixelSize * 0.08))
-    const pixelDrawSize = Math.max(1, effectivePixelSize - inset * 2)
-    
+    // Draw pixels - align exactly to grid cells with 1px inset
     pixels.forEach(pixel => {
+      // Calculate exact grid cell boundaries
+      const cellLeft = Math.round(pixel.x * effectivePixelSize)
+      const cellTop = Math.round(pixel.y * effectivePixelSize)
+      const cellRight = Math.round((pixel.x + 1) * effectivePixelSize)
+      const cellBottom = Math.round((pixel.y + 1) * effectivePixelSize)
+
+      const cellWidth = cellRight - cellLeft
+      const cellHeight = cellBottom - cellTop
+
+      // Draw with 1px inset from cell boundaries
       ctx.fillStyle = pixel.color
       ctx.fillRect(
-        pixel.x * effectivePixelSize + inset,
-        pixel.y * effectivePixelSize + inset,
-        pixelDrawSize,
-        pixelDrawSize
+        cellLeft + 1,
+        cellTop + 1,
+        cellWidth - 2,
+        cellHeight - 2
       )
     })
 
-    // Preview hovered pixel with same inset
+    // Preview hovered pixel with same alignment
     if (hoveredPixel && canPlace && !isPanning) {
+      const cellLeft = Math.round(hoveredPixel.x * effectivePixelSize)
+      const cellTop = Math.round(hoveredPixel.y * effectivePixelSize)
+      const cellRight = Math.round((hoveredPixel.x + 1) * effectivePixelSize)
+      const cellBottom = Math.round((hoveredPixel.y + 1) * effectivePixelSize)
+
+      const cellWidth = cellRight - cellLeft
+      const cellHeight = cellBottom - cellTop
+
       ctx.globalAlpha = 0.5
       ctx.fillStyle = selectedColor
       ctx.fillRect(
-        hoveredPixel.x * effectivePixelSize + inset,
-        hoveredPixel.y * effectivePixelSize + inset,
-        pixelDrawSize,
-        pixelDrawSize
+        cellLeft + 1,
+        cellTop + 1,
+        cellWidth - 2,
+        cellHeight - 2
       )
       ctx.globalAlpha = 1.0
     }
