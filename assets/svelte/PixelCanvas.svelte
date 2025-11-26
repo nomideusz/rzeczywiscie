@@ -336,7 +336,7 @@
   }
 </script>
 
-<svelte:window on:keydown={handleKeyDown} on:mouseup={handleMouseUp} on:click={handleClickOutside} />
+<svelte:window onkeydown={handleKeyDown} onmouseup={handleMouseUp} onclick={handleClickOutside} />
 
 <!-- Main container -->
 <div class="container mx-auto px-4 py-4 bg-base-200">
@@ -435,14 +435,14 @@
         <canvas
           use:initCanvas
           class="bg-white block {isPanning ? 'cursor-grabbing' : 'cursor-crosshair'}"
-          on:mousedown={handleMouseDown}
-          on:click={handleClick}
-          on:mousemove={handleMove}
-          on:mouseleave={handleLeave}
-          on:touchstart={handleTouchStart}
-          on:touchmove={handleTouchMove}
-          on:touchend={handleTouchEnd}
-          on:contextmenu|preventDefault
+          onmousedown={handleMouseDown}
+          onclick={handleClick}
+          onmousemove={handleMove}
+          onmouseleave={handleLeave}
+          ontouchstart={handleTouchStart}
+          ontouchmove={handleTouchMove}
+          ontouchend={handleTouchEnd}
+          oncontextmenu={(e) => e.preventDefault()}
         ></canvas>
       </div>
     </div>
