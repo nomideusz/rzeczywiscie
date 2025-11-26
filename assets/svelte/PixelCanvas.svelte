@@ -168,8 +168,9 @@
     if (!ctx) return
 
     const effectivePixelSize = pixelSize * zoom
-    const actualWidth = width * effectivePixelSize
-    const actualHeight = height * effectivePixelSize
+    const cellSize = Math.round(effectivePixelSize)
+    const actualWidth = width * cellSize
+    const actualHeight = height * cellSize
 
     if (canvasElement.width !== actualWidth || canvasElement.height !== actualHeight) {
       canvasElement.width = actualWidth
@@ -179,63 +180,45 @@
     ctx.fillStyle = '#FFFFFF'
     ctx.fillRect(0, 0, actualWidth, actualHeight)
 
-    // Draw grid - use single path for better performance and appearance
+    // Draw grid - use uniform cell size to prevent wide/tall pixels
     ctx.strokeStyle = 'rgba(0, 0, 0, 0.06)'
     ctx.lineWidth = 1
     ctx.beginPath()
 
     for (let x = 0; x <= width; x++) {
-      const px = Math.round(x * effectivePixelSize) + 0.5
+      const px = x * cellSize + 0.5
       ctx.moveTo(px, 0)
-      ctx.lineTo(px, actualHeight)
+      ctx.lineTo(px, height * cellSize)
     }
 
     for (let y = 0; y <= height; y++) {
-      const py = Math.round(y * effectivePixelSize) + 0.5
+      const py = y * cellSize + 0.5
       ctx.moveTo(0, py)
-      ctx.lineTo(actualWidth, py)
+      ctx.lineTo(width * cellSize, py)
     }
 
     ctx.stroke()
 
-    // Draw pixels - align exactly to grid cells with 1px inset
+    // Draw pixels - use uniform cell size for consistent appearance
     pixels.forEach(pixel => {
-      // Calculate exact grid cell boundaries
-      const cellLeft = Math.round(pixel.x * effectivePixelSize)
-      const cellTop = Math.round(pixel.y * effectivePixelSize)
-      const cellRight = Math.round((pixel.x + 1) * effectivePixelSize)
-      const cellBottom = Math.round((pixel.y + 1) * effectivePixelSize)
-
-      const cellWidth = cellRight - cellLeft
-      const cellHeight = cellBottom - cellTop
-
-      // Draw with 1px inset from cell boundaries
       ctx.fillStyle = pixel.color
       ctx.fillRect(
-        cellLeft + 1,
-        cellTop + 1,
-        cellWidth - 2,
-        cellHeight - 2
+        pixel.x * cellSize + 1,
+        pixel.y * cellSize + 1,
+        cellSize - 2,
+        cellSize - 2
       )
     })
 
-    // Preview hovered pixel with same alignment
+    // Preview hovered pixel with same uniform size
     if (hoveredPixel && canPlace && !isPanning) {
-      const cellLeft = Math.round(hoveredPixel.x * effectivePixelSize)
-      const cellTop = Math.round(hoveredPixel.y * effectivePixelSize)
-      const cellRight = Math.round((hoveredPixel.x + 1) * effectivePixelSize)
-      const cellBottom = Math.round((hoveredPixel.y + 1) * effectivePixelSize)
-
-      const cellWidth = cellRight - cellLeft
-      const cellHeight = cellBottom - cellTop
-
       ctx.globalAlpha = 0.5
       ctx.fillStyle = selectedColor
       ctx.fillRect(
-        cellLeft + 1,
-        cellTop + 1,
-        cellWidth - 2,
-        cellHeight - 2
+        hoveredPixel.x * cellSize + 1,
+        hoveredPixel.y * cellSize + 1,
+        cellSize - 2,
+        cellSize - 2
       )
       ctx.globalAlpha = 1.0
     }
@@ -243,9 +226,9 @@
 
   function getCoords(clientX, clientY) {
     const rect = canvasElement.getBoundingClientRect()
-    const effectivePixelSize = pixelSize * zoom
-    const x = Math.floor((clientX - rect.left) / effectivePixelSize)
-    const y = Math.floor((clientY - rect.top) / effectivePixelSize)
+    const cellSize = Math.round(pixelSize * zoom)
+    const x = Math.floor((clientX - rect.left) / cellSize)
+    const y = Math.floor((clientY - rect.top) / cellSize)
     return { x, y }
   }
 
@@ -491,7 +474,7 @@
         {#each cursors as cursor (cursor.id)}
           <div
             class="absolute pointer-events-none transition-all duration-100"
-            style="left: {cursor.x * pixelSize * zoom}px; top: {cursor.y * pixelSize * zoom}px;"
+            style="left: {cursor.x * Math.round(pixelSize * zoom)}px; top: {cursor.y * Math.round(pixelSize * zoom)}px;"
           >
             <div
               class="w-2 h-2 rounded-full border border-white shadow"
