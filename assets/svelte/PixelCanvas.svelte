@@ -178,15 +178,18 @@
       ctx.stroke()
     }
 
-    // Draw pixels with 1px inset to show grid border
-    const inset = 1
+    // Draw pixels with 1px inset to show grid border on all sides
+    // Inset from top-left, shrink size to leave gap at bottom-right
+    const inset = Math.max(1, Math.floor(effectivePixelSize * 0.1))
+    const pixelDrawSize = Math.max(1, effectivePixelSize - inset * 2)
+    
     pixels.forEach(pixel => {
       ctx.fillStyle = pixel.color
       ctx.fillRect(
         pixel.x * effectivePixelSize + inset,
         pixel.y * effectivePixelSize + inset,
-        effectivePixelSize - inset * 2,
-        effectivePixelSize - inset * 2
+        pixelDrawSize,
+        pixelDrawSize
       )
     })
 
@@ -197,8 +200,8 @@
       ctx.fillRect(
         hoveredPixel.x * effectivePixelSize + inset,
         hoveredPixel.y * effectivePixelSize + inset,
-        effectivePixelSize - inset * 2,
-        effectivePixelSize - inset * 2
+        pixelDrawSize,
+        pixelDrawSize
       )
       ctx.globalAlpha = 1.0
     }
