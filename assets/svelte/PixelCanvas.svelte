@@ -292,15 +292,15 @@
 
 <svelte:window onkeydown={handleKeyDown} onmouseup={handleMouseUp} />
 
-<div class="flex flex-col bg-base-200" style="height: calc(100vh - 10rem);">
-  <!-- Canvas fills available space -->
+<div class="flex flex-col bg-base-200 overflow-hidden" style="height: calc(100vh - 8rem);">
+  <!-- Canvas area - no page scroll needed -->
   <div 
-    class="flex-1 overflow-hidden bg-neutral-100 relative"
+    class="flex-1 min-h-0 overflow-auto bg-neutral-100 relative"
+    style="scrollbar-width: thin;"
     use:initWrapper
   >
-    <div class="absolute inset-0 overflow-auto flex items-center justify-center" style="scrollbar-width: thin;">
-      <div class="p-4">
-        <canvas
+    <div class="inline-block p-4">
+      <canvas
           use:initCanvas
           class="bg-white shadow-lg {isPanning ? 'cursor-grabbing' : 'cursor-crosshair'}"
           onmousedown={handleMouseDown}
@@ -311,8 +311,7 @@
           ontouchmove={handleTouchMove}
           ontouchend={handleTouchEnd}
           oncontextmenu={(e) => e.preventDefault()}
-        ></canvas>
-      </div>
+      ></canvas>
     </div>
 
     <!-- Live Cursors -->
