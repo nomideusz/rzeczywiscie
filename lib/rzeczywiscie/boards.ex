@@ -144,6 +144,32 @@ defmodule Rzeczywiscie.Boards do
     cards
   end
 
+  @doc """
+  Reorder a card within or across columns, placing it before another card.
+  """
+  def reorder_card(board_id, card_id, to_column, before_card_id) do
+    card = Repo.get_by!(KanbanCard, kanban_board_id: board_id, card_id: card_id)
+    target_card = Repo.get_by!(KanbanCard, kanban_board_id: board_id, card_id: before_card_id)
+
+    # Get the target position
+    target_position = target_card.position
+
+    # Shift all cards in the target column that are at or after the target position
+    from(c in KanbanCard,
+      where: c.kanban_board_id == ^board_id and c.column == ^to_column and c.position >= ^target_position and c.card_id != ^card_id
+    )
+    |> Repo.update_all(inc: [position: 1])
+
+    # Update the card's column and position
+    card
+    |> KanbanCard.changeset(%{column: to_column, position: target_position})
+    |> Repo.update()
+
+    cards = get_cards(board_id)
+    broadcast_cards_update(cards)
+    cards
+  end
+
   # Private functions
 
   defp create_card(board_id, card_attrs) do

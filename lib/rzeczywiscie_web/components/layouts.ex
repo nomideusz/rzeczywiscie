@@ -196,6 +196,14 @@ defmodule RzeczywiscieWeb.Layouts do
                   Real Estate Scraper
                 </a>
               </li>
+              <li>
+                <a
+                  href={~p"/pixels"}
+                  class="text-sm font-bold hover:underline hover:underline-offset-4 decoration-2 decoration-warning"
+                >
+                  Pixel Canvas
+                </a>
+              </li>
             </ul>
           </div>
           <!-- Tech Column -->

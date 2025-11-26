@@ -107,6 +107,13 @@ defmodule RzeczywiscieWeb.KanbanBoardLive do
     {:noreply, assign(socket, :cards, cards)}
   end
 
+  def handle_event("reorder_card", %{"card_id" => card_id, "to_column" => to_column, "before_card_id" => before_card_id}, socket) do
+    # Reorder card in database and broadcast
+    cards = Boards.reorder_card(socket.assigns.board_id, card_id, to_column, before_card_id)
+
+    {:noreply, assign(socket, :cards, cards)}
+  end
+
   # Handle incoming PubSub messages from Boards context
   def handle_info({:cards_updated, cards}, socket) do
     {:noreply,

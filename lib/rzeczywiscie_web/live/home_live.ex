@@ -46,32 +46,41 @@ defmodule RzeczywiscieWeb.HomeLive do
             </div>
 
             <!-- CTAs - brutal buttons -->
-            <div class="flex flex-col sm:flex-row gap-3 sm:gap-4">
+            <div class="flex flex-wrap gap-3">
               <a
                 href={~p"/draw"}
-                class="group relative px-6 sm:px-8 py-3 sm:py-4 bg-primary text-primary-content font-bold text-base sm:text-lg tracking-wide uppercase border-4 border-base-content hover:translate-x-1 hover:translate-y-1 transition-transform text-center"
+                class="group relative px-4 sm:px-6 py-3 sm:py-4 bg-primary text-primary-content font-bold text-sm sm:text-base tracking-wide uppercase border-4 border-base-content hover:translate-x-1 hover:translate-y-1 transition-transform text-center"
               >
                 <span class="relative z-10">Draw</span>
                 <div class="absolute inset-0 bg-base-content translate-x-1 translate-y-1 -z-10"></div>
               </a>
               <a
                 href={~p"/kanban"}
-                class="group relative px-6 sm:px-8 py-3 sm:py-4 bg-secondary text-secondary-content font-bold text-base sm:text-lg tracking-wide uppercase border-4 border-base-content hover:translate-x-1 hover:translate-y-1 transition-transform text-center"
+                class="group relative px-4 sm:px-6 py-3 sm:py-4 bg-secondary text-secondary-content font-bold text-sm sm:text-base tracking-wide uppercase border-4 border-base-content hover:translate-x-1 hover:translate-y-1 transition-transform text-center"
               >
                 <span class="relative z-10">Kanban</span>
                 <div class="absolute inset-0 bg-base-content translate-x-1 translate-y-1 -z-10"></div>
               </a>
               <a
                 href={~p"/world"}
-                class="group relative px-6 sm:px-8 py-3 sm:py-4 bg-accent text-accent-content font-bold text-base sm:text-lg tracking-wide uppercase border-4 border-base-content hover:translate-x-1 hover:translate-y-1 transition-transform text-center"
+                class="group relative px-4 sm:px-6 py-3 sm:py-4 bg-accent text-accent-content font-bold text-sm sm:text-base tracking-wide uppercase border-4 border-base-content hover:translate-x-1 hover:translate-y-1 transition-transform text-center"
               >
-                🌍 World
+                <span class="relative z-10">🌍 World</span>
+                <div class="absolute inset-0 bg-base-content translate-x-1 translate-y-1 -z-10"></div>
               </a>
               <a
                 href={~p"/real-estate"}
-                class="group relative px-6 sm:px-8 py-3 sm:py-4 bg-success text-success-content font-bold text-base sm:text-lg tracking-wide uppercase border-4 border-base-content hover:translate-x-1 hover:translate-y-1 transition-transform text-center"
+                class="group relative px-4 sm:px-6 py-3 sm:py-4 bg-success text-success-content font-bold text-sm sm:text-base tracking-wide uppercase border-4 border-base-content hover:translate-x-1 hover:translate-y-1 transition-transform text-center"
               >
-                🏠 Properties
+                <span class="relative z-10">🏠 Properties</span>
+                <div class="absolute inset-0 bg-base-content translate-x-1 translate-y-1 -z-10"></div>
+              </a>
+              <a
+                href={~p"/pixels"}
+                class="group relative px-4 sm:px-6 py-3 sm:py-4 bg-warning text-warning-content font-bold text-sm sm:text-base tracking-wide uppercase border-4 border-base-content hover:translate-x-1 hover:translate-y-1 transition-transform text-center"
+              >
+                <span class="relative z-10">🎨 Pixels</span>
+                <div class="absolute inset-0 bg-base-content translate-x-1 translate-y-1 -z-10"></div>
               </a>
             </div>
           </div>
@@ -368,6 +377,64 @@ defmodule RzeczywiscieWeb.HomeLive do
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        <!-- Pixel Canvas Card - Brutalist -->
+        <div class="group relative border-4 border-base-content bg-base-100 p-8 hover:translate-x-1 hover:translate-y-1 transition-transform">
+          <!-- Accent bar -->
+          <div class="absolute top-0 left-0 w-2 h-full bg-warning"></div>
+
+          <!-- Number badge -->
+          <div class="absolute top-4 right-4 w-12 h-12 border-2 border-base-content flex items-center justify-center font-black text-xl">
+            05
+          </div>
+
+          <div class="pr-16">
+            <!-- Icon - geometric -->
+            <div class="w-20 h-20 border-4 border-warning mb-6 flex items-center justify-center">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                class="h-10 w-10"
+                stroke="currentColor"
+                stroke-width="2.5"
+              >
+                <path
+                  stroke-linecap="square"
+                  stroke-linejoin="miter"
+                  d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"
+                />
+              </svg>
+            </div>
+
+            <h3 class="text-4xl font-black mb-4 tracking-tight uppercase">
+              Pixel<br />Canvas
+            </h3>
+
+            <p class="text-base opacity-70 mb-6 leading-relaxed">
+              Collaborative pixel art canvas. Create pixel art together in real-time with a grid-based drawing tool.
+            </p>
+
+            <!-- Tags - raw style -->
+            <div class="flex flex-wrap gap-2 mb-8">
+              <span class="px-3 py-1 text-xs uppercase tracking-wider bg-warning text-warning-content font-bold">
+                Pixel Art
+              </span>
+              <span class="px-3 py-1 text-xs uppercase tracking-wider border-2 border-base-content font-bold">
+                Grid-Based
+              </span>
+              <span class="px-3 py-1 text-xs uppercase tracking-wider bg-base-content text-base-100 font-bold">
+                Creative
+              </span>
+            </div>
+
+            <a
+              href={~p"/pixels"}
+              class="inline-block px-6 py-3 bg-warning text-warning-content font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors"
+            >
+              Launch →
+            </a>
           </div>
         </div>
         </div>
