@@ -19,7 +19,7 @@
   let canvasElement
   let ctx
   let lastCursorSend = 0
-  let zoom = 1.2
+  let zoom = 1
   let isMobile = false
   const CURSOR_THROTTLE_MS = 250
 
@@ -200,37 +200,57 @@
 
 <div class="py-4 bg-base-200">
   <div class="container mx-auto px-4">
-    <!-- Toolbar: colors + stats + zoom -->
-    <div class="flex items-center justify-between gap-2 mb-3 flex-wrap">
-      <!-- Colors with timer -->
-      <div class="flex items-center gap-0.5">
+    <!-- Unified toolbar -->
+    <div class="flex items-center justify-center gap-3 sm:gap-4 mb-4">
+      <!-- Zoom out -->
+      <button 
+        class="w-8 h-8 flex items-center justify-center text-lg font-bold opacity-40 hover:opacity-100 hover:bg-base-300 rounded transition-all cursor-pointer"
+        onclick={() => adjustZoom(-0.2)}
+      >−</button>
+
+      <!-- Colors -->
+      <div class="flex items-center gap-0.5 sm:gap-1">
         {#each colors as color}
           <button
-            class="relative w-7 h-7 sm:w-8 sm:h-8 border-2 cursor-pointer transition-all {selectedColor === color ? 'border-base-content scale-110 z-10' : 'border-base-content/20 hover:border-base-content/50'}"
+            class="relative w-6 h-6 sm:w-7 sm:h-7 rounded-sm cursor-pointer transition-all {selectedColor === color ? 'scale-125 z-10' : 'hover:scale-110'}"
             style="background-color: {color};"
             onclick={() => selectColor(color)}
           >
-            {#if selectedColor === color && !canPlace}
-              <div class="absolute inset-0 bg-black/50 flex items-center justify-center">
-                <span class="text-white text-[10px] font-bold">{secondsRemaining}</span>
-              </div>
-              <div class="absolute bottom-0 left-0 h-0.5 bg-white/80" style="width: {cooldownProgress * 100}%"></div>
+            {#if selectedColor === color}
+              <!-- Border progress for cooldown -->
+              <svg class="absolute -inset-0.5 w-[calc(100%+4px)] h-[calc(100%+4px)]" viewBox="0 0 36 36">
+                <rect x="1" y="1" width="34" height="34" fill="none" stroke="currentColor" stroke-width="2" class="opacity-30" rx="2"/>
+                {#if !canPlace}
+                  <rect 
+                    x="1" y="1" width="34" height="34" fill="none" stroke="currentColor" stroke-width="2.5" rx="2"
+                    stroke-dasharray="{cooldownProgress * 136} 136"
+                    stroke-dashoffset="0"
+                    class="transition-all duration-1000"
+                    style="transform-origin: center; transform: rotate(-90deg);"
+                  />
+                {/if}
+              </svg>
+              {#if !canPlace}
+                <span class="absolute inset-0 flex items-center justify-center text-[9px] font-black text-white drop-shadow-sm">{secondsRemaining}</span>
+              {/if}
             {/if}
           </button>
         {/each}
       </div>
 
-      <!-- Stats + Zoom -->
-      <div class="flex items-center gap-4 text-xs">
-        <div class="hidden sm:flex items-center gap-3 opacity-60">
-          <span><strong>{stats.total_pixels.toLocaleString()}</strong> px</span>
-          <span><strong>{stats.unique_users}</strong> artists</span>
-        </div>
-        <div class="flex items-center gap-1">
-          <button class="w-7 h-7 hover:bg-base-300 rounded cursor-pointer font-bold" onclick={() => adjustZoom(-0.2)}>−</button>
-          <span class="w-10 text-center text-[11px]">{Math.round(zoom * 100)}%</span>
-          <button class="w-7 h-7 hover:bg-base-300 rounded cursor-pointer font-bold" onclick={() => adjustZoom(0.2)}>+</button>
-        </div>
+      <!-- Zoom in -->
+      <button 
+        class="w-8 h-8 flex items-center justify-center text-lg font-bold opacity-40 hover:opacity-100 hover:bg-base-300 rounded transition-all cursor-pointer"
+        onclick={() => adjustZoom(0.2)}
+      >+</button>
+
+      <!-- Stats (desktop) -->
+      <div class="hidden sm:flex items-center gap-2 text-[11px] opacity-40 ml-2">
+        <span>{stats.total_pixels.toLocaleString()} px</span>
+        <span>•</span>
+        <span>{stats.unique_users} artists</span>
+        <span>•</span>
+        <span>{Math.round(zoom * 100)}%</span>
       </div>
     </div>
 
