@@ -240,15 +240,29 @@
       <div class="relative flex items-center gap-2">
         <!-- Current color button -->
         <button
-          class="relative w-9 h-9 border-2 border-base-content cursor-pointer"
+          class="relative w-10 h-10 border-2 border-base-content cursor-pointer overflow-hidden"
           style="background-color: {selectedColor};"
           onclick={() => showPalette = !showPalette}
         >
           {#if !canPlace}
-            <div class="absolute inset-0 bg-black/50 flex items-center justify-center">
+            <div class="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
               <span class="text-white text-xs font-black">{secondsRemaining}</span>
             </div>
-            <div class="absolute bottom-0 left-0 h-1 bg-white/80" style="width: {cooldownProgress * 100}%"></div>
+            <!-- Progress border that wraps around -->
+            <svg class="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 40 40">
+              <rect
+                x="1"
+                y="1"
+                width="38"
+                height="38"
+                fill="none"
+                stroke="rgba(255,255,255,0.9)"
+                stroke-width="2"
+                stroke-dasharray="{152 * cooldownProgress} 152"
+                stroke-dashoffset="0"
+                pathLength="152"
+              />
+            </svg>
           {/if}
         </button>
 
@@ -265,11 +279,11 @@
 
         <!-- Mobile: dropdown palette -->
         {#if showPalette}
-          <div class="absolute top-11 left-0 z-50 bg-base-100 border-2 border-base-content p-1.5 md:hidden">
-            <div class="grid grid-cols-5 gap-1">
+          <div class="absolute top-12 left-0 z-50 bg-base-100 border-2 border-base-content p-2 md:hidden shadow-lg">
+            <div class="grid grid-cols-5 gap-1.5 w-max">
               {#each colors as color}
                 <button
-                  class="w-9 h-9 cursor-pointer {selectedColor === color ? 'ring-2 ring-inset ring-base-content' : ''}"
+                  class="w-10 h-10 cursor-pointer border border-base-content {selectedColor === color ? 'ring-2 ring-offset-1 ring-base-content' : ''}"
                   style="background-color: {color};"
                   onclick={() => { selectColor(color); showPalette = false; }}
                 ></button>
