@@ -270,31 +270,29 @@
         </div>
       </div>
     </div>
-  </div>
 
     <!-- Canvas wrapper -->
-    <div class="flex justify-center">
-        <div class="relative inline-block">
-          <canvas
-            use:initCanvas
-            class="bg-white shadow-lg cursor-crosshair block"
-            onclick={handleClick}
-            onmousemove={handleMove}
-            onmouseleave={handleLeave}
-            ontouchstart={handleTouchStart}
-            ontouchmove={handleTouchMove}
-            ontouchend={handleTouchEnd}
-          ></canvas>
-          
-          <!-- Coordinates overlay -->
-          {#if hoveredPixel}
-            <div class="absolute top-2 right-2 px-2 py-1 bg-black/60 text-white text-xs font-mono rounded">
-              {hoveredPixel.x}, {hoveredPixel.y}
-            </div>
-          {/if}
-        </div>
+    <div class="flex justify-center mt-3">
+      <div class="relative inline-block">
+        <canvas
+          use:initCanvas
+          class="bg-white shadow-lg cursor-crosshair block"
+          onclick={handleClick}
+          onmousemove={handleMove}
+          onmouseleave={handleLeave}
+          ontouchstart={handleTouchStart}
+          ontouchmove={handleTouchMove}
+          ontouchend={handleTouchEnd}
+        ></canvas>
+        
+        <!-- Coordinates overlay -->
+        {#if hoveredPixel}
+          <div class="absolute top-2 right-2 px-2 py-1 bg-black/60 text-white text-xs font-mono rounded">
+            {hoveredPixel.x}, {hoveredPixel.y}
+          </div>
+        {/if}
       </div>
-
+    </div>
   </div>
 </div>
 
