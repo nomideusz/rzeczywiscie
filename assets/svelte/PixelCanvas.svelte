@@ -213,9 +213,8 @@
       </div>
     </div>
 
-    <!-- Canvas wrapper - scrollable horizontally if needed -->
-    <div class="overflow-x-auto pb-3" style="scrollbar-width: thin;">
-      <div class="flex justify-center">
+    <!-- Canvas wrapper -->
+    <div class="flex justify-center">
         <div class="relative inline-block">
           <canvas
             use:initCanvas
@@ -236,7 +235,6 @@
           {/if}
         </div>
       </div>
-    </div>
 
     <!-- Color picker -->
     <div class="flex items-center justify-center gap-1 pt-2">
