@@ -37,28 +37,32 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
       |> assign(:pixels_version, 0)
       |> assign(:cursors, %{})
 
-    {:ok, socket, layout: false}
+    {:ok, socket}
   end
 
   def render(assigns) do
     ~H"""
-    <.svelte
-      name="PixelCanvas"
-      props={%{
-        width: @canvas_width,
-        height: @canvas_height,
-        pixels: serialize_pixels(@pixels),
-        pixelsVersion: @pixels_version,
-        colors: @colors,
-        selectedColor: @selected_color,
-        canPlace: @can_place,
-        secondsRemaining: @seconds_remaining,
-        cooldownSeconds: @cooldown_seconds,
-        stats: @stats,
-        cursors: serialize_cursors(@cursors)
-      }}
-      socket={@socket}
-    />
+    <Layouts.app flash={@flash} current_path={@current_path}>
+      <div class="h-[calc(100vh-4rem)]">
+        <.svelte
+          name="PixelCanvas"
+          props={%{
+            width: @canvas_width,
+            height: @canvas_height,
+            pixels: serialize_pixels(@pixels),
+            pixelsVersion: @pixels_version,
+            colors: @colors,
+            selectedColor: @selected_color,
+            canPlace: @can_place,
+            secondsRemaining: @seconds_remaining,
+            cooldownSeconds: @cooldown_seconds,
+            stats: @stats,
+            cursors: serialize_cursors(@cursors)
+          }}
+          socket={@socket}
+        />
+      </div>
+    </Layouts.app>
     """
   end
 

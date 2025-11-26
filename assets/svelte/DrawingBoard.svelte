@@ -232,62 +232,49 @@
     }
 </script>
 
-<div class="min-h-screen bg-base-200 flex flex-col">
-    <!-- Header -->
-    <div class="bg-base-100 border-b-4 border-base-content flex-shrink-0">
-        <div class="container mx-auto px-4 py-3">
-            <div class="flex flex-col gap-3">
-                <!-- Title row -->
-                <div class="flex items-center justify-between">
-                    <div>
-                        <h1 class="text-lg md:text-xl font-black uppercase tracking-tight">Drawing Board</h1>
-                        <p class="text-[10px] font-bold uppercase tracking-wide opacity-60 hidden sm:block">Collaborative real-time canvas</p>
+<div class="h-[calc(100vh-4rem)] bg-base-200 flex flex-col">
+    <!-- Sub-header with toolbar -->
+    <div class="bg-base-100 border-b-2 border-base-content flex-shrink-0">
+        <div class="container mx-auto px-4 py-2">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <!-- Title + Color picker -->
+                <div class="flex items-center gap-3">
+                    <h1 class="text-base md:text-lg font-black uppercase tracking-tight">✏️ Draw</h1>
+                    
+                    <div class="flex border-2 border-base-content">
+                        {#each colors as color}
+                            <button
+                                class="w-5 h-5 md:w-6 md:h-6 transition-all cursor-pointer relative {currentColor === color ? 'z-10' : ''}"
+                                style="background-color: {color}; {color === '#FFFFFF' ? 'border-right: 1px solid rgba(0,0,0,0.1);' : ''}"
+                                onclick={() => currentColor = color}
+                            >
+                                {#if currentColor === color}
+                                    <div class="absolute inset-0 border-2 border-base-content"></div>
+                                {/if}
+                            </button>
+                        {/each}
+                    </div>
+                </div>
+
+                <!-- Brush Size + Clear -->
+                <div class="flex items-center gap-2">
+                    <div class="flex border-2 border-base-content">
+                        {#each brushSizes as brush}
+                            <button
+                                class="w-7 h-7 text-[10px] font-bold transition-colors cursor-pointer flex items-center justify-center {brushSize === brush.size ? 'bg-base-content text-base-100' : 'hover:bg-base-200'}"
+                                onclick={() => brushSize = brush.size}
+                            >
+                                {brush.label}
+                            </button>
+                        {/each}
                     </div>
                     
-                    <!-- Clear Button -->
                     <button 
-                        class="px-3 py-1.5 text-xs font-bold uppercase tracking-wide border-2 border-error text-error hover:bg-error hover:text-error-content transition-colors cursor-pointer"
+                        class="px-2 py-1 text-xs font-bold uppercase tracking-wide border-2 border-error text-error hover:bg-error hover:text-error-content transition-colors cursor-pointer"
                         onclick={handleClearCanvas}
                     >
                         Clear
                     </button>
-                </div>
-
-                <!-- Toolbar row -->
-                <div class="flex flex-wrap items-center gap-2 md:gap-4">
-                    <!-- Color Picker -->
-                    <div class="flex items-center gap-2">
-                        <span class="text-[10px] font-bold uppercase tracking-wide opacity-50 hidden md:inline">Color:</span>
-                        <div class="flex border-2 border-base-content">
-                            {#each colors as color}
-                                <button
-                                    class="w-6 h-6 md:w-7 md:h-7 transition-all cursor-pointer relative {currentColor === color ? 'z-10' : ''}"
-                                    style="background-color: {color}; {color === '#FFFFFF' ? 'border-right: 1px solid rgba(0,0,0,0.1);' : ''}"
-                                    onclick={() => currentColor = color}
-                                >
-                                    {#if currentColor === color}
-                                        <div class="absolute inset-0 border-2 border-base-content"></div>
-                                        <div class="absolute inset-1 border border-white"></div>
-                                    {/if}
-                                </button>
-                            {/each}
-                        </div>
-                    </div>
-
-                    <!-- Brush Size -->
-                    <div class="flex items-center gap-2">
-                        <span class="text-[10px] font-bold uppercase tracking-wide opacity-50 hidden md:inline">Size:</span>
-                        <div class="flex border-2 border-base-content">
-                            {#each brushSizes as brush}
-                                <button
-                                    class="w-8 h-8 md:w-9 md:h-9 text-xs font-bold transition-colors cursor-pointer flex items-center justify-center {brushSize === brush.size ? 'bg-base-content text-base-100' : 'hover:bg-base-200'}"
-                                    onclick={() => brushSize = brush.size}
-                                >
-                                    {brush.label}
-                                </button>
-                            {/each}
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -295,17 +282,17 @@
 
     <!-- Canvas Area - fills remaining space -->
     <div 
-        class="flex-1 flex items-center justify-center p-4 overflow-hidden"
+        class="flex-1 flex items-center justify-center p-2 md:p-4 overflow-hidden"
         bind:this={canvasContainer}
     >
-        <div class="bg-base-100 border-2 border-base-content p-1 md:p-2 max-w-full max-h-full">
+        <div class="bg-base-100 border-2 border-base-content p-1 max-w-full max-h-full">
             <div class="relative">
                 <canvas
                     bind:this={canvas}
                     width={canvasWidth}
                     height={canvasHeight}
                     class="bg-white cursor-crosshair block touch-none"
-                    style="max-width: calc(100vw - 48px); max-height: calc(100vh - 200px); width: auto; height: auto;"
+                    style="max-width: calc(100vw - 32px); max-height: calc(100vh - 160px); width: auto; height: auto;"
                     onmousedown={startDrawing}
                     onmousemove={(e) => { handleMouseMove(e); draw(e); }}
                     onmouseup={stopDrawing}
@@ -333,18 +320,12 @@
         </div>
     </div>
 
-    <!-- Mobile tip -->
-    {#if isMobile}
-        <div class="fixed bottom-4 left-4 right-4 bg-base-100 border-2 border-base-content p-3 text-center">
-            <p class="text-[10px] font-bold uppercase tracking-wide opacity-60">
-                Draw with your finger • Pinch to zoom browser
-            </p>
-        </div>
-    {:else}
-        <div class="fixed bottom-4 left-1/2 -translate-x-1/2 text-[10px] font-bold uppercase tracking-wide opacity-40">
-            Open in multiple windows to collaborate
-        </div>
-    {/if}
+    <!-- Tip bar at bottom -->
+    <div class="bg-base-100 border-t border-base-content/20 py-2 text-center flex-shrink-0">
+        <p class="text-[10px] font-bold uppercase tracking-wide opacity-40">
+            {isMobile ? 'Draw with finger • Pinch to zoom' : 'Open in multiple windows to collaborate'}
+        </p>
+    </div>
 </div>
 
 <style>

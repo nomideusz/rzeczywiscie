@@ -364,28 +364,27 @@
     $: if (isMapLoaded) renderPins()
 </script>
 
-<div class="min-h-screen bg-base-200 flex flex-col">
-    <!-- Header -->
-    <div class="bg-base-100 border-b-4 border-base-content flex-shrink-0 z-20">
-        <div class="container mx-auto px-4 py-3">
+<div class="h-[calc(100vh-4rem)] bg-base-200 flex flex-col">
+    <!-- Sub-header -->
+    <div class="bg-base-100 border-b-2 border-base-content flex-shrink-0 z-20">
+        <div class="container mx-auto px-4 py-2">
             <div class="flex items-center justify-between gap-4">
                 <div class="flex items-center gap-4">
                     <div>
-                        <h1 class="text-lg md:text-xl font-black uppercase tracking-tight">Live World</h1>
-                        <p class="text-[10px] font-bold uppercase tracking-wide opacity-60 hidden sm:block">Real-time global presence</p>
+                        <h1 class="text-base md:text-lg font-black uppercase tracking-tight">🌍 Live World</h1>
                     </div>
                     
                     <!-- Quick Stats -->
                     <div class="hidden md:flex items-center gap-1 border-2 border-base-content">
-                        <div class="px-3 py-1.5 border-r border-base-content/30">
+                        <div class="px-3 py-1 border-r border-base-content/30">
                             <span class="font-black text-success">{onlineCount}</span>
                             <span class="text-[10px] font-bold uppercase opacity-50 ml-1">online</span>
                         </div>
-                        <div class="px-3 py-1.5 border-r border-base-content/30">
+                        <div class="px-3 py-1 border-r border-base-content/30">
                             <span class="font-black text-primary">{pinCount}</span>
                             <span class="text-[10px] font-bold uppercase opacity-50 ml-1">pins</span>
                         </div>
-                        <div class="px-3 py-1.5">
+                        <div class="px-3 py-1">
                             <span class="font-black text-secondary">{countriesCount}</span>
                             <span class="text-[10px] font-bold uppercase opacity-50 ml-1">countries</span>
                         </div>
@@ -394,19 +393,19 @@
 
                 <div class="flex items-center gap-2">
                     <button
-                        class="px-3 py-1.5 text-xs font-bold uppercase tracking-wide border-2 border-base-content transition-colors cursor-pointer {showUsers ? 'bg-base-content text-base-100' : 'hover:bg-base-200'}"
+                        class="px-2 py-1 text-xs font-bold uppercase tracking-wide border-2 border-base-content transition-colors cursor-pointer {showUsers ? 'bg-base-content text-base-100' : 'hover:bg-base-200'}"
                         onclick={() => showUsers = !showUsers}
                     >
                         👥 {onlineCount}
                     </button>
                     <button
-                        class="px-3 py-1.5 text-xs font-bold uppercase tracking-wide border-2 border-base-content transition-colors cursor-pointer {showChat ? 'bg-base-content text-base-100' : 'hover:bg-base-200'}"
+                        class="px-2 py-1 text-xs font-bold uppercase tracking-wide border-2 border-base-content transition-colors cursor-pointer {showChat ? 'bg-base-content text-base-100' : 'hover:bg-base-200'}"
                         onclick={() => showChat = !showChat}
                     >
                         💬 {chatMessages.length || ''}
                     </button>
                     {#if currentUser.name}
-                        <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 border-2 border-base-content bg-base-200">
+                        <div class="hidden sm:flex items-center gap-2 px-2 py-1 border-2 border-base-content bg-base-200">
                             <div class="w-3 h-3" style="background: {currentUser.color}"></div>
                             <span class="text-xs font-bold uppercase">{currentUser.name}</span>
                         </div>

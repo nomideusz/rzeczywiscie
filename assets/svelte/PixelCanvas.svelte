@@ -335,24 +335,23 @@
 
 <svelte:window on:keydown={handleKeyDown} on:mouseup={handleMouseUp} on:click={handleClickOutside} />
 
-<div class="min-h-screen bg-base-200 flex flex-col">
-  <!-- Header -->
-  <div class="bg-base-100 border-b-4 border-base-content flex-shrink-0 z-20">
-    <div class="container mx-auto px-4 py-3">
+<div class="h-full bg-base-200 flex flex-col">
+  <!-- Sub-header with stats and controls -->
+  <div class="bg-base-100 border-b-2 border-base-content flex-shrink-0 z-20">
+    <div class="container mx-auto px-4 py-2">
       <div class="flex items-center justify-between gap-4">
         <div class="flex items-center gap-4">
           <div>
-            <h1 class="text-lg md:text-xl font-black uppercase tracking-tight">Pixel Canvas</h1>
-            <p class="text-[10px] font-bold uppercase tracking-wide opacity-60 hidden sm:block">Collaborative pixel art</p>
+            <h1 class="text-base md:text-lg font-black uppercase tracking-tight">🎨 Pixel Canvas</h1>
           </div>
           
           <!-- Stats -->
           <div class="hidden md:flex items-center gap-1 border-2 border-base-content">
-            <div class="px-3 py-1.5 border-r border-base-content/30">
+            <div class="px-3 py-1 border-r border-base-content/30">
               <span class="font-black text-primary">{stats.total_pixels.toLocaleString()}</span>
               <span class="text-[10px] font-bold uppercase opacity-50 ml-1">pixels</span>
             </div>
-            <div class="px-3 py-1.5">
+            <div class="px-3 py-1">
               <span class="font-black text-secondary">{stats.unique_users}</span>
               <span class="text-[10px] font-bold uppercase opacity-50 ml-1">artists</span>
             </div>
@@ -362,13 +361,13 @@
         <div class="flex items-center gap-2">
           <!-- Zoom Controls -->
           <div class="hidden sm:flex items-center border-2 border-base-content">
-            <button class="w-8 h-8 text-sm font-bold hover:bg-base-200 transition-colors cursor-pointer" onclick={() => adjustZoom(-0.25)}>−</button>
-            <span class="w-12 text-center text-xs font-bold">{Math.round(zoom * 100)}%</span>
-            <button class="w-8 h-8 text-sm font-bold hover:bg-base-200 transition-colors cursor-pointer border-l border-base-content/30" onclick={() => adjustZoom(0.25)}>+</button>
+            <button class="w-7 h-7 text-sm font-bold hover:bg-base-200 transition-colors cursor-pointer" onclick={() => adjustZoom(-0.25)}>−</button>
+            <span class="w-10 text-center text-xs font-bold">{Math.round(zoom * 100)}%</span>
+            <button class="w-7 h-7 text-sm font-bold hover:bg-base-200 transition-colors cursor-pointer border-l border-base-content/30" onclick={() => adjustZoom(0.25)}>+</button>
           </div>
 
           <button
-            class="px-3 py-1.5 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-200 transition-colors cursor-pointer"
+            class="px-2 py-1 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-200 transition-colors cursor-pointer"
             onclick={() => showHelp = !showHelp}
           >
             ?
@@ -413,8 +412,8 @@
   </div>
 
   <!-- Bottom Toolbar -->
-  <div class="bg-base-100 border-t-4 border-base-content flex-shrink-0">
-    <div class="container mx-auto px-4 py-3">
+  <div class="bg-base-100 border-t-2 border-base-content flex-shrink-0">
+    <div class="container mx-auto px-4 py-2">
       <div class="flex items-center justify-between gap-4">
         <!-- Color Picker -->
         <div class="palette-container relative flex items-center gap-3">
