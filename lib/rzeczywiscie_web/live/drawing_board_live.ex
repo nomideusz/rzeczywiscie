@@ -7,7 +7,7 @@ defmodule RzeczywiscieWeb.DrawingBoardLive do
 
   def render(assigns) do
     ~H"""
-    <.app flash={@flash}>
+    <.app flash={@flash} current_path={@current_path}>
       <.svelte
         name="DrawingBoard"
         props={%{canvasWidth: 1200, canvasHeight: 800}}

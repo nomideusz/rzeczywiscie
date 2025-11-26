@@ -29,7 +29,7 @@ defmodule RzeczywiscieWeb.LifeProjectLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <.app flash={@flash}>
+    <.app flash={@flash} current_path={@current_path}>
       <div class="container mx-auto px-2 sm:px-4 py-4 max-w-6xl pb-20 sm:pb-4">
         <!-- Breadcrumb -->
         <div class="text-xs sm:text-sm breadcrumbs mb-3 sm:mb-4">

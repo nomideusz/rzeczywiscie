@@ -25,7 +25,7 @@ defmodule RzeczywiscieWeb.ProgressDashboardLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <.app flash={@flash}>
+    <.app flash={@flash} current_path={@current_path}>
       <div class="container mx-auto px-2 sm:px-4 py-4 pb-20 sm:pb-4 max-w-7xl">
         <!-- Breadcrumb -->
         <div class="text-sm breadcrumbs mb-3 sm:mb-4">

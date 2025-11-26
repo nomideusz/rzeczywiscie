@@ -4,7 +4,7 @@ defmodule RzeczywiscieWeb.ExampleLive do
 
   def render(assigns) do
     ~H"""
-    <.app flash={@flash}>
+    <.app flash={@flash} current_path={@current_path}>
       <.svelte name="Example" props={%{number: @number}} socket={@socket} />
     </.app>
     """

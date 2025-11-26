@@ -11,6 +11,75 @@ defmodule RzeczywiscieWeb.Layouts do
   # and other static content.
   embed_templates "layouts/*"
 
+  # Helper to check if a path is active
+  defp is_active?(current_path, href, match_prefix) when is_binary(current_path) do
+    cond do
+      # If match_prefix is provided, check if current path starts with any of the prefixes
+      match_prefix != nil ->
+        prefixes = String.split(match_prefix, ",")
+        Enum.any?(prefixes, fn prefix -> String.starts_with?(current_path, prefix) end)
+
+      # Otherwise, exact match or starts with href
+      true ->
+        current_path == href or String.starts_with?(current_path, href <> "/")
+    end
+  end
+
+  defp is_active?(_current_path, _href, _match_prefix), do: false
+
+  @doc """
+  Renders a navigation link with active state styling.
+  """
+  attr :href, :string, required: true
+  attr :current_path, :string, default: nil
+  attr :match_prefix, :string, default: nil
+  slot :inner_block, required: true
+
+  def nav_link(assigns) do
+    active = is_active?(assigns.current_path, assigns.href, assigns.match_prefix)
+    assigns = assign(assigns, :active, active)
+
+    ~H"""
+    <a
+      href={@href}
+      class={[
+        "px-3 lg:px-4 py-2 text-xs lg:text-sm font-bold uppercase tracking-wide transition-colors",
+        @active && "bg-base-content text-base-100",
+        not @active && "hover:bg-base-content hover:text-base-100"
+      ]}
+    >
+      {render_slot(@inner_block)}
+    </a>
+    """
+  end
+
+  @doc """
+  Renders a mobile navigation link with active state styling.
+  """
+  attr :href, :string, required: true
+  attr :current_path, :string, default: nil
+  attr :match_prefix, :string, default: nil
+  attr :icon, :string, required: true
+  slot :inner_block, required: true
+
+  def mobile_nav_link(assigns) do
+    active = is_active?(assigns.current_path, assigns.href, assigns.match_prefix)
+    assigns = assign(assigns, :active, active)
+
+    ~H"""
+    <a
+      href={@href}
+      class={[
+        "px-4 py-3 text-sm font-bold uppercase tracking-wide border-2 transition-colors",
+        @active && "border-base-content bg-base-content text-base-100",
+        not @active && "border-transparent hover:border-base-content hover:bg-base-content hover:text-base-100"
+      ]}
+    >
+      {@icon} {render_slot(@inner_block)}
+    </a>
+    """
+  end
+
   @doc """
   Renders your app layout.
 
@@ -30,6 +99,8 @@ defmodule RzeczywiscieWeb.Layouts do
   attr :current_scope, :map,
     default: nil,
     doc: "the current [scope](https://hexdocs.pm/phoenix/scopes.html)"
+
+  attr :current_path, :string, default: nil, doc: "the current request path for active link highlighting"
 
   slot :inner_block, required: true
 
@@ -53,36 +124,11 @@ defmodule RzeczywiscieWeb.Layouts do
 
           <!-- Desktop Navigation -->
           <div class="hidden md:flex items-center gap-1">
-            <a
-              href={~p"/draw"}
-              class="px-3 lg:px-4 py-2 text-xs lg:text-sm font-bold uppercase tracking-wide hover:bg-base-content hover:text-base-100 transition-colors"
-            >
-              Draw
-            </a>
-            <a
-              href={~p"/kanban"}
-              class="px-3 lg:px-4 py-2 text-xs lg:text-sm font-bold uppercase tracking-wide hover:bg-base-content hover:text-base-100 transition-colors"
-            >
-              Kanban
-            </a>
-            <a
-              href={~p"/world"}
-              class="px-3 lg:px-4 py-2 text-xs lg:text-sm font-bold uppercase tracking-wide hover:bg-base-content hover:text-base-100 transition-colors"
-            >
-              World
-            </a>
-            <a
-              href={~p"/pixels"}
-              class="px-3 lg:px-4 py-2 text-xs lg:text-sm font-bold uppercase tracking-wide hover:bg-base-content hover:text-base-100 transition-colors"
-            >
-              Pixels
-            </a>
-            <a
-              href={~p"/real-estate"}
-              class="px-3 lg:px-4 py-2 text-xs lg:text-sm font-bold uppercase tracking-wide hover:bg-base-content hover:text-base-100 transition-colors"
-            >
-              Properties
-            </a>
+            <.nav_link href={~p"/draw"} current_path={@current_path}>Draw</.nav_link>
+            <.nav_link href={~p"/kanban"} current_path={@current_path}>Kanban</.nav_link>
+            <.nav_link href={~p"/world"} current_path={@current_path}>World</.nav_link>
+            <.nav_link href={~p"/pixels"} current_path={@current_path}>Pixels</.nav_link>
+            <.nav_link href={~p"/real-estate"} current_path={@current_path} match_prefix="/real-estate,/favorites,/stats,/admin">Properties</.nav_link>
           </div>
 
           <!-- Mobile Menu Button -->
@@ -99,36 +145,11 @@ defmodule RzeczywiscieWeb.Layouts do
         <!-- Mobile Menu -->
         <div id="mobile-menu" class="hidden md:hidden border-t-2 border-base-content py-4">
           <div class="flex flex-col space-y-2">
-            <a
-              href={~p"/draw"}
-              class="px-4 py-3 text-sm font-bold uppercase tracking-wide border-2 border-transparent hover:border-base-content hover:bg-base-content hover:text-base-100 transition-colors"
-            >
-              ✏️ Draw
-            </a>
-            <a
-              href={~p"/kanban"}
-              class="px-4 py-3 text-sm font-bold uppercase tracking-wide border-2 border-transparent hover:border-base-content hover:bg-base-content hover:text-base-100 transition-colors"
-            >
-              📋 Kanban
-            </a>
-            <a
-              href={~p"/world"}
-              class="px-4 py-3 text-sm font-bold uppercase tracking-wide border-2 border-transparent hover:border-base-content hover:bg-base-content hover:text-base-100 transition-colors"
-            >
-              🌍 World
-            </a>
-            <a
-              href={~p"/pixels"}
-              class="px-4 py-3 text-sm font-bold uppercase tracking-wide border-2 border-transparent hover:border-base-content hover:bg-base-content hover:text-base-100 transition-colors"
-            >
-              🎨 Pixels
-            </a>
-            <a
-              href={~p"/real-estate"}
-              class="px-4 py-3 text-sm font-bold uppercase tracking-wide border-2 border-transparent hover:border-base-content hover:bg-base-content hover:text-base-100 transition-colors"
-            >
-              🏠 Properties
-            </a>
+            <.mobile_nav_link href={~p"/draw"} current_path={@current_path} icon="✏️">Draw</.mobile_nav_link>
+            <.mobile_nav_link href={~p"/kanban"} current_path={@current_path} icon="📋">Kanban</.mobile_nav_link>
+            <.mobile_nav_link href={~p"/world"} current_path={@current_path} icon="🌍">World</.mobile_nav_link>
+            <.mobile_nav_link href={~p"/pixels"} current_path={@current_path} icon="🎨">Pixels</.mobile_nav_link>
+            <.mobile_nav_link href={~p"/real-estate"} current_path={@current_path} icon="🏠" match_prefix="/real-estate,/favorites,/stats,/admin">Properties</.mobile_nav_link>
           </div>
         </div>
       </nav>

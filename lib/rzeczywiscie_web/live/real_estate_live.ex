@@ -38,7 +38,7 @@ defmodule RzeczywiscieWeb.RealEstateLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <.app flash={@flash}>
+    <.app flash={@flash} current_path={@current_path}>
       <.svelte
         name="PropertyView"
         props={%{

@@ -17,28 +17,30 @@ defmodule RzeczywiscieWeb.Router do
   scope "/", RzeczywiscieWeb do
     pipe_through :browser
 
-    live "/", HomeLive
-    live "/example", ExampleLive
-    live "/draw", DrawingBoardLive
-    live "/kanban", KanbanBoardLive
-    live "/counter", PersistentCounterLive
-    live "/world", LiveWorldLive
-    live "/pixels", PixelCanvasLive
-    live "/real-estate", RealEstateLive
-    live "/favorites", FavoritesLive
-    live "/admin", AdminLive
-    live "/stats", StatsLive
-    live "/url-inspector", UrlInspectorLive
+    live_session :default, on_mount: {RzeczywiscieWeb.Live.Hooks, :set_current_path} do
+      live "/", HomeLive
+      live "/example", ExampleLive
+      live "/draw", DrawingBoardLive
+      live "/kanban", KanbanBoardLive
+      live "/counter", PersistentCounterLive
+      live "/world", LiveWorldLive
+      live "/pixels", PixelCanvasLive
+      live "/real-estate", RealEstateLive
+      live "/favorites", FavoritesLive
+      live "/admin", AdminLive
+      live "/stats", StatsLive
+      live "/url-inspector", UrlInspectorLive
 
-    # Life Planning Routes (old)
-    live "/life-old", LifeDashboardLive
-    live "/life-old/projects/:id", LifeProjectLive
-    live "/life-old/check-in", LifeCheckinLive
-    live "/life-old/weekly-review", WeeklyReviewLive
-    live "/life-old/progress", ProgressDashboardLive
+      # Life Planning Routes (old)
+      live "/life-old", LifeDashboardLive
+      live "/life-old/projects/:id", LifeProjectLive
+      live "/life-old/check-in", LifeCheckinLive
+      live "/life-old/weekly-review", WeeklyReviewLive
+      live "/life-old/progress", ProgressDashboardLive
 
-    # Life Reboot - Personalized Life Management
-    live "/life", LifeRebootLive
+      # Life Reboot - Personalized Life Management
+      live "/life", LifeRebootLive
+    end
   end
 
   # Other scopes may use custom stacks.

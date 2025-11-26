@@ -58,23 +58,32 @@ defmodule RzeczywiscieWeb.CoreComponents do
       phx-mounted={JS.transition("duration-300") |> JS.dispatch("phx:flash-mounted", to: "##{@id}")}
       phx-hook="FlashAutoClose"
       role="alert"
-      class="toast toast-top toast-end z-50"
+      class="fixed top-20 right-4 z-50"
       {@rest}
     >
       <div class={[
-        "alert w-80 sm:w-96 max-w-80 sm:max-w-96 text-wrap",
-        @kind == :info && "alert-info",
-        @kind == :error && "alert-error"
+        "flex items-start gap-3 w-80 sm:w-96 p-4 border-2 shadow-lg",
+        @kind == :info && "bg-info/10 border-info text-info",
+        @kind == :error && "bg-error/10 border-error text-error"
       ]}>
-        <.icon :if={@kind == :info} name="hero-information-circle" class="size-5 shrink-0" />
-        <.icon :if={@kind == :error} name="hero-exclamation-circle" class="size-5 shrink-0" />
-        <div>
-          <p :if={@title} class="font-semibold">{@title}</p>
-          <p>{msg}</p>
+        <div class={[
+          "flex-shrink-0 w-6 h-6 flex items-center justify-center text-sm font-black",
+          @kind == :info && "bg-info text-info-content",
+          @kind == :error && "bg-error text-error-content"
+        ]}>
+          <span :if={@kind == :info}>✓</span>
+          <span :if={@kind == :error}>!</span>
         </div>
-        <div class="flex-1" />
-        <button type="button" class="group self-start cursor-pointer" aria-label={gettext("close")}>
-          <.icon name="hero-x-mark" class="size-5 opacity-40 group-hover:opacity-70" />
+        <div class="flex-1 min-w-0">
+          <p :if={@title} class="text-xs font-bold uppercase tracking-wide mb-1">{@title}</p>
+          <p class="text-sm font-medium">{msg}</p>
+        </div>
+        <button
+          type="button"
+          class="flex-shrink-0 p-1 hover:bg-base-content/10 transition-colors cursor-pointer"
+          aria-label={gettext("close")}
+        >
+          <.icon name="hero-x-mark" class="size-4" />
         </button>
       </div>
     </div>

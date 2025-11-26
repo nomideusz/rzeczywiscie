@@ -30,7 +30,7 @@ defmodule RzeczywiscieWeb.AdminLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <.app flash={@flash}>
+    <.app flash={@flash} current_path={@current_path}>
     <div class="min-h-screen bg-base-200">
       <!-- Header -->
       <div class="bg-base-100 border-b-4 border-base-content">
