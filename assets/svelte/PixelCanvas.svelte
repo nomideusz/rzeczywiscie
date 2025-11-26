@@ -200,16 +200,37 @@
 
 <div class="py-4 bg-base-200">
   <div class="container mx-auto px-4">
-    <!-- Stats bar -->
-    <div class="flex items-center justify-between mb-3 text-xs opacity-60">
-      <div class="flex items-center gap-3">
-        <span><strong>{stats.total_pixels.toLocaleString()}</strong> pixels</span>
-        <span><strong>{stats.unique_users}</strong> artists</span>
+    <!-- Toolbar: colors + stats + zoom -->
+    <div class="flex items-center justify-between gap-2 mb-3 flex-wrap">
+      <!-- Colors with timer -->
+      <div class="flex items-center gap-0.5">
+        {#each colors as color}
+          <button
+            class="relative w-7 h-7 sm:w-8 sm:h-8 border-2 cursor-pointer transition-all {selectedColor === color ? 'border-base-content scale-110 z-10' : 'border-base-content/20 hover:border-base-content/50'}"
+            style="background-color: {color};"
+            onclick={() => selectColor(color)}
+          >
+            {#if selectedColor === color && !canPlace}
+              <div class="absolute inset-0 bg-black/50 flex items-center justify-center">
+                <span class="text-white text-[10px] font-bold">{secondsRemaining}</span>
+              </div>
+              <div class="absolute bottom-0 left-0 h-0.5 bg-white/80" style="width: {cooldownProgress * 100}%"></div>
+            {/if}
+          </button>
+        {/each}
       </div>
-      <div class="flex items-center gap-2">
-        <button class="px-2 py-1 hover:bg-base-300 rounded cursor-pointer" onclick={() => adjustZoom(-0.2)}>−</button>
-        <span class="w-12 text-center">{Math.round(zoom * 100)}%</span>
-        <button class="px-2 py-1 hover:bg-base-300 rounded cursor-pointer" onclick={() => adjustZoom(0.2)}>+</button>
+
+      <!-- Stats + Zoom -->
+      <div class="flex items-center gap-4 text-xs">
+        <div class="hidden sm:flex items-center gap-3 opacity-60">
+          <span><strong>{stats.total_pixels.toLocaleString()}</strong> px</span>
+          <span><strong>{stats.unique_users}</strong> artists</span>
+        </div>
+        <div class="flex items-center gap-1">
+          <button class="w-7 h-7 hover:bg-base-300 rounded cursor-pointer font-bold" onclick={() => adjustZoom(-0.2)}>−</button>
+          <span class="w-10 text-center text-[11px]">{Math.round(zoom * 100)}%</span>
+          <button class="w-7 h-7 hover:bg-base-300 rounded cursor-pointer font-bold" onclick={() => adjustZoom(0.2)}>+</button>
+        </div>
       </div>
     </div>
 
@@ -236,23 +257,6 @@
         </div>
       </div>
 
-    <!-- Color picker -->
-    <div class="flex items-center justify-center gap-1 pt-2">
-      {#each colors as color}
-        <button
-          class="relative w-8 h-8 sm:w-9 sm:h-9 border-2 cursor-pointer transition-all {selectedColor === color ? 'border-base-content scale-110' : 'border-base-content/20 hover:border-base-content/50'}"
-          style="background-color: {color};"
-          onclick={() => selectColor(color)}
-        >
-          {#if selectedColor === color && !canPlace}
-            <div class="absolute inset-0 bg-black/50 flex items-center justify-center">
-              <span class="text-white text-xs font-bold">{secondsRemaining}</span>
-            </div>
-            <div class="absolute bottom-0 left-0 h-1 bg-white/80" style="width: {cooldownProgress * 100}%"></div>
-          {/if}
-        </button>
-      {/each}
-    </div>
   </div>
 </div>
 
