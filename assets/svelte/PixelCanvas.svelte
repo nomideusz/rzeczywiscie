@@ -82,33 +82,38 @@
 
     // Pixels (draw first, under the grid)
     const inset = 0.5 // Fixed sub-pixel inset for clean edges
-    const pixelDrawSize = effectivePixelSize - inset * 2
 
     pixels.forEach(pixel => {
-      const cellX = Math.round(pixel.x * effectivePixelSize)
-      const cellY = Math.round(pixel.y * effectivePixelSize)
+      // Calculate exact grid cell boundaries
+      const cellLeft = Math.round(pixel.x * effectivePixelSize)
+      const cellTop = Math.round(pixel.y * effectivePixelSize)
+      const cellRight = Math.round((pixel.x + 1) * effectivePixelSize)
+      const cellBottom = Math.round((pixel.y + 1) * effectivePixelSize)
 
+      // Draw pixel within cell boundaries with inset
       ctx.fillStyle = pixel.color
       ctx.fillRect(
-        cellX + inset,
-        cellY + inset,
-        pixelDrawSize,
-        pixelDrawSize
+        cellLeft + inset,
+        cellTop + inset,
+        cellRight - cellLeft - inset * 2,
+        cellBottom - cellTop - inset * 2
       )
     })
 
     // Hover preview
     if (hoveredPixel && canPlace) {
-      const cellX = Math.round(hoveredPixel.x * effectivePixelSize)
-      const cellY = Math.round(hoveredPixel.y * effectivePixelSize)
+      const cellLeft = Math.round(hoveredPixel.x * effectivePixelSize)
+      const cellTop = Math.round(hoveredPixel.y * effectivePixelSize)
+      const cellRight = Math.round((hoveredPixel.x + 1) * effectivePixelSize)
+      const cellBottom = Math.round((hoveredPixel.y + 1) * effectivePixelSize)
 
       ctx.globalAlpha = 0.6
       ctx.fillStyle = selectedColor
       ctx.fillRect(
-        cellX + inset,
-        cellY + inset,
-        pixelDrawSize,
-        pixelDrawSize
+        cellLeft + inset,
+        cellTop + inset,
+        cellRight - cellLeft - inset * 2,
+        cellBottom - cellTop - inset * 2
       )
       ctx.globalAlpha = 1.0
     }
@@ -332,11 +337,11 @@
     </div>
 
     <!-- Canvas wrapper -->
-    <div class="flex justify-center items-start mt-3 w-full overflow-auto max-h-[calc(100vh-140px)]">
+    <div class="relative flex justify-center items-start mt-3 w-full overflow-auto max-h-[calc(100vh-140px)] bg-base-300/30 rounded-lg border-2 border-base-content p-4 scroll-smooth">
       <div class="relative inline-block">
         <canvas
           use:initCanvas
-          class="bg-white shadow-lg cursor-crosshair block"
+          class="bg-white shadow-xl border-2 border-base-content cursor-crosshair block"
           onclick={handleClick}
           onmousemove={handleMove}
           onmouseleave={handleLeave}
@@ -352,6 +357,16 @@
           </div>
         {/if}
       </div>
+
+      <!-- Scroll indicator for mobile (shows when canvas is larger than viewport) -->
+      {#if isMobile}
+        <div class="absolute bottom-2 left-1/2 -translate-x-1/2 px-3 py-1.5 bg-base-content text-base-100 text-xs font-bold rounded-full shadow-lg pointer-events-none opacity-70 flex items-center gap-1.5">
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+          </svg>
+          <span>Drag to scroll</span>
+        </div>
+      {/if}
     </div>
   </div>
 </div>
