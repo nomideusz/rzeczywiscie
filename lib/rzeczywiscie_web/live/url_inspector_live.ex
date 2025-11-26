@@ -1,5 +1,6 @@
 defmodule RzeczywiscieWeb.UrlInspectorLive do
   use RzeczywiscieWeb, :live_view
+  import RzeczywiscieWeb.Layouts
   require Logger
 
   @impl true
@@ -15,63 +16,95 @@ defmodule RzeczywiscieWeb.UrlInspectorLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="container mx-auto p-8 max-w-4xl">
-      <h1 class="text-3xl font-bold mb-6">URL Inspector</h1>
+    <.app flash={@flash}>
+    <div class="min-h-screen bg-base-200">
+      <!-- Header -->
+      <div class="bg-base-100 border-b-4 border-base-content">
+        <div class="container mx-auto px-4 py-6">
+          <!-- Navigation -->
+          <nav class="flex gap-1 mb-4">
+            <a href="/real-estate" class="px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">
+              Properties
+            </a>
+            <a href="/favorites" class="px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">
+              Favorites
+            </a>
+            <a href="/stats" class="px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">
+              Stats
+            </a>
+            <a href="/admin" class="px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">
+              Admin
+            </a>
+          </nav>
 
-      <div class="card bg-base-200 shadow-xl mb-6">
-        <div class="card-body">
-          <h2 class="card-title">Sample Property URLs</h2>
-          <p class="text-sm opacity-70 mb-4">
-            View sample URLs from the database to understand the URL patterns.
-          </p>
-
-          <%= if @loading do %>
-            <div class="alert alert-info">
-              <div class="loading loading-spinner"></div>
-              <span>Loading sample URLs...</span>
+          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <h1 class="text-2xl md:text-3xl font-black uppercase tracking-tight">URL Inspector</h1>
+              <p class="text-sm font-bold uppercase tracking-wide opacity-60">Debug URL Patterns</p>
             </div>
-          <% end %>
+            <button
+              phx-click="load_samples"
+              disabled={@loading}
+              class={"px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @loading, do: "border-base-content/30 opacity-50", else: "border-base-content hover:bg-base-content hover:text-base-100"}"}
+            >
+              <%= if @loading, do: "Loading...", else: "Load Sample URLs" %>
+            </button>
+          </div>
+        </div>
+      </div>
 
-          <%= if length(@sample_urls) > 0 do %>
+      <div class="container mx-auto px-4 py-6">
+        <%= if @loading do %>
+          <div class="bg-base-100 border-2 border-base-content p-8 text-center">
+            <div class="inline-block w-6 h-6 border-3 border-base-content border-t-transparent rounded-full animate-spin mb-3"></div>
+            <p class="text-xs font-bold uppercase tracking-wide opacity-60">Loading sample URLs...</p>
+          </div>
+        <% end %>
+
+        <%= if length(@sample_urls) > 0 do %>
+          <div class="bg-base-100 border-2 border-base-content">
+            <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
+              <h2 class="text-sm font-bold uppercase tracking-wide">Sample URLs (<%= length(@sample_urls) %>)</h2>
+            </div>
             <div class="overflow-x-auto">
-              <table class="table table-sm">
-                <thead>
+              <table class="w-full text-sm">
+                <thead class="bg-base-200 border-b border-base-content/30">
                   <tr>
-                    <th>ID</th>
-                    <th>URL</th>
-                    <th>Has /sprzedaz/?</th>
-                    <th>Has /wynajem/?</th>
-                    <th>Has /mieszkania/?</th>
+                    <th class="px-4 py-2 text-left text-[10px] font-bold uppercase tracking-wide">ID</th>
+                    <th class="px-4 py-2 text-left text-[10px] font-bold uppercase tracking-wide">URL</th>
+                    <th class="px-4 py-2 text-center text-[10px] font-bold uppercase tracking-wide">Sprzedaż</th>
+                    <th class="px-4 py-2 text-center text-[10px] font-bold uppercase tracking-wide">Wynajem</th>
+                    <th class="px-4 py-2 text-center text-[10px] font-bold uppercase tracking-wide">Mieszkania</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody class="divide-y divide-base-content/20">
                   <%= for url_info <- @sample_urls do %>
-                    <tr>
-                      <td><%= url_info.id %></td>
-                      <td class="max-w-md truncate" title={url_info.url}>
-                        <a href={url_info.url} target="_blank" class="link link-primary text-xs">
+                    <tr class="hover:bg-base-200/50">
+                      <td class="px-4 py-2 font-mono text-xs"><%= url_info.id %></td>
+                      <td class="px-4 py-2 max-w-md">
+                        <a href={url_info.url} target="_blank" rel="noopener" class="text-xs text-primary hover:underline truncate block">
                           <%= url_info.url %>
                         </a>
                       </td>
-                      <td>
+                      <td class="px-4 py-2 text-center">
                         <%= if String.contains?(url_info.url, "/sprzedaz/") do %>
-                          <span class="badge badge-success">Yes</span>
+                          <span class="px-2 py-0.5 text-[10px] font-bold bg-success/20 text-success">Yes</span>
                         <% else %>
-                          <span class="badge badge-ghost">No</span>
+                          <span class="text-xs opacity-30">—</span>
                         <% end %>
                       </td>
-                      <td>
+                      <td class="px-4 py-2 text-center">
                         <%= if String.contains?(url_info.url, "/wynajem/") do %>
-                          <span class="badge badge-success">Yes</span>
+                          <span class="px-2 py-0.5 text-[10px] font-bold bg-warning/20 text-warning">Yes</span>
                         <% else %>
-                          <span class="badge badge-ghost">No</span>
+                          <span class="text-xs opacity-30">—</span>
                         <% end %>
                       </td>
-                      <td>
+                      <td class="px-4 py-2 text-center">
                         <%= if String.contains?(url_info.url, "/mieszkania/") do %>
-                          <span class="badge badge-success">Yes</span>
+                          <span class="px-2 py-0.5 text-[10px] font-bold bg-info/20 text-info">Yes</span>
                         <% else %>
-                          <span class="badge badge-ghost">No</span>
+                          <span class="text-xs opacity-30">—</span>
                         <% end %>
                       </td>
                     </tr>
@@ -79,20 +112,19 @@ defmodule RzeczywiscieWeb.UrlInspectorLive do
                 </tbody>
               </table>
             </div>
-          <% end %>
-
-          <div class="card-actions justify-end mt-4">
-            <button
-              phx-click="load_samples"
-              class="btn btn-primary"
-              disabled={@loading}
-            >
-              <%= if @loading, do: "Loading...", else: "Load Sample URLs" %>
-            </button>
           </div>
-        </div>
+        <% else %>
+          <%= if not @loading do %>
+            <div class="bg-base-100 border-2 border-base-content p-8 text-center">
+              <div class="text-4xl mb-3">🔍</div>
+              <h3 class="font-black uppercase tracking-wide mb-2">No URLs loaded</h3>
+              <p class="text-xs opacity-60">Click "Load Sample URLs" to inspect URL patterns.</p>
+            </div>
+          <% end %>
+        <% end %>
       </div>
     </div>
+    </.app>
     """
   end
 

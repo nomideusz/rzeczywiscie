@@ -427,20 +427,15 @@
   {#if !browser || !mapLoaded}
     <div class="map-overlay-full">
       {#if loadError}
-        <div class="alert alert-error max-w-md">
-          <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <div>
-            <h3 class="font-bold">Map Error</h3>
-            <div class="text-sm">{loadError}</div>
-            <div class="text-xs mt-2">Make sure GOOGLE_MAPS_API_KEY is configured.</div>
-          </div>
+        <div class="bg-base-100 border-2 border-error p-6 max-w-md">
+          <h3 class="font-black uppercase tracking-wide text-error mb-2">Map Error</h3>
+          <div class="text-sm mb-2">{loadError}</div>
+          <div class="text-xs opacity-60">Make sure GOOGLE_MAPS_API_KEY is configured.</div>
         </div>
       {:else}
         <div class="text-center">
-          <div class="loading loading-spinner loading-lg"></div>
-          <p class="mt-4 text-gray-600">Loading map...</p>
+          <div class="inline-block w-8 h-8 border-4 border-base-content border-t-transparent rounded-full animate-spin"></div>
+          <p class="mt-4 text-xs font-bold uppercase tracking-wide opacity-60">Loading map...</p>
         </div>
       {/if}
     </div>
@@ -449,34 +444,45 @@
   <!-- No Properties Overlay -->
   {#if browser && mapLoaded && properties.filter(p => p.latitude && p.longitude).length === 0}
     <div class="map-overlay">
-      <div class="alert alert-info shadow-lg">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-        </svg>
-        <div>
-          <h3 class="font-bold">No geocoded properties</h3>
-          <div class="text-xs">Properties need coordinates to appear on the map. Click "Geocode Now" to add them.</div>
-        </div>
+      <div class="bg-base-100 border-2 border-base-content p-6 text-center">
+        <div class="text-4xl mb-3">📍</div>
+        <h3 class="font-black uppercase tracking-wide mb-2">No geocoded properties</h3>
+        <div class="text-xs opacity-60">Properties need coordinates to appear on the map.</div>
+        <div class="text-xs opacity-60">Click "Geocode" to add them.</div>
       </div>
     </div>
   {/if}
 
-  <!-- Legend -->
+  <!-- Map Stats -->
   {#if browser && mapLoaded}
+    <div class="map-stats">
+      <div class="flex items-center gap-4">
+        <div>
+          <span class="font-black text-lg">{properties.filter(p => p.latitude && p.longitude).length}</span>
+          <span class="text-[10px] font-bold uppercase tracking-wide opacity-60 ml-1">on map</span>
+        </div>
+        <div class="h-4 w-px bg-base-content/30"></div>
+        <div>
+          <span class="font-black text-lg">{properties.filter(p => p.aqi).length}</span>
+          <span class="text-[10px] font-bold uppercase tracking-wide opacity-60 ml-1">with AQI</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Legend -->
     <div class="map-legend">
-      <div class="legend-title">Air Quality</div>
+      <div class="legend-title">Air Quality Index</div>
 
       <!-- Heatmap Toggle -->
       <label class="heatmap-toggle">
         <input
           type="checkbox"
           bind:checked={showHeatmap}
-          class="checkbox checkbox-xs"
         />
-        <span class="text-xs ml-2">Show Heatmap</span>
+        <span>Show Heatmap Overlay</span>
       </label>
 
-      <div class="legend-subtitle">Property Markers</div>
+      <div class="legend-subtitle">Marker Colors</div>
       <div class="legend-item">
         <span class="legend-dot" style="background-color: #10B981;"></span>
         <span>Good (0-50)</span>
@@ -487,15 +493,19 @@
       </div>
       <div class="legend-item">
         <span class="legend-dot" style="background-color: #F97316;"></span>
-        <span>Unhealthy* (101-150)</span>
+        <span>Sensitive (101-150)</span>
       </div>
       <div class="legend-item">
         <span class="legend-dot" style="background-color: #EF4444;"></span>
         <span>Unhealthy (151-200)</span>
       </div>
       <div class="legend-item">
+        <span class="legend-dot" style="background-color: #A855F7;"></span>
+        <span>Very Unhealthy (201-300)</span>
+      </div>
+      <div class="legend-item">
         <span class="legend-dot" style="background-color: #9CA3AF;"></span>
-        <span>No AQI data</span>
+        <span>No data</span>
       </div>
     </div>
   {/if}
@@ -505,10 +515,9 @@
   .map-wrapper {
     position: relative;
     width: 100%;
-    height: 800px;
-    border-radius: 8px;
+    height: 700px;
+    border: 2px solid oklch(var(--bc));
     overflow: hidden;
-    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
   }
 
   .map-container {
@@ -522,11 +531,6 @@
     left: 50%;
     transform: translate(-50%, -50%);
     z-index: 1000;
-    pointer-events: none;
-  }
-
-  .map-overlay .alert {
-    pointer-events: auto;
   }
 
   .map-overlay-full {
@@ -538,63 +542,97 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background-color: #f3f4f6;
+    background-color: oklch(var(--b2));
     z-index: 2000;
   }
 
-  .map-legend {
+  .map-stats {
     position: absolute;
-    bottom: 20px;
-    right: 20px;
-    background: white;
-    padding: 12px;
-    border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    top: 12px;
+    left: 12px;
+    background: oklch(var(--b1));
+    border: 2px solid oklch(var(--bc));
+    padding: 8px 12px;
     z-index: 1000;
     font-size: 12px;
   }
 
+  .map-legend {
+    position: absolute;
+    bottom: 12px;
+    right: 12px;
+    background: oklch(var(--b1));
+    border: 2px solid oklch(var(--bc));
+    padding: 0;
+    z-index: 1000;
+    font-size: 11px;
+    min-width: 180px;
+  }
+
   .legend-title {
-    font-weight: 600;
-    margin-bottom: 8px;
-    color: #1F2937;
+    font-weight: 800;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 8px 12px;
+    background: oklch(var(--b2));
+    border-bottom: 2px solid oklch(var(--bc));
   }
 
   .heatmap-toggle {
     display: flex;
     align-items: center;
-    margin-bottom: 8px;
-    padding: 4px 0;
+    gap: 8px;
+    padding: 8px 12px;
     cursor: pointer;
-    color: #4B5563;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    border-bottom: 1px solid oklch(var(--bc) / 0.2);
+    transition: background 0.15s;
   }
 
   .heatmap-toggle:hover {
-    color: #1F2937;
+    background: oklch(var(--b2));
+  }
+
+  .heatmap-toggle input {
+    width: 14px;
+    height: 14px;
+    accent-color: oklch(var(--p));
+    cursor: pointer;
   }
 
   .legend-subtitle {
-    font-weight: 500;
-    font-size: 11px;
-    margin-top: 8px;
-    margin-bottom: 4px;
-    color: #4B5563;
+    font-weight: 700;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 6px 12px;
+    opacity: 0.5;
+    border-bottom: 1px solid oklch(var(--bc) / 0.2);
   }
 
   .legend-item {
     display: flex;
     align-items: center;
-    margin-bottom: 4px;
-    color: #6B7280;
+    padding: 4px 12px;
+    font-size: 10px;
+  }
+
+  .legend-item:last-child {
+    padding-bottom: 8px;
   }
 
   .legend-dot {
-    width: 12px;
-    height: 12px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
     margin-right: 8px;
     border: 2px solid white;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    flex-shrink: 0;
   }
 
   /* Make map responsive */
@@ -603,16 +641,17 @@
       height: 500px;
     }
 
-    .map-legend {
-      bottom: 10px;
-      right: 10px;
-      font-size: 10px;
-      padding: 8px;
+    .map-stats {
+      top: 8px;
+      left: 8px;
+      padding: 6px 10px;
+      font-size: 11px;
     }
 
-    .legend-dot {
-      width: 10px;
-      height: 10px;
+    .map-legend {
+      bottom: 8px;
+      right: 8px;
+      min-width: 160px;
     }
   }
 </style>
