@@ -43,8 +43,8 @@
       const zoomByHeight = maxCanvasHeight / fullCanvasHeight
       const calculatedZoom = Math.min(zoomByWidth, zoomByHeight)
 
-      // Clamp zoom between 0.25 and 0.8, prefer fitting to screen
-      zoom = Math.min(0.8, Math.max(0.25, calculatedZoom))
+      // Clamp zoom between 0.5 and 1.0 for mobile, keep pixels visible
+      zoom = Math.min(1.0, Math.max(0.5, calculatedZoom))
     }
 
     const savedColor = localStorage.getItem('pixels_selected_color')
@@ -165,13 +165,15 @@
     drawCanvas()
   }
 
-  // Touch - tap to place
+  // Touch - tap to place (distinguish from pan/scroll)
   let touchStart = null
   let touchMoved = false
+  let touchStartTime = 0
 
   function handleTouchStart(e) {
     if (e.touches.length === 1) {
       touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+      touchStartTime = Date.now()
       touchMoved = false
     }
   }
@@ -180,12 +182,15 @@
     if (touchStart) {
       const dx = e.touches[0].clientX - touchStart.x
       const dy = e.touches[0].clientY - touchStart.y
-      if (Math.hypot(dx, dy) > 10) touchMoved = true
+      // More lenient threshold to allow scrolling without accidental pixel placement
+      if (Math.hypot(dx, dy) > 5) touchMoved = true
     }
   }
 
   function handleTouchEnd(e) {
-    if (touchStart && !touchMoved && canPlace) {
+    const touchDuration = Date.now() - touchStartTime
+    // Only place pixel if: 1) no movement, 2) quick tap (<300ms), 3) can place
+    if (touchStart && !touchMoved && touchDuration < 300 && canPlace) {
       const { x, y } = getCoords(touchStart.x, touchStart.y)
       if (x >= 0 && x < width && y >= 0 && y < height) {
         live.pushEvent("place_pixel", { x, y })
@@ -193,6 +198,7 @@
     }
     touchStart = null
     touchMoved = false
+    touchStartTime = 0
   }
 
   function selectColor(color) {
@@ -292,11 +298,11 @@
     </div>
 
     <!-- Canvas wrapper -->
-    <div class="flex justify-center items-start mt-3 w-full overflow-x-auto">
-      <div class="relative inline-block mx-auto">
+    <div class="flex justify-center items-start mt-3 w-full overflow-auto max-h-[calc(100vh-140px)]">
+      <div class="relative inline-block">
         <canvas
           use:initCanvas
-          class="bg-white shadow-lg cursor-crosshair block mx-auto touch-none"
+          class="bg-white shadow-lg cursor-crosshair block"
           onclick={handleClick}
           onmousemove={handleMove}
           onmouseleave={handleLeave}
