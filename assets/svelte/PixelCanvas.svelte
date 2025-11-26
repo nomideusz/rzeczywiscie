@@ -504,21 +504,10 @@
   <div class="contents">
     
     <!-- Color picker - bottom center on mobile, bottom left on desktop -->
-    <div 
+    <div
       class="fixed z-50 {isMobile ? 'bottom-4 left-1/2 -translate-x-1/2' : 'bottom-6 left-6'}"
     >
       <div class="palette-container relative flex items-end gap-3">
-        <!-- Back button - only on desktop -->
-        {#if !isMobile}
-          <a 
-            href="/" 
-            class="w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center text-neutral-400 hover:text-neutral-900 transition-colors"
-          >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-            </svg>
-          </a>
-        {/if}
 
         <!-- Expanded palette -->
         {#if showPalette}
@@ -584,30 +573,32 @@
       </div>
     {/if}
 
-    <!-- Stats - top left, smaller on mobile -->
-    <div 
-      class="fixed z-50 {isMobile ? 'top-2 left-2' : 'top-6 left-6'}"
+    <!-- Mysterious raven icon - top left -->
+    <a
+      href="/"
+      class="fixed z-50 {isMobile ? 'top-3 left-3' : 'top-6 left-6'} group"
+      title="Kruk.live"
     >
-      <div class="bg-white/90 backdrop-blur rounded-xl shadow-lg {isMobile ? 'px-3 py-2' : 'px-4 py-3'}">
-        <div class="flex items-center gap-2">
-          {#if isMobile}
-            <a href="/" class="text-neutral-400">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-              </svg>
-            </a>
-          {/if}
-          <div>
-            <h1 class="{isMobile ? 'text-xs' : 'text-sm'} font-semibold text-neutral-900">Pixels</h1>
-            <p class="{isMobile ? 'text-[10px]' : 'text-xs'} text-neutral-500">{stats.total_pixels.toLocaleString()} · {stats.unique_users} artists</p>
-          </div>
-        </div>
+      <div class="bg-neutral-900 {isMobile ? 'w-8 h-8' : 'w-10 h-10'} rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-110 hover:shadow-xl">
+        <svg class="{isMobile ? 'w-4 h-4' : 'w-5 h-5'} text-white" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2C10.5 2 9.19 2.84 8.5 4.08C6 4.5 4 6.74 4 9.5c0 1.33.5 2.5 1.31 3.41-.23.63-.31 1.3-.31 2.09 0 3.31 2.69 6 6 6h2c3.31 0 6-2.69 6-6 0-.79-.08-1.46-.31-2.09A4.49 4.49 0 0020 9.5c0-2.76-2-5-4.5-5.42C14.81 2.84 13.5 2 12 2zm0 2c.55 0 1 .45 1 1 0 .28-.11.53-.29.71.61.19 1.13.59 1.48 1.12.35-.09.7-.16 1.08-.16 1.67 0 3 1.33 3 3s-1.33 3-3 3c-.38 0-.73-.07-1.08-.16-.35.53-.87.93-1.48 1.12.18.18.29.43.29.71 0 .55-.45 1-1 1s-1-.45-1-1c0-.28.11-.53.29-.71-.61-.19-1.13-.59-1.48-1.12C9.46 12.93 9.11 13 8.73 13c-1.67 0-3-1.33-3-3s1.33-3 3-3c.38 0 .73.07 1.08.16.35-.53.87-.93 1.48-1.12C10.11 5.53 10 5.28 10 5c0-.55.45-1 1-1z"/>
+        </svg>
+      </div>
+    </a>
+
+    <!-- Stats - top right, smaller on mobile -->
+    <div
+      class="fixed z-50 {isMobile ? 'top-3 right-3' : 'top-6 right-6'}"
+    >
+      <div class="bg-white/90 backdrop-blur rounded-xl shadow-lg {isMobile ? 'px-3 py-1.5' : 'px-4 py-2.5'}">
+        <h1 class="{isMobile ? 'text-xs' : 'text-sm'} font-semibold text-neutral-900">Pixels</h1>
+        <p class="{isMobile ? 'text-[10px]' : 'text-xs'} text-neutral-500">{stats.total_pixels.toLocaleString()} · {stats.unique_users} artists</p>
       </div>
     </div>
 
-    <!-- Coordinates - only on desktop -->
+    <!-- Coordinates - only on desktop, below stats -->
     {#if hoveredPixel && !isMobile}
-      <div class="fixed top-6 right-6 bg-neutral-900 text-white px-3 py-2 rounded-lg text-xs font-mono">
+      <div class="fixed top-20 right-6 bg-neutral-900 text-white px-3 py-2 rounded-lg text-xs font-mono shadow-lg">
         {hoveredPixel.x}, {hoveredPixel.y}
       </div>
     {/if}
