@@ -21,7 +21,7 @@
   let scrollContainer
   let ctx
   let lastCursorSend = 0
-  let zoom = 1
+  let zoom = 1.5
   let showPalette = false
   let isMobile = false
   let showHelp = false
@@ -409,10 +409,10 @@
 
         <!-- Right: Zoom + Help -->
         <div class="flex items-center gap-1">
-          <div class="flex items-center border-2 border-base-content">
+          <div class="flex items-center border-2 border-base-content divide-x divide-base-content/30">
             <button class="w-7 h-7 text-sm font-bold hover:bg-base-200 cursor-pointer" onclick={() => adjustZoom(-0.25)}>−</button>
             <span class="w-9 text-center text-[10px] font-bold">{Math.round(zoom * 100)}%</span>
-            <button class="w-7 h-7 text-sm font-bold hover:bg-base-200 cursor-pointer border-l border-base-content/30" onclick={() => adjustZoom(0.25)}>+</button>
+            <button class="w-7 h-7 text-sm font-bold hover:bg-base-200 cursor-pointer" onclick={() => adjustZoom(0.25)}>+</button>
           </div>
           <button
             class="w-7 h-7 text-xs font-bold border-2 border-base-content hover:bg-base-200 cursor-pointer"
@@ -426,11 +426,11 @@
   <!-- Canvas Area -->
   <div 
     class="overflow-auto relative border-2 border-base-content bg-base-100"
-    style="max-height: 65vh;"
+    style="height: 500px;"
     use:initScrollContainer
     use:initContainer
   >
-    <div class="flex items-center justify-center p-4" style="min-width: max-content; min-height: 300px;">
+    <div class="flex items-center justify-center p-4" style="min-width: max-content; min-height: 100%;">
       <div>
         <canvas
           use:initCanvas
