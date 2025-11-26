@@ -24,9 +24,7 @@
   let zoom = 1
   let showPalette = false
   let isMobile = false
-  let canScroll = false
-  let showScrollHint = false
-  let hasScrolled = false
+  let showHelp = false
   const CURSOR_THROTTLE_MS = 250
 
   // Pan/drag state
@@ -36,14 +34,12 @@
 
   function centerCanvas() {
     if (!scrollContainer) return
-    
-    const scrollWidth = scrollContainer.scrollWidth
-    const scrollHeight = scrollContainer.scrollHeight
-    const clientWidth = scrollContainer.clientWidth
-    const clientHeight = scrollContainer.clientHeight
-    
-    scrollContainer.scrollLeft = (scrollWidth - clientWidth) / 2
-    scrollContainer.scrollTop = (scrollHeight - clientHeight) / 2
+    const sw = scrollContainer.scrollWidth
+    const sh = scrollContainer.scrollHeight
+    const cw = scrollContainer.clientWidth
+    const ch = scrollContainer.clientHeight
+    scrollContainer.scrollLeft = (sw - cw) / 2
+    scrollContainer.scrollTop = (sh - ch) / 2
   }
 
   onMount(() => {
@@ -60,62 +56,26 @@
       selectedColor = savedColor
       live.pushEvent("select_color", { color: savedColor })
     }
-
-    hasScrolled = localStorage.getItem('pixels_has_scrolled') === 'true'
-    setTimeout(checkScrollability, 500)
   })
-
-  function checkScrollability() {
-    if (!scrollContainer) return
-    
-    const threshold = 5
-    const isScrollable = scrollContainer.scrollWidth > scrollContainer.clientWidth + threshold ||
-                         scrollContainer.scrollHeight > scrollContainer.clientHeight + threshold
-    
-    canScroll = isScrollable
-    
-    if (isScrollable && !hasScrolled && isMobile) {
-      showScrollHint = true
-      setTimeout(() => {
-        showScrollHint = false
-      }, 4000)
-    } else {
-      showScrollHint = false
-    }
-  }
-
-  function onUserScrolled() {
-    if (!hasScrolled) {
-      hasScrolled = true
-      localStorage.setItem('pixels_has_scrolled', 'true')
-      showScrollHint = false
-    }
-  }
 
   $: cooldownProgress = canPlace ? 1 : (cooldownSeconds - secondsRemaining) / cooldownSeconds
 
   function calculatePixelSize() {
     if (!canvasContainer) return
-
-    const padding = 64
+    const padding = 32
     const containerWidth = canvasContainer.clientWidth - padding
     const containerHeight = canvasContainer.clientHeight - padding
-
     const maxPixelWidth = Math.floor(containerWidth / width)
     const maxPixelHeight = Math.floor(containerHeight / height)
-
     const fittedSize = Math.min(maxPixelWidth, maxPixelHeight)
     const newPixelSize = Math.max(2, Math.min(8, fittedSize))
-
     if (newPixelSize !== pixelSize) {
       pixelSize = newPixelSize
       if (ctx) drawCanvas()
     }
   }
 
-  $: if (ctx && pixelsVersion >= 0) {
-    drawCanvas()
-  }
+  $: if (ctx && pixelsVersion >= 0) drawCanvas()
 
   function initCanvas(node) {
     canvasElement = node
@@ -127,24 +87,14 @@
   function initContainer(node) {
     canvasContainer = node
     calculatePixelSize()
-
     const resizeObserver = new ResizeObserver(() => calculatePixelSize())
     resizeObserver.observe(node)
-
     return { destroy() { resizeObserver.disconnect() } }
   }
 
   function initScrollContainer(node) {
     scrollContainer = node
-    
-    const handleScroll = () => onUserScrolled()
-    node.addEventListener('scroll', handleScroll, { passive: true })
-    
-    return { 
-      destroy() {
-        node.removeEventListener('scroll', handleScroll)
-      }
-    }
+    return { destroy() {} }
   }
 
   function drawCanvas() {
@@ -162,25 +112,24 @@
     ctx.fillStyle = '#FFFFFF'
     ctx.fillRect(0, 0, actualWidth, actualHeight)
 
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)'
+    // Grid
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.06)'
     ctx.lineWidth = 1
     ctx.beginPath()
-
     for (let x = 0; x <= width; x++) {
       const px = Math.round(x * effectivePixelSize) + 0.5
       ctx.moveTo(px, 0)
       ctx.lineTo(px, actualHeight)
     }
-
     for (let y = 0; y <= height; y++) {
       const py = Math.round(y * effectivePixelSize) + 0.5
       ctx.moveTo(0, py)
       ctx.lineTo(actualWidth, py)
     }
-
     ctx.stroke()
 
-    const inset = Math.max(1, Math.round(effectivePixelSize * 0.08))
+    // Pixels
+    const inset = Math.max(1, Math.round(effectivePixelSize * 0.06))
     const pixelDrawSize = Math.max(1, effectivePixelSize - inset * 2)
     
     pixels.forEach(pixel => {
@@ -193,6 +142,7 @@
       )
     })
 
+    // Hover preview
     if (hoveredPixel && canPlace && !isPanning) {
       ctx.globalAlpha = 0.5
       ctx.fillStyle = selectedColor
@@ -209,40 +159,37 @@
   function getCoords(clientX, clientY) {
     const rect = canvasElement.getBoundingClientRect()
     const effectivePixelSize = pixelSize * zoom
-    const x = Math.floor((clientX - rect.left) / effectivePixelSize)
-    const y = Math.floor((clientY - rect.top) / effectivePixelSize)
-    return { x, y }
-  }
-
-  function handleMouseDown(event) {
-    if (event.button === 1) {
-      event.preventDefault()
-      startPan(event.clientX, event.clientY)
+    return {
+      x: Math.floor((clientX - rect.left) / effectivePixelSize),
+      y: Math.floor((clientY - rect.top) / effectivePixelSize)
     }
   }
 
-  function handleMouseUp(event) {
-    if (isPanning) {
-      isPanning = false
-      return
+  function handleMouseDown(e) {
+    if (e.button === 1) {
+      e.preventDefault()
+      startPan(e.clientX, e.clientY)
     }
   }
 
-  function handleClick(event) {
+  function handleMouseUp() {
+    if (isPanning) isPanning = false
+  }
+
+  function handleClick(e) {
     if (isPanning || !canPlace) return
-    const { x, y } = getCoords(event.clientX, event.clientY)
+    const { x, y } = getCoords(e.clientX, e.clientY)
     if (x >= 0 && x < width && y >= 0 && y < height) {
       live.pushEvent("place_pixel", { x, y })
     }
   }
 
-  function handleMove(event) {
+  function handleMove(e) {
     if (isPanning) {
-      doPan(event.clientX, event.clientY)
+      doPan(e.clientX, e.clientY)
       return
     }
-
-    const { x, y } = getCoords(event.clientX, event.clientY)
+    const { x, y } = getCoords(e.clientX, e.clientY)
     if (x >= 0 && x < width && y >= 0 && y < height) {
       if (!hoveredPixel || hoveredPixel.x !== x || hoveredPixel.y !== y) {
         hoveredPixel = { x, y }
@@ -262,10 +209,8 @@
 
   function doPan(clientX, clientY) {
     if (!scrollContainer) return
-    const dx = panStart.x - clientX
-    const dy = panStart.y - clientY
-    scrollContainer.scrollLeft = scrollStart.x + dx
-    scrollContainer.scrollTop = scrollStart.y + dy
+    scrollContainer.scrollLeft = scrollStart.x + (panStart.x - clientX)
+    scrollContainer.scrollTop = scrollStart.y + (panStart.y - clientY)
   }
 
   function sendCursorPosition(x, y) {
@@ -289,29 +234,20 @@
   let touchMoved = false
   const TAP_THRESHOLD = 10
 
-  function handleTouchStart(event) {
-    if (event.touches.length === 2) {
-      event.preventDefault()
+  function handleTouchStart(e) {
+    if (e.touches.length === 2) {
+      e.preventDefault()
       singleTouchStart = null
       touchMoved = true
-      const touch1 = event.touches[0]
-      const touch2 = event.touches[1]
-      const centerX = (touch1.clientX + touch2.clientX) / 2
-      const centerY = (touch1.clientY + touch2.clientY) / 2
-      touchPanStart = { x: centerX, y: centerY }
-      if (scrollContainer) {
-        scrollStart = { x: scrollContainer.scrollLeft, y: scrollContainer.scrollTop }
-      }
-      lastTouchDistance = Math.hypot(
-        touch2.clientX - touch1.clientX,
-        touch2.clientY - touch1.clientY
-      )
-    } else if (event.touches.length === 1) {
-      const touch = event.touches[0]
-      singleTouchStart = { clientX: touch.clientX, clientY: touch.clientY }
+      const t1 = e.touches[0], t2 = e.touches[1]
+      touchPanStart = { x: (t1.clientX + t2.clientX) / 2, y: (t1.clientY + t2.clientY) / 2 }
+      if (scrollContainer) scrollStart = { x: scrollContainer.scrollLeft, y: scrollContainer.scrollTop }
+      lastTouchDistance = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY)
+    } else if (e.touches.length === 1) {
+      const t = e.touches[0]
+      singleTouchStart = { clientX: t.clientX, clientY: t.clientY }
       touchMoved = false
-      
-      const { x, y } = getCoords(touch.clientX, touch.clientY)
+      const { x, y } = getCoords(t.clientX, t.clientY)
       if (x >= 0 && x < width && y >= 0 && y < height) {
         hoveredPixel = { x, y }
         drawCanvas()
@@ -319,48 +255,33 @@
     }
   }
 
-  function handleTouchMove(event) {
-    if (event.touches.length === 2) {
-      event.preventDefault()
-      const touch1 = event.touches[0]
-      const touch2 = event.touches[1]
-      
-      const centerX = (touch1.clientX + touch2.clientX) / 2
-      const centerY = (touch1.clientY + touch2.clientY) / 2
+  function handleTouchMove(e) {
+    if (e.touches.length === 2) {
+      e.preventDefault()
+      const t1 = e.touches[0], t2 = e.touches[1]
+      const centerX = (t1.clientX + t2.clientX) / 2
+      const centerY = (t1.clientY + t2.clientY) / 2
       if (touchPanStart && scrollContainer) {
-        const dx = touchPanStart.x - centerX
-        const dy = touchPanStart.y - centerY
-        scrollContainer.scrollLeft = scrollStart.x + dx
-        scrollContainer.scrollTop = scrollStart.y + dy
+        scrollContainer.scrollLeft = scrollStart.x + (touchPanStart.x - centerX)
+        scrollContainer.scrollTop = scrollStart.y + (touchPanStart.y - centerY)
       }
-
-      const distance = Math.hypot(
-        touch2.clientX - touch1.clientX,
-        touch2.clientY - touch1.clientY
-      )
+      const distance = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY)
       if (lastTouchDistance > 0) {
         const scale = distance / lastTouchDistance
         if (Math.abs(scale - 1) > 0.02) {
-          const newZoom = Math.max(0.5, Math.min(3, zoom * scale))
-          if (newZoom !== zoom) {
-            zoom = newZoom
-            drawCanvas()
-          }
+          zoom = Math.max(0.5, Math.min(3, zoom * scale))
+          drawCanvas()
           lastTouchDistance = distance
         }
       }
-    } else if (event.touches.length === 1) {
-      const touch = event.touches[0]
-      
+    } else if (e.touches.length === 1) {
+      const t = e.touches[0]
       if (singleTouchStart) {
-        const dx = touch.clientX - singleTouchStart.clientX
-        const dy = touch.clientY - singleTouchStart.clientY
-        if (Math.hypot(dx, dy) > TAP_THRESHOLD) {
-          touchMoved = true
-        }
+        const dx = t.clientX - singleTouchStart.clientX
+        const dy = t.clientY - singleTouchStart.clientY
+        if (Math.hypot(dx, dy) > TAP_THRESHOLD) touchMoved = true
       }
-      
-      const { x, y } = getCoords(touch.clientX, touch.clientY)
+      const { x, y } = getCoords(t.clientX, t.clientY)
       if (x >= 0 && x < width && y >= 0 && y < height) {
         if (!hoveredPixel || hoveredPixel.x !== x || hoveredPixel.y !== y) {
           hoveredPixel = { x, y }
@@ -371,14 +292,13 @@
     }
   }
 
-  function handleTouchEnd(event) {
+  function handleTouchEnd() {
     if (singleTouchStart && !touchMoved && canPlace && hoveredPixel) {
       const { x, y } = hoveredPixel
       if (x >= 0 && x < width && y >= 0 && y < height) {
         live.pushEvent("place_pixel", { x, y })
       }
     }
-    
     touchPanStart = null
     lastTouchDistance = 0
     singleTouchStart = null
@@ -397,46 +317,78 @@
   function adjustZoom(delta) {
     zoom = Math.max(0.5, Math.min(3, zoom + delta))
     drawCanvas()
-    setTimeout(checkScrollability, 100)
   }
 
-  function handleKeyDown(event) {
-    if (event.key >= '1' && event.key <= '9') {
-      const index = parseInt(event.key) - 1
-      if (colors[index]) {
-        selectColor(colors[index])
-      }
+  function handleKeyDown(e) {
+    if (e.key >= '1' && e.key <= '9') {
+      const idx = parseInt(e.key) - 1
+      if (colors[idx]) selectColor(colors[idx])
     }
-    if (event.key === '0' && colors[9]) {
-      selectColor(colors[9])
-    }
+    if (e.key === '0' && colors[9]) selectColor(colors[9])
+    if (e.key === 'Escape') showHelp = false
   }
 
-  function handleClickOutside(event) {
-    if (showPalette && !event.target.closest('.palette-container')) {
-      showPalette = false
-    }
-  }
-
-  function openPalette() {
-    showPalette = true
+  function handleClickOutside(e) {
+    if (showPalette && !e.target.closest('.palette-container')) showPalette = false
   }
 </script>
 
 <svelte:window on:keydown={handleKeyDown} on:mouseup={handleMouseUp} on:click={handleClickOutside} />
 
-<div class="fixed inset-0 flex flex-col bg-base-200">
+<div class="min-h-screen bg-base-200 flex flex-col">
+  <!-- Header -->
+  <div class="bg-base-100 border-b-4 border-base-content flex-shrink-0 z-20">
+    <div class="container mx-auto px-4 py-3">
+      <div class="flex items-center justify-between gap-4">
+        <div class="flex items-center gap-4">
+          <div>
+            <h1 class="text-lg md:text-xl font-black uppercase tracking-tight">Pixel Canvas</h1>
+            <p class="text-[10px] font-bold uppercase tracking-wide opacity-60 hidden sm:block">Collaborative pixel art</p>
+          </div>
+          
+          <!-- Stats -->
+          <div class="hidden md:flex items-center gap-1 border-2 border-base-content">
+            <div class="px-3 py-1.5 border-r border-base-content/30">
+              <span class="font-black text-primary">{stats.total_pixels.toLocaleString()}</span>
+              <span class="text-[10px] font-bold uppercase opacity-50 ml-1">pixels</span>
+            </div>
+            <div class="px-3 py-1.5">
+              <span class="font-black text-secondary">{stats.unique_users}</span>
+              <span class="text-[10px] font-bold uppercase opacity-50 ml-1">artists</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <!-- Zoom Controls -->
+          <div class="hidden sm:flex items-center border-2 border-base-content">
+            <button class="w-8 h-8 text-sm font-bold hover:bg-base-200 transition-colors cursor-pointer" onclick={() => adjustZoom(-0.25)}>−</button>
+            <span class="w-12 text-center text-xs font-bold">{Math.round(zoom * 100)}%</span>
+            <button class="w-8 h-8 text-sm font-bold hover:bg-base-200 transition-colors cursor-pointer border-l border-base-content/30" onclick={() => adjustZoom(0.25)}>+</button>
+          </div>
+
+          <button
+            class="px-3 py-1.5 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-200 transition-colors cursor-pointer"
+            onclick={() => showHelp = !showHelp}
+          >
+            ?
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Canvas Area -->
   <div 
-    class="flex-1 overflow-auto"
+    class="flex-1 overflow-auto relative"
     use:initScrollContainer
     use:initContainer
   >
-    <div class="flex items-center justify-center min-h-full" style="min-width: max-content; padding: 2rem;">
-      <div class="relative border-2 border-base-content">
+    <div class="flex items-center justify-center min-h-full p-4" style="min-width: max-content;">
+      <div class="border-2 border-base-content bg-base-100 p-1">
         <canvas
           use:initCanvas
-          class="bg-white {isPanning ? 'cursor-grabbing' : 'cursor-crosshair'}"
+          class="bg-white block {isPanning ? 'cursor-grabbing' : 'cursor-crosshair'}"
           on:mousedown={handleMouseDown}
           on:click={handleClick}
           on:mousemove={handleMove}
@@ -446,172 +398,161 @@
           on:touchend={handleTouchEnd}
           on:contextmenu|preventDefault
         ></canvas>
-
-        <!-- Live Cursors -->
-        {#each cursors as cursor (cursor.id)}
-          <div
-            class="absolute pointer-events-none transition-all duration-100"
-            style="left: {cursor.x * pixelSize * zoom}px; top: {cursor.y * pixelSize * zoom}px;"
-          >
-            <div
-              class="w-2 h-2 border-2 border-white"
-              style="background-color: {cursor.color}"
-            ></div>
-          </div>
-        {/each}
       </div>
     </div>
 
-    <!-- Scroll hint overlay -->
-    {#if showScrollHint && canScroll}
-      <div class="absolute inset-0 pointer-events-none flex items-center justify-center">
-        <div class="bg-base-content text-base-100 px-4 py-3 flex items-center gap-3 animate-hint font-bold text-sm uppercase tracking-wide">
-          <span>↔</span>
-          <span>Drag to explore</span>
-        </div>
+    <!-- Live Cursors -->
+    {#each cursors as cursor (cursor.id)}
+      <div
+        class="absolute pointer-events-none transition-all duration-100"
+        style="left: calc(50% + {(cursor.x - width/2) * pixelSize * zoom}px); top: calc(50% + {(cursor.y - height/2) * pixelSize * zoom}px);"
+      >
+        <div class="w-2 h-2 border border-white" style="background-color: {cursor.color}"></div>
       </div>
-    {/if}
+    {/each}
   </div>
 
-  <!-- UI Container -->
-  <div class="contents">
-    
-    <!-- Color picker -->
-    <div 
-      class="fixed z-50 {isMobile ? 'bottom-4 left-1/2 -translate-x-1/2' : 'bottom-6 left-6'}"
-    >
-      <div class="palette-container relative flex items-end gap-3">
-        <!-- Back button - only on desktop -->
-        {#if !isMobile}
-          <a 
-            href="/" 
-            class="w-10 h-10 bg-base-100 border-2 border-base-content flex items-center justify-center text-base-content hover:bg-base-content hover:text-base-100 transition-colors"
+  <!-- Bottom Toolbar -->
+  <div class="bg-base-100 border-t-4 border-base-content flex-shrink-0">
+    <div class="container mx-auto px-4 py-3">
+      <div class="flex items-center justify-between gap-4">
+        <!-- Color Picker -->
+        <div class="palette-container relative flex items-center gap-3">
+          <!-- Current color with cooldown -->
+          <button
+            class="w-12 h-12 border-2 border-base-content cursor-pointer relative overflow-hidden flex-shrink-0"
+            style="background-color: {selectedColor};"
+            onclick={() => showPalette = !showPalette}
           >
-            ←
-          </a>
-        {/if}
-
-        <!-- Expanded palette -->
-        {#if showPalette}
-          <div class="absolute {isMobile ? 'bottom-16 left-1/2 -translate-x-1/2' : 'bottom-16 left-0'} bg-base-100 border-2 border-base-content p-3 animate-in">
-            <div class="flex flex-wrap gap-1 justify-center" style="width: 200px;">
-              {#each colors as color, i}
-                <button
-                  class="w-8 h-8 transition-all cursor-pointer {selectedColor === color ? 'ring-2 ring-base-content ring-offset-1' : 'hover:scale-110'}"
-                  style="background-color: {color};"
-                  on:click={() => selectColor(color)}
-                >
-                </button>
-              {/each}
-            </div>
-            {#if !isMobile}
-              <p class="text-[9px] font-bold uppercase tracking-wide opacity-40 mt-2 text-center">Press 1-0 for colors</p>
+            {#if !canPlace}
+              <div class="absolute inset-0 bg-black/30 flex items-center justify-center">
+                <span class="text-white text-sm font-black drop-shadow">{secondsRemaining}</span>
+              </div>
             {/if}
-          </div>
-        {/if}
+            <!-- Cooldown border -->
+            <div 
+              class="absolute bottom-0 left-0 h-1 bg-white/50 transition-all duration-1000"
+              style="width: {cooldownProgress * 100}%"
+            ></div>
+          </button>
 
-        <!-- Current color button with cooldown -->
-        <button
-          class="w-14 h-14 sm:w-12 sm:h-12 border-2 border-base-content transition-all cursor-pointer relative overflow-hidden"
-          style="background-color: {selectedColor};"
-          on:click={openPalette}
-        >
-          <svg class="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 36 36">
-            <rect x="0" y="0" width="36" height="36" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="4"/>
-            <rect x="0" y="0" width="36" height="36" fill="none" stroke="white" stroke-width="4"
-              stroke-dasharray="144" stroke-dashoffset={144 - cooldownProgress * 144}
-              class="transition-all duration-1000 ease-linear"/>
-          </svg>
-          {#if !canPlace}
-            <span class="absolute inset-0 flex items-center justify-center text-white text-sm font-black drop-shadow">
-              {secondsRemaining}
-            </span>
+          <!-- Expanded palette -->
+          {#if showPalette}
+            <div class="absolute bottom-16 left-0 bg-base-100 border-2 border-base-content p-2 z-50">
+              <div class="grid grid-cols-5 gap-1" style="width: 180px;">
+                {#each colors as color, i}
+                  <button
+                    class="w-8 h-8 cursor-pointer relative {selectedColor === color ? 'ring-2 ring-base-content ring-offset-1' : 'hover:scale-110'} transition-all"
+                    style="background-color: {color};"
+                    onclick={() => selectColor(color)}
+                  >
+                    {#if i < 10 && !isMobile}
+                      <span class="absolute -top-1 -right-1 w-3.5 h-3.5 bg-base-content text-base-100 text-[8px] font-bold flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                        {i < 9 ? i + 1 : 0}
+                      </span>
+                    {/if}
+                  </button>
+                {/each}
+              </div>
+              {#if !isMobile}
+                <p class="text-[9px] font-bold uppercase tracking-wide opacity-40 mt-2 text-center">Keys 1-0</p>
+              {/if}
+            </div>
           {/if}
-        </button>
 
-        <!-- Zoom controls - inline on mobile -->
-        {#if isMobile}
-          <div class="bg-base-100 border-2 border-base-content flex items-center">
-            <button class="w-10 h-10 text-base-content active:bg-base-200 text-lg font-bold cursor-pointer" on:click={() => adjustZoom(-0.25)}>−</button>
-            <button class="w-10 h-10 text-base-content active:bg-base-200 text-lg font-bold cursor-pointer border-l-2 border-base-content" on:click={() => adjustZoom(0.25)}>+</button>
-          </div>
-        {/if}
-      </div>
-    </div>
-
-    <!-- Desktop zoom controls -->
-    {#if !isMobile}
-      <div class="fixed bottom-6 right-6 flex items-center gap-2">
-        <div class="bg-base-100 border-2 border-base-content flex items-center">
-          <button class="w-10 h-10 text-base-content hover:bg-base-200 text-lg font-bold transition-colors cursor-pointer" on:click={() => adjustZoom(-0.25)}>−</button>
-          <span class="text-xs font-bold w-14 text-center">{Math.round(zoom * 100)}%</span>
-          <button class="w-10 h-10 text-base-content hover:bg-base-200 text-lg font-bold transition-colors cursor-pointer border-l-2 border-base-content" on:click={() => adjustZoom(0.25)}>+</button>
-        </div>
-      </div>
-    {/if}
-
-    <!-- Stats -->
-    <div 
-      class="fixed z-50 {isMobile ? 'top-2 left-2' : 'top-6 left-6'}"
-    >
-      <div class="bg-base-100 border-2 border-base-content {isMobile ? 'px-3 py-2' : 'px-4 py-3'}">
-        <div class="flex items-center gap-3">
-          {#if isMobile}
-            <a href="/" class="text-base-content font-bold">←</a>
-          {/if}
-          <div>
-            <h1 class="{isMobile ? 'text-xs' : 'text-sm'} font-black uppercase tracking-tight">Pixels</h1>
-            <p class="{isMobile ? 'text-[9px]' : 'text-[10px]'} font-bold uppercase tracking-wide opacity-50">
-              {stats.total_pixels.toLocaleString()} placed · {stats.unique_users} artists
-            </p>
+          <!-- Color strip (desktop) -->
+          <div class="hidden md:flex border-2 border-base-content">
+            {#each colors.slice(0, 10) as color, i}
+              <button
+                class="w-7 h-7 cursor-pointer transition-all {selectedColor === color ? 'scale-110 z-10 ring-1 ring-base-content' : 'hover:scale-105'}"
+                style="background-color: {color};"
+                onclick={() => selectColor(color)}
+              ></button>
+            {/each}
           </div>
         </div>
+
+        <!-- Mobile Stats -->
+        <div class="md:hidden flex items-center gap-2 text-xs">
+          <span class="font-black text-primary">{stats.total_pixels.toLocaleString()}</span>
+          <span class="opacity-50">pixels</span>
+        </div>
+
+        <!-- Coordinates & Zoom (mobile) -->
+        <div class="flex items-center gap-2">
+          {#if hoveredPixel}
+            <div class="hidden sm:block px-2 py-1 bg-base-content text-base-100 text-xs font-mono font-bold">
+              {hoveredPixel.x},{hoveredPixel.y}
+            </div>
+          {/if}
+
+          <!-- Mobile zoom -->
+          <div class="sm:hidden flex items-center border-2 border-base-content">
+            <button class="w-8 h-8 text-sm font-bold active:bg-base-200 cursor-pointer" onclick={() => adjustZoom(-0.25)}>−</button>
+            <button class="w-8 h-8 text-sm font-bold active:bg-base-200 cursor-pointer border-l border-base-content/30" onclick={() => adjustZoom(0.25)}>+</button>
+          </div>
+        </div>
       </div>
     </div>
-
-    <!-- Coordinates - only on desktop -->
-    {#if hoveredPixel && !isMobile}
-      <div class="fixed top-6 right-6 bg-base-content text-base-100 px-3 py-2 text-xs font-mono font-bold">
-        {hoveredPixel.x}, {hoveredPixel.y}
-      </div>
-    {/if}
   </div>
 </div>
 
-<style>
-  :global(body) {
-    overflow: hidden;
-  }
+<!-- Help Modal -->
+{#if showHelp}
+  <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onclick={() => showHelp = false}>
+    <div class="bg-base-100 border-2 border-base-content max-w-sm w-full" onclick={(e) => e.stopPropagation()}>
+      <div class="px-4 py-3 border-b-2 border-base-content bg-base-200 flex items-center justify-between">
+        <span class="text-sm font-bold uppercase tracking-wide">How to Play</span>
+        <button class="text-lg opacity-50 hover:opacity-100 cursor-pointer" onclick={() => showHelp = false}>✕</button>
+      </div>
+      <div class="p-4 space-y-3 text-sm">
+        <div class="flex items-start gap-3">
+          <span class="text-lg">🎨</span>
+          <div>
+            <div class="font-bold">Place Pixels</div>
+            <div class="text-xs opacity-60">Click/tap any square to place a pixel in your selected color</div>
+          </div>
+        </div>
+        <div class="flex items-start gap-3">
+          <span class="text-lg">⏱️</span>
+          <div>
+            <div class="font-bold">Cooldown</div>
+            <div class="text-xs opacity-60">{cooldownSeconds} second wait between placements</div>
+          </div>
+        </div>
+        <div class="flex items-start gap-3">
+          <span class="text-lg">🔍</span>
+          <div>
+            <div class="font-bold">Navigate</div>
+            <div class="text-xs opacity-60">Scroll to pan, pinch or use +/- to zoom</div>
+          </div>
+        </div>
+        {#if !isMobile}
+          <div class="flex items-start gap-3">
+            <span class="text-lg">⌨️</span>
+            <div>
+              <div class="font-bold">Keyboard</div>
+              <div class="text-xs opacity-60">Press 1-0 to quickly select colors</div>
+            </div>
+          </div>
+        {/if}
+        <div class="flex items-start gap-3">
+          <span class="text-lg">👥</span>
+          <div>
+            <div class="font-bold">Collaborate</div>
+            <div class="text-xs opacity-60">See other artists' cursors in real-time</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{/if}
 
+<style>
   canvas {
     image-rendering: pixelated;
     image-rendering: -moz-crisp-edges;
     image-rendering: crisp-edges;
-  }
-
-  .animate-in {
-    animation: fadeIn 0.15s ease-out;
-  }
-
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(8px) scale(0.95);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0) scale(1);
-    }
-  }
-
-  .animate-hint {
-    animation: hintFade 4s ease-out forwards;
-  }
-
-  @keyframes hintFade {
-    0% { opacity: 0; transform: scale(0.9); }
-    10% { opacity: 1; transform: scale(1); }
-    80% { opacity: 1; }
-    100% { opacity: 0; }
+    touch-action: none;
   }
 </style>
