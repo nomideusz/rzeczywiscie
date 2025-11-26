@@ -286,10 +286,15 @@
   // Touch handling
   let lastTouchDistance = 0
   let touchPanStart = null
+  let singleTouchStart = null  // Track single touch start position
+  let touchMoved = false       // Track if touch moved significantly
+  const TAP_THRESHOLD = 10     // Max pixels moved to count as tap
 
   function handleTouchStart(event) {
     if (event.touches.length === 2) {
       event.preventDefault()
+      singleTouchStart = null  // Cancel single touch if second finger added
+      touchMoved = true
       const touch1 = event.touches[0]
       const touch2 = event.touches[1]
       const centerX = (touch1.clientX + touch2.clientX) / 2
@@ -302,14 +307,15 @@
         touch2.clientX - touch1.clientX,
         touch2.clientY - touch1.clientY
       )
-    } else if (event.touches.length === 1 && canPlace) {
+    } else if (event.touches.length === 1) {
       const touch = event.touches[0]
+      singleTouchStart = { clientX: touch.clientX, clientY: touch.clientY }
+      touchMoved = false
+      
       const { x, y } = getCoords(touch.clientX, touch.clientY)
       if (x >= 0 && x < width && y >= 0 && y < height) {
-        event.preventDefault()
         hoveredPixel = { x, y }
         drawCanvas()
-        live.pushEvent("place_pixel", { x, y })
       }
     }
   }
@@ -346,6 +352,16 @@
       }
     } else if (event.touches.length === 1) {
       const touch = event.touches[0]
+      
+      // Check if moved beyond tap threshold
+      if (singleTouchStart) {
+        const dx = touch.clientX - singleTouchStart.clientX
+        const dy = touch.clientY - singleTouchStart.clientY
+        if (Math.hypot(dx, dy) > TAP_THRESHOLD) {
+          touchMoved = true
+        }
+      }
+      
       const { x, y } = getCoords(touch.clientX, touch.clientY)
       if (x >= 0 && x < width && y >= 0 && y < height) {
         if (!hoveredPixel || hoveredPixel.x !== x || hoveredPixel.y !== y) {
@@ -357,9 +373,19 @@
     }
   }
 
-  function handleTouchEnd() {
+  function handleTouchEnd(event) {
+    // Place pixel only if it was a tap (no significant movement) and can place
+    if (singleTouchStart && !touchMoved && canPlace && hoveredPixel) {
+      const { x, y } = hoveredPixel
+      if (x >= 0 && x < width && y >= 0 && y < height) {
+        live.pushEvent("place_pixel", { x, y })
+      }
+    }
+    
     touchPanStart = null
     lastTouchDistance = 0
+    singleTouchStart = null
+    touchMoved = false
     hoveredPixel = null
     drawCanvas()
   }
