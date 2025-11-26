@@ -10,7 +10,7 @@
     let canvasContainer;
     let isDrawing = false;
     let currentColor = '#000000';
-    let brushSize = 3;
+    let brushSize = 4;
     let cursors = {};
     let isMobile = false;
     let lastPos = null;
@@ -282,17 +282,17 @@
 
     <!-- Canvas Area - fills remaining space -->
     <div 
-        class="flex-1 flex items-center justify-center p-2 md:p-4 overflow-hidden"
+        class="flex-1 flex items-center justify-center p-2 overflow-hidden"
         bind:this={canvasContainer}
     >
-        <div class="bg-base-100 border-2 border-base-content p-1 max-w-full max-h-full">
+        <div class="bg-base-100 border-2 border-base-content p-1">
             <div class="relative">
                 <canvas
                     bind:this={canvas}
                     width={canvasWidth}
                     height={canvasHeight}
                     class="bg-white cursor-crosshair block touch-none"
-                    style="max-width: calc(100vw - 32px); max-height: calc(100vh - 160px); width: auto; height: auto;"
+                    style="max-width: calc(100vw - 24px); max-height: calc(100vh - 140px); width: auto; height: auto;"
                     onmousedown={startDrawing}
                     onmousemove={(e) => { handleMouseMove(e); draw(e); }}
                     onmouseup={stopDrawing}

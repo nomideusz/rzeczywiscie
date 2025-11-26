@@ -58,25 +58,25 @@ defmodule RzeczywiscieWeb.CoreComponents do
       phx-mounted={JS.transition("duration-300") |> JS.dispatch("phx:flash-mounted", to: "##{@id}")}
       phx-hook="FlashAutoClose"
       role="alert"
-      class="fixed top-20 right-4 z-50"
+      class="fixed top-20 right-4 left-4 sm:left-auto z-50"
       {@rest}
     >
       <div class={[
-        "flex items-start gap-3 w-80 sm:w-96 p-4 border-2 shadow-lg",
+        "flex items-start gap-2 sm:gap-3 sm:w-80 p-3 sm:p-4 border-2 shadow-lg",
         @kind == :info && "bg-info/10 border-info text-info",
         @kind == :error && "bg-error/10 border-error text-error"
       ]}>
         <div class={[
-          "flex-shrink-0 w-6 h-6 flex items-center justify-center text-sm font-black",
+          "flex-shrink-0 w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center text-xs sm:text-sm font-black",
           @kind == :info && "bg-info text-info-content",
           @kind == :error && "bg-error text-error-content"
         ]}>
           <span :if={@kind == :info}>✓</span>
           <span :if={@kind == :error}>!</span>
         </div>
-        <div class="flex-1 min-w-0">
-          <p :if={@title} class="text-xs font-bold uppercase tracking-wide mb-1">{@title}</p>
-          <p class="text-sm font-medium">{msg}</p>
+        <div class="flex-1 min-w-0 overflow-hidden">
+          <p :if={@title} class="text-xs font-bold uppercase tracking-wide mb-1 truncate">{@title}</p>
+          <p class="text-xs sm:text-sm font-medium break-words">{msg}</p>
         </div>
         <button
           type="button"
