@@ -34,6 +34,20 @@
   let panStart = { x: 0, y: 0 }
   let scrollStart = { x: 0, y: 0 }
 
+  // Center the scroll position
+  function centerCanvas() {
+    if (!scrollContainer) return
+    
+    const scrollWidth = scrollContainer.scrollWidth
+    const scrollHeight = scrollContainer.scrollHeight
+    const clientWidth = scrollContainer.clientWidth
+    const clientHeight = scrollContainer.clientHeight
+    
+    // Center horizontally and vertically
+    scrollContainer.scrollLeft = (scrollWidth - clientWidth) / 2
+    scrollContainer.scrollTop = (scrollHeight - clientHeight) / 2
+  }
+
   // Detect mobile and check if canvas is scrollable
   onMount(() => {
     isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0
@@ -41,8 +55,10 @@
     // Set default zoom higher on mobile so pixels are visible
     if (isMobile) {
       zoom = 2
-      // Redraw with new zoom
+      // Redraw with new zoom and center after render
       if (ctx) drawCanvas()
+      // Center canvas after a short delay to let it render
+      setTimeout(centerCanvas, 100)
     }
     
     const savedColor = localStorage.getItem('pixels_selected_color')
