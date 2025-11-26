@@ -23,14 +23,11 @@
   let lastCursorSend = 0
   let zoom = 1
   let showPalette = false
-  let showUI = true
-  let uiTimeout = null
   let isMobile = false
   let canScroll = false
   let showScrollHint = false
   let hasScrolled = false
   const CURSOR_THROTTLE_MS = 250
-  const UI_HIDE_DELAY = 3000
 
   // Pan/drag state
   let isPanning = false
@@ -45,11 +42,6 @@
     if (savedColor && colors.includes(savedColor)) {
       selectedColor = savedColor
       live.pushEvent("select_color", { color: savedColor })
-    }
-
-    // Auto-hide UI on mobile after delay
-    if (isMobile) {
-      resetUITimer()
     }
 
     // Check if user has seen scroll hint before
@@ -86,20 +78,6 @@
       localStorage.setItem('pixels_has_scrolled', 'true')
       showScrollHint = false
     }
-  }
-
-  function resetUITimer() {
-    if (!isMobile) return
-    showUI = true
-    if (uiTimeout) clearTimeout(uiTimeout)
-    uiTimeout = setTimeout(() => {
-      if (!showPalette) showUI = false
-    }, UI_HIDE_DELAY)
-  }
-
-  function toggleUI() {
-    showUI = !showUI
-    if (showUI) resetUITimer()
   }
 
   // Cooldown progress (0 to 1)
@@ -303,12 +281,6 @@
   let touchPanStart = null
 
   function handleTouchStart(event) {
-    // Show UI when user interacts with canvas
-    if (isMobile && !showUI) {
-      showUI = true
-    }
-    resetUITimer()
-    
     if (event.touches.length === 2) {
       event.preventDefault()
       const touch1 = event.touches[0]
@@ -390,13 +362,11 @@
     localStorage.setItem('pixels_selected_color', color)
     live.pushEvent("select_color", { color })
     showPalette = false
-    resetUITimer()
   }
 
   function adjustZoom(delta) {
     zoom = Math.max(0.5, Math.min(3, zoom + delta))
     drawCanvas()
-    resetUITimer()
     // Recheck scrollability after zoom change
     setTimeout(checkScrollability, 100)
   }
@@ -478,34 +448,12 @@
     {/if}
   </div>
 
-  <!-- Mobile: Minimal floating indicator when UI is hidden (doesn't block canvas) -->
-  {#if isMobile && !showUI}
-    <button
-      class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-white/90 backdrop-blur rounded-full shadow-lg px-3 py-2"
-      on:click={toggleUI}
-    >
-      <div 
-        class="w-6 h-6 rounded-full relative"
-        style="background-color: {selectedColor};"
-      >
-        {#if !canPlace}
-          <svg class="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 36 36">
-            <circle cx="18" cy="18" r="14" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="4"/>
-            <circle cx="18" cy="18" r="14" fill="none" stroke="white" stroke-width="4"
-              stroke-dasharray="88" stroke-dashoffset={88 - cooldownProgress * 88} stroke-linecap="round"/>
-          </svg>
-        {/if}
-      </div>
-      <span class="text-xs text-neutral-500">Tap for controls</span>
-    </button>
-  {/if}
-
-  <!-- UI Container - hidden on mobile when not active -->
-  <div class="contents {isMobile && !showUI ? 'pointer-events-none' : ''}">
+  <!-- UI Container -->
+  <div class="contents">
     
     <!-- Color picker - bottom center on mobile, bottom left on desktop -->
     <div 
-      class="fixed z-50 transition-all duration-200 {isMobile ? 'bottom-4 left-1/2 -translate-x-1/2' : 'bottom-6 left-6'} {isMobile && !showUI ? 'opacity-0 translate-y-4' : 'opacity-100 translate-y-0'}"
+      class="fixed z-50 {isMobile ? 'bottom-4 left-1/2 -translate-x-1/2' : 'bottom-6 left-6'}"
     >
       <div class="palette-container relative flex items-end gap-3">
         <!-- Back button - only on desktop -->
@@ -586,7 +534,7 @@
 
     <!-- Stats - top left, smaller on mobile -->
     <div 
-      class="fixed z-50 transition-all duration-200 {isMobile ? 'top-2 left-2' : 'top-6 left-6'} {isMobile && !showUI ? 'opacity-0 -translate-y-4' : 'opacity-100 translate-y-0'}"
+      class="fixed z-50 {isMobile ? 'top-2 left-2' : 'top-6 left-6'}"
     >
       <div class="bg-white/90 backdrop-blur rounded-xl shadow-lg {isMobile ? 'px-3 py-2' : 'px-4 py-3'}">
         <div class="flex items-center gap-2">
