@@ -33,11 +33,11 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
       |> assign(:can_place, cooldown == :ok)
       |> assign(:seconds_remaining, seconds_remaining)
       |> assign(:stats, stats)
-      |> assign(:page_title, "Pixel Canvas")
-      |> assign(:pixels_version, 0)  # Add version counter to force Svelte updates
-      |> assign(:cursors, %{})  # Map of user_id => {x, y, color, timestamp}
+      |> assign(:page_title, "Pixels")
+      |> assign(:pixels_version, 0)
+      |> assign(:cursors, %{})
 
-    {:ok, socket}
+    {:ok, socket, layout: false}
   end
 
   def render(assigns) do

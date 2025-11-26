@@ -1,82 +1,133 @@
 <script>
-  export let width = 500
-  export let height = 500
+  import { onMount } from 'svelte'
+
+  export let width = 100
+  export let height = 100
   export let pixels = []
   export let pixelsVersion = 0
   export let colors = []
   export let selectedColor = "#1a1a1a"
   export let canPlace = true
   export let secondsRemaining = 0
-  export let cooldownSeconds = 60
+  export let cooldownSeconds = 15
   export let stats = { total_pixels: 0, unique_users: 0 }
   export let cursors = []
   export let live
 
   let hoveredPixel = null
-  let pixelSize = 5
+  let pixelSize = 8
   let canvasElement
   let canvasContainer
+  let scrollContainer
   let ctx
   let lastCursorSend = 0
-  let lastDraw = 0
-  let isLoading = true
-  let loadedPixelCount = 0
-  const CURSOR_THROTTLE_MS = 250  // Send cursor updates every 250ms (reduced from 100ms)
-  const DRAW_THROTTLE_MS = 16  // ~60fps max
+  let zoom = 1
+  let showPalette = false
+  let showUI = true
+  let uiTimeout = null
+  let isMobile = false
+  let canScroll = false
+  let showScrollHint = false
+  let hasScrolled = false
+  const CURSOR_THROTTLE_MS = 250
+  const UI_HIDE_DELAY = 3000
 
-  $: canvasWidth = width * pixelSize
-  $: canvasHeight = height * pixelSize
+  // Pan/drag state
+  let isPanning = false
+  let panStart = { x: 0, y: 0 }
+  let scrollStart = { x: 0, y: 0 }
 
-  // Animate pixels loading one by one (like old computer games)
-  // But don't block interaction - load in background
-  $: if (pixels !== undefined) {
-    if (pixels.length === 0) {
-      // Empty canvas, no loading needed
-      isLoading = false
-    } else if (isLoading && loadedPixelCount < pixels.length) {
-      // Animate loading in background (faster pace)
-      const pixelsPerFrame = Math.max(10, Math.ceil(pixels.length / 20)) // Faster load: ~20 frames
+  // Detect mobile and check if canvas is scrollable
+  onMount(() => {
+    isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0
+    
+    const savedColor = localStorage.getItem('pixels_selected_color')
+    if (savedColor && colors.includes(savedColor)) {
+      selectedColor = savedColor
+      live.pushEvent("select_color", { color: savedColor })
+    }
 
-      const animateLoad = () => {
-        if (loadedPixelCount < pixels.length) {
-          loadedPixelCount = Math.min(loadedPixelCount + pixelsPerFrame, pixels.length)
-          drawCanvas()
-          requestAnimationFrame(animateLoad)
-        } else {
-          isLoading = false
-        }
-      }
+    // Auto-hide UI on mobile after delay
+    if (isMobile) {
+      resetUITimer()
+    }
 
-      requestAnimationFrame(animateLoad)
+    // Check if user has seen scroll hint before
+    hasScrolled = localStorage.getItem('pixels_has_scrolled') === 'true'
+
+    // Check scrollability after a short delay to let canvas render
+    setTimeout(checkScrollability, 500)
+  })
+
+  function checkScrollability() {
+    if (!scrollContainer) return
+    
+    const isScrollable = scrollContainer.scrollWidth > scrollContainer.clientWidth ||
+                         scrollContainer.scrollHeight > scrollContainer.clientHeight
+    
+    canScroll = isScrollable
+    
+    // Show hint briefly if scrollable and user hasn't scrolled before
+    if (isScrollable && !hasScrolled) {
+      showScrollHint = true
+      setTimeout(() => {
+        showScrollHint = false
+      }, 4000)
     }
   }
+
+  function onUserScrolled() {
+    if (!hasScrolled) {
+      hasScrolled = true
+      localStorage.setItem('pixels_has_scrolled', 'true')
+      showScrollHint = false
+    }
+  }
+
+  function resetUITimer() {
+    if (!isMobile) return
+    showUI = true
+    if (uiTimeout) clearTimeout(uiTimeout)
+    uiTimeout = setTimeout(() => {
+      if (!showPalette) showUI = false
+    }, UI_HIDE_DELAY)
+  }
+
+  function toggleUI() {
+    showUI = !showUI
+    if (showUI) resetUITimer()
+  }
+
+  // Cooldown progress (0 to 1)
+  $: cooldownProgress = canPlace ? 1 : (cooldownSeconds - secondsRemaining) / cooldownSeconds
 
   // Calculate responsive pixel size based on available space
   function calculatePixelSize() {
     if (!canvasContainer) return
 
-    const containerWidth = canvasContainer.clientWidth
-    const containerHeight = canvasContainer.clientHeight
+    // Account for margin: m-4 (16px each side = 32px total) on mobile
+    // sm:m-8 (32px each side = 64px total) on desktop
+    const isSmallScreen = canvasContainer.clientWidth < 640
+    const margin = isSmallScreen ? 32 : 64  // 16px * 2 or 32px * 2
+    const containerWidth = canvasContainer.clientWidth - margin
+    const containerHeight = canvasContainer.clientHeight - margin
 
-    // Calculate pixel size that fits both dimensions
     const maxPixelWidth = Math.floor(containerWidth / width)
     const maxPixelHeight = Math.floor(containerHeight / height)
 
-    // Use the smaller dimension, with a minimum of 4px for visibility
-    // On small screens, allow scrolling rather than making pixels invisible
+    // On small screens, fit canvas to screen; on large screens allow some flexibility
     const fittedSize = Math.min(maxPixelWidth, maxPixelHeight)
-    const newPixelSize = Math.max(4, fittedSize)
+    const newPixelSize = isSmallScreen 
+      ? Math.max(2, fittedSize)  // On mobile, fit to screen
+      : Math.max(3, Math.min(10, fittedSize))  // On desktop, clamp to reasonable range
 
     if (newPixelSize !== pixelSize) {
       pixelSize = newPixelSize
-      // Redraw after size change
-      if (ctx) {
-        drawCanvas()
-      }
+      if (ctx) drawCanvas()
     }
   }
 
-  // Draw canvas when pixels change (using version to force reactivity)
+  // Draw canvas when pixels change
   $: if (ctx && pixelsVersion >= 0) {
     drawCanvas()
   }
@@ -85,26 +136,29 @@
     canvasElement = node
     ctx = node.getContext('2d')
     drawCanvas()
-    return {
-      destroy() {}
-    }
+    return { destroy() {} }
   }
 
   function initContainer(node) {
     canvasContainer = node
-
-    // Calculate initial size
     calculatePixelSize()
 
-    // Recalculate on window resize
-    const resizeObserver = new ResizeObserver(() => {
-      calculatePixelSize()
-    })
+    const resizeObserver = new ResizeObserver(() => calculatePixelSize())
     resizeObserver.observe(node)
 
-    return {
+    return { destroy() { resizeObserver.disconnect() } }
+  }
+
+  function initScrollContainer(node) {
+    scrollContainer = node
+    
+    // Listen for scroll to dismiss hint
+    const handleScroll = () => onUserScrolled()
+    node.addEventListener('scroll', handleScroll, { passive: true })
+    
+    return { 
       destroy() {
-        resizeObserver.disconnect()
+        node.removeEventListener('scroll', handleScroll)
       }
     }
   }
@@ -112,74 +166,82 @@
   function drawCanvas() {
     if (!ctx) return
 
-    // Throttle drawing to max 60fps (but skip throttle during loading animation)
-    if (!isLoading) {
-      const now = Date.now()
-      if (now - lastDraw < DRAW_THROTTLE_MS) return
-      lastDraw = now
+    const effectivePixelSize = pixelSize * zoom
+    const actualWidth = width * effectivePixelSize
+    const actualHeight = height * effectivePixelSize
+
+    if (canvasElement.width !== actualWidth || canvasElement.height !== actualHeight) {
+      canvasElement.width = actualWidth
+      canvasElement.height = actualHeight
     }
 
-    // Clear with white background
     ctx.fillStyle = '#FFFFFF'
-    ctx.fillRect(0, 0, canvasWidth, canvasHeight)
+    ctx.fillRect(0, 0, actualWidth, actualHeight)
 
-    // Always draw grid lines to show empty cells
-    ctx.strokeStyle = '#EEEEEE'
-    ctx.lineWidth = 1
-
-    // Vertical lines
-    for (let x = 0; x <= width; x++) {
-      ctx.beginPath()
-      ctx.moveTo(x * pixelSize, 0)
-      ctx.lineTo(x * pixelSize, canvasHeight)
-      ctx.stroke()
-    }
-
-    // Horizontal lines
-    for (let y = 0; y <= height; y++) {
-      ctx.beginPath()
-      ctx.moveTo(0, y * pixelSize)
-      ctx.lineTo(canvasWidth, y * pixelSize)
-      ctx.stroke()
-    }
-
-    // Draw filled pixels (with 1px inset from grid)
-    // During loading, only draw pixels up to loadedPixelCount
-    const pixelsToDraw = isLoading ? pixels.slice(0, loadedPixelCount) : pixels
-
-    pixelsToDraw.forEach(pixel => {
+    pixels.forEach(pixel => {
       ctx.fillStyle = pixel.color
       ctx.fillRect(
-        pixel.x * pixelSize + 1,
-        pixel.y * pixelSize + 1,
-        pixelSize - 2,
-        pixelSize - 2
+        pixel.x * effectivePixelSize,
+        pixel.y * effectivePixelSize,
+        effectivePixelSize,
+        effectivePixelSize
       )
     })
 
-    // Preview hovered pixel
-    if (hoveredPixel && canPlace) {
-      ctx.globalAlpha = 0.6
+    if (hoveredPixel && canPlace && !isPanning) {
+      ctx.globalAlpha = 0.5
       ctx.fillStyle = selectedColor
       ctx.fillRect(
-        hoveredPixel.x * pixelSize + 1,
-        hoveredPixel.y * pixelSize + 1,
-        pixelSize - 2,
-        pixelSize - 2
+        hoveredPixel.x * effectivePixelSize,
+        hoveredPixel.y * effectivePixelSize,
+        effectivePixelSize,
+        effectivePixelSize
       )
       ctx.globalAlpha = 1.0
+    }
+
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)'
+    ctx.lineWidth = 1
+
+    for (let x = 0; x <= width; x++) {
+      ctx.beginPath()
+      ctx.moveTo(x * effectivePixelSize + 0.5, 0)
+      ctx.lineTo(x * effectivePixelSize + 0.5, actualHeight)
+      ctx.stroke()
+    }
+
+    for (let y = 0; y <= height; y++) {
+      ctx.beginPath()
+      ctx.moveTo(0, y * effectivePixelSize + 0.5)
+      ctx.lineTo(actualWidth, y * effectivePixelSize + 0.5)
+      ctx.stroke()
     }
   }
 
   function getCoords(clientX, clientY) {
     const rect = canvasElement.getBoundingClientRect()
-    const x = Math.floor((clientX - rect.left) / pixelSize)
-    const y = Math.floor((clientY - rect.top) / pixelSize)
+    const effectivePixelSize = pixelSize * zoom
+    const x = Math.floor((clientX - rect.left) / effectivePixelSize)
+    const y = Math.floor((clientY - rect.top) / effectivePixelSize)
     return { x, y }
   }
 
+  function handleMouseDown(event) {
+    if (event.button === 1) {
+      event.preventDefault()
+      startPan(event.clientX, event.clientY)
+    }
+  }
+
+  function handleMouseUp(event) {
+    if (isPanning) {
+      isPanning = false
+      return
+    }
+  }
+
   function handleClick(event) {
-    if (!canPlace) return
+    if (isPanning || !canPlace) return
     const { x, y } = getCoords(event.clientX, event.clientY)
     if (x >= 0 && x < width && y >= 0 && y < height) {
       live.pushEvent("place_pixel", { x, y })
@@ -187,17 +249,35 @@
   }
 
   function handleMove(event) {
+    if (isPanning) {
+      doPan(event.clientX, event.clientY)
+      return
+    }
+
     const { x, y } = getCoords(event.clientX, event.clientY)
     if (x >= 0 && x < width && y >= 0 && y < height) {
-      // Only update if pixel changed
       if (!hoveredPixel || hoveredPixel.x !== x || hoveredPixel.y !== y) {
         hoveredPixel = { x, y }
         drawCanvas()
-
-        // Send cursor position (throttled)
         sendCursorPosition(x, y)
       }
     }
+  }
+
+  function startPan(clientX, clientY) {
+    isPanning = true
+    panStart = { x: clientX, y: clientY }
+    if (scrollContainer) {
+      scrollStart = { x: scrollContainer.scrollLeft, y: scrollContainer.scrollTop }
+    }
+  }
+
+  function doPan(clientX, clientY) {
+    if (!scrollContainer) return
+    const dx = panStart.x - clientX
+    const dy = panStart.y - clientY
+    scrollContainer.scrollLeft = scrollStart.x + dx
+    scrollContainer.scrollTop = scrollStart.y + dy
   }
 
   function sendCursorPosition(x, y) {
@@ -210,165 +290,326 @@
 
   function handleLeave() {
     hoveredPixel = null
+    isPanning = false
     drawCanvas()
   }
 
-  // Touch support
+  // Touch handling
+  let lastTouchDistance = 0
+  let touchPanStart = null
+
   function handleTouchStart(event) {
-    if (!canPlace || event.touches.length !== 1) return
-
-    const touch = event.touches[0]
-    const { x, y } = getCoords(touch.clientX, touch.clientY)
-
-    if (x >= 0 && x < width && y >= 0 && y < height) {
-      // Only prevent default when actually placing a pixel
+    resetUITimer()
+    
+    if (event.touches.length === 2) {
       event.preventDefault()
-      hoveredPixel = { x, y }
-      drawCanvas()
-      live.pushEvent("place_pixel", { x, y })
-    }
-  }
-
-  function handleTouchMove(event) {
-    if (event.touches.length !== 1) return
-    const touch = event.touches[0]
-    const { x, y } = getCoords(touch.clientX, touch.clientY)
-    if (x >= 0 && x < width && y >= 0 && y < height) {
-      // Only update if pixel changed
-      if (!hoveredPixel || hoveredPixel.x !== x || hoveredPixel.y !== y) {
+      const touch1 = event.touches[0]
+      const touch2 = event.touches[1]
+      const centerX = (touch1.clientX + touch2.clientX) / 2
+      const centerY = (touch1.clientY + touch2.clientY) / 2
+      touchPanStart = { x: centerX, y: centerY }
+      if (scrollContainer) {
+        scrollStart = { x: scrollContainer.scrollLeft, y: scrollContainer.scrollTop }
+      }
+      lastTouchDistance = Math.hypot(
+        touch2.clientX - touch1.clientX,
+        touch2.clientY - touch1.clientY
+      )
+    } else if (event.touches.length === 1 && canPlace) {
+      const touch = event.touches[0]
+      const { x, y } = getCoords(touch.clientX, touch.clientY)
+      if (x >= 0 && x < width && y >= 0 && y < height) {
+        event.preventDefault()
         hoveredPixel = { x, y }
         drawCanvas()
-
-        // Send cursor position (throttled)
-        sendCursorPosition(x, y)
+        live.pushEvent("place_pixel", { x, y })
       }
     }
   }
 
+  function handleTouchMove(event) {
+    if (event.touches.length === 2) {
+      event.preventDefault()
+      const touch1 = event.touches[0]
+      const touch2 = event.touches[1]
+      
+      const centerX = (touch1.clientX + touch2.clientX) / 2
+      const centerY = (touch1.clientY + touch2.clientY) / 2
+      if (touchPanStart && scrollContainer) {
+        const dx = touchPanStart.x - centerX
+        const dy = touchPanStart.y - centerY
+        scrollContainer.scrollLeft = scrollStart.x + dx
+        scrollContainer.scrollTop = scrollStart.y + dy
+      }
+
+      const distance = Math.hypot(
+        touch2.clientX - touch1.clientX,
+        touch2.clientY - touch1.clientY
+      )
+      if (lastTouchDistance > 0) {
+        const scale = distance / lastTouchDistance
+        if (Math.abs(scale - 1) > 0.02) {
+          const newZoom = Math.max(0.5, Math.min(3, zoom * scale))
+          if (newZoom !== zoom) {
+            zoom = newZoom
+            drawCanvas()
+          }
+          lastTouchDistance = distance
+        }
+      }
+    } else if (event.touches.length === 1) {
+      const touch = event.touches[0]
+      const { x, y } = getCoords(touch.clientX, touch.clientY)
+      if (x >= 0 && x < width && y >= 0 && y < height) {
+        if (!hoveredPixel || hoveredPixel.x !== x || hoveredPixel.y !== y) {
+          hoveredPixel = { x, y }
+          drawCanvas()
+          sendCursorPosition(x, y)
+        }
+      }
+    }
+  }
+
+  function handleTouchEnd() {
+    touchPanStart = null
+    lastTouchDistance = 0
+    hoveredPixel = null
+    drawCanvas()
+  }
+
   function selectColor(color) {
     selectedColor = color
+    localStorage.setItem('pixels_selected_color', color)
     live.pushEvent("select_color", { color })
+    showPalette = false
+    resetUITimer()
+  }
+
+  function adjustZoom(delta) {
+    zoom = Math.max(0.5, Math.min(3, zoom + delta))
+    drawCanvas()
+    resetUITimer()
+    // Recheck scrollability after zoom change
+    setTimeout(checkScrollability, 100)
+  }
+
+  function handleKeyDown(event) {
+    if (event.key >= '1' && event.key <= '9') {
+      const index = parseInt(event.key) - 1
+      if (colors[index]) {
+        selectColor(colors[index])
+      }
+    }
+    if (event.key === '0' && colors[9]) {
+      selectColor(colors[9])
+    }
+  }
+
+  function handleClickOutside(event) {
+    if (showPalette && !event.target.closest('.palette-container')) {
+      showPalette = false
+    }
+  }
+
+  function openPalette() {
+    showPalette = true
+    showUI = true
+    if (uiTimeout) clearTimeout(uiTimeout)
   }
 </script>
 
-<div class="fixed inset-0 flex flex-col bg-gray-50">
-  <!-- Sleek Header - Ultra Minimal -->
-  <div class="bg-white border-b border-gray-200 relative z-10">
-    <div class="px-2 sm:px-3 py-1 flex items-center gap-1 sm:gap-2">
-      <!-- Back Button -->
-      <a
-        href="/real-estate"
-        class="p-1 hover:bg-gray-50 rounded transition-colors flex-shrink-0"
-        title="Back"
-      >
-        <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-        </svg>
-      </a>
+<svelte:window on:keydown={handleKeyDown} on:mouseup={handleMouseUp} on:click={handleClickOutside} />
 
-      <!-- Title -->
-      <h1 class="text-xs font-semibold text-gray-700 flex-shrink-0 hidden sm:block">Pixel Canvas</h1>
+<div class="fixed inset-0 flex flex-col bg-neutral-100">
+  <!-- Canvas Area - full screen -->
+  <div 
+    class="flex-1 overflow-auto"
+    use:initScrollContainer
+    use:initContainer
+  >
+    <div class="flex items-center justify-center min-h-full min-w-full">
+      <div class="relative m-4 sm:m-8">
+        <canvas
+          use:initCanvas
+          class="shadow-2xl rounded-sm bg-white {isPanning ? 'cursor-grabbing' : canPlace ? 'cursor-crosshair' : 'cursor-wait'}"
+          on:mousedown={handleMouseDown}
+          on:click={handleClick}
+          on:mousemove={handleMove}
+          on:mouseleave={handleLeave}
+          on:touchstart={handleTouchStart}
+          on:touchmove={handleTouchMove}
+          on:touchend={handleTouchEnd}
+          on:contextmenu|preventDefault
+        ></canvas>
 
-      <!-- Color Palette -->
-      <div class="flex items-center gap-0.5 overflow-x-auto overflow-y-hidden scrollbar-hide flex-1 px-0.5 py-1 touch-pan-x">
-        {#each colors as color}
-          <button
-            class="w-5 h-5 sm:w-6 sm:h-6 rounded flex-shrink-0 transition-all duration-150 relative border border-gray-200/50"
-            class:scale-110={selectedColor === color}
-            class:border-2={selectedColor === color}
-            class:border-gray-800={selectedColor === color}
-            style="background-color: {color};"
-            on:click={() => selectColor(color)}
-            title={color.toUpperCase()}
+        <!-- Live Cursors -->
+        {#each cursors as cursor (cursor.id)}
+          <div
+            class="absolute pointer-events-none transition-all duration-100"
+            style="left: {cursor.x * pixelSize * zoom}px; top: {cursor.y * pixelSize * zoom}px;"
           >
-            {#if selectedColor === color}
-              <div class="absolute inset-0 flex items-center justify-center">
-                <svg class="w-3 h-3 text-white filter drop-shadow" fill="currentColor" viewBox="0 0 20 20">
-                  <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-                </svg>
-              </div>
-            {/if}
-          </button>
+            <div
+              class="w-2 h-2 rounded-full border border-white shadow"
+              style="background-color: {cursor.color}"
+            ></div>
+          </div>
         {/each}
       </div>
+    </div>
 
-      <!-- Stats -->
-      <div class="hidden lg:flex items-center gap-1 text-[10px] text-gray-400 flex-shrink-0">
-        <span>{stats.total_pixels.toLocaleString()}</span>
-        <span>·</span>
-        <span>{stats.unique_users}</span>
+    <!-- Scroll hint overlay -->
+    {#if showScrollHint && canScroll}
+      <div class="absolute inset-0 pointer-events-none flex items-center justify-center">
+        <div class="bg-black/70 text-white px-4 py-3 rounded-2xl flex items-center gap-3 animate-hint">
+          <svg class="w-6 h-6 animate-bounce-x" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4"/>
+          </svg>
+          <span class="text-sm">Scroll to explore</span>
+        </div>
       </div>
+    {/if}
+  </div>
 
-      <!-- Cooldown Status -->
-      <div class="flex-shrink-0">
-        {#if canPlace}
-          <div class="px-2 py-0.5 bg-green-500 text-white font-medium text-[10px] rounded">
-            ✓
+  <!-- Mobile: Tap anywhere to show UI hint -->
+  {#if isMobile && !showUI}
+    <button 
+      class="fixed inset-0 z-40"
+      on:click={toggleUI}
+      aria-label="Show controls"
+    ></button>
+    
+    <!-- Minimal floating color indicator - always visible, tap to show UI -->
+    <button
+      class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-white/90 backdrop-blur rounded-full shadow-lg px-3 py-2"
+      on:click={toggleUI}
+    >
+      <div 
+        class="w-6 h-6 rounded-full relative"
+        style="background-color: {selectedColor};"
+      >
+        {#if !canPlace}
+          <svg class="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 36 36">
+            <circle cx="18" cy="18" r="14" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="4"/>
+            <circle cx="18" cy="18" r="14" fill="none" stroke="white" stroke-width="4"
+              stroke-dasharray="88" stroke-dashoffset={88 - cooldownProgress * 88} stroke-linecap="round"/>
+          </svg>
+        {/if}
+      </div>
+      <span class="text-xs text-neutral-500">Tap for controls</span>
+    </button>
+  {/if}
+
+  <!-- UI Container - hidden on mobile when not active -->
+  <div class="contents {isMobile && !showUI ? 'pointer-events-none' : ''}">
+    
+    <!-- Color picker - bottom center on mobile, bottom left on desktop -->
+    <div 
+      class="fixed z-50 transition-all duration-200 {isMobile ? 'bottom-4 left-1/2 -translate-x-1/2' : 'bottom-6 left-6'} {isMobile && !showUI ? 'opacity-0 translate-y-4' : 'opacity-100 translate-y-0'}"
+    >
+      <div class="palette-container relative flex items-end gap-3">
+        <!-- Back button - only on desktop -->
+        {#if !isMobile}
+          <a 
+            href="/" 
+            class="w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center text-neutral-400 hover:text-neutral-900 transition-colors"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+            </svg>
+          </a>
+        {/if}
+
+        <!-- Expanded palette -->
+        {#if showPalette}
+          <div class="absolute {isMobile ? 'bottom-16 left-1/2 -translate-x-1/2' : 'bottom-16 left-0'} bg-white rounded-2xl shadow-2xl p-4 animate-in">
+            <div class="flex flex-wrap gap-2 justify-center" style="width: 200px;">
+              {#each colors as color, i}
+                <button
+                  class="group relative w-9 h-9 rounded-lg transition-all active:scale-95 {selectedColor === color ? 'ring-2 ring-neutral-900 ring-offset-2' : ''}"
+                  style="background-color: {color};"
+                  on:click={() => selectColor(color)}
+                >
+                  {#if i < 10 && !isMobile}
+                    <span class="absolute -top-1 -right-1 w-4 h-4 bg-neutral-900 text-white text-[10px] font-medium rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      {i < 9 ? i + 1 : 0}
+                    </span>
+                  {/if}
+                </button>
+              {/each}
+            </div>
+            {#if !isMobile}
+              <p class="text-[10px] text-neutral-400 mt-3 text-center">1-0 for first 10 colors</p>
+            {/if}
           </div>
-        {:else}
-          <div class="px-2 py-0.5 bg-gray-200 text-gray-600 font-medium text-[10px] rounded">
-            {secondsRemaining}s
+        {/if}
+
+        <!-- Current color button -->
+        <button
+          class="w-14 h-14 sm:w-12 sm:h-12 rounded-full shadow-lg transition-all active:scale-95 relative overflow-hidden"
+          style="background-color: {selectedColor};"
+          on:click={openPalette}
+        >
+          <svg class="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 36 36">
+            <circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="3"/>
+            <circle cx="18" cy="18" r="16" fill="none" stroke="white" stroke-width="3"
+              stroke-dasharray="100" stroke-dashoffset={100 - cooldownProgress * 100} stroke-linecap="round"
+              class="transition-all duration-1000 ease-linear"/>
+          </svg>
+          {#if !canPlace}
+            <span class="absolute inset-0 flex items-center justify-center text-white text-sm font-bold drop-shadow">
+              {secondsRemaining}
+            </span>
+          {/if}
+        </button>
+
+        <!-- Zoom controls - inline on mobile -->
+        {#if isMobile}
+          <div class="bg-white rounded-full shadow-lg flex items-center overflow-hidden">
+            <button class="w-10 h-10 text-neutral-600 active:bg-neutral-100 text-lg font-medium" on:click={() => adjustZoom(-0.25)}>−</button>
+            <button class="w-10 h-10 text-neutral-600 active:bg-neutral-100 text-lg font-medium" on:click={() => adjustZoom(0.25)}>+</button>
           </div>
         {/if}
       </div>
     </div>
 
-    <!-- Cooldown Progress Bar (always reserve 1px space) -->
-    <div class="h-px bg-gray-200 relative overflow-hidden">
-      {#if !canPlace}
-        <div
-          class="h-full bg-blue-500 transition-all duration-1000 ease-linear"
-          style="width: {((cooldownSeconds - secondsRemaining) / cooldownSeconds) * 100}%"
-        ></div>
-      {/if}
-    </div>
-  </div>
-
-  <!-- Canvas Area (Full Screen) -->
-  <div class="flex-1 overflow-auto relative p-4 flex items-start justify-center" use:initContainer>
-    <div class="relative">
-      <canvas
-        use:initCanvas
-        width={canvasWidth}
-        height={canvasHeight}
-        class="cursor-crosshair shadow-lg bg-white rounded-sm"
-        class:cursor-not-allowed={!canPlace}
-        on:click={handleClick}
-        on:mousemove={handleMove}
-        on:mouseleave={handleLeave}
-        on:touchstart={handleTouchStart}
-        on:touchmove={handleTouchMove}
-        on:touchend={handleLeave}
-      ></canvas>
-
-      <!-- Loading Progress Overlay -->
-      {#if isLoading && pixels.length > 0}
-        <div class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-gray-900/90 backdrop-blur-sm text-white px-4 py-2 rounded-full shadow-lg text-xs font-medium">
-          Loading {loadedPixelCount} / {pixels.length} pixels...
+    <!-- Desktop zoom controls - bottom right -->
+    {#if !isMobile}
+      <div class="fixed bottom-6 right-6 flex items-center gap-2">
+        <div class="bg-white rounded-full shadow-lg flex items-center overflow-hidden">
+          <button class="w-10 h-10 text-neutral-600 hover:bg-neutral-50 text-lg font-medium transition-colors" on:click={() => adjustZoom(-0.25)}>−</button>
+          <span class="text-xs text-neutral-500 w-12 text-center font-medium">{Math.round(zoom * 100)}%</span>
+          <button class="w-10 h-10 text-neutral-600 hover:bg-neutral-50 text-lg font-medium transition-colors" on:click={() => adjustZoom(0.25)}>+</button>
         </div>
-      {/if}
+      </div>
+    {/if}
 
-      <!-- Live Cursors Overlay -->
-      {#each cursors as cursor (cursor.id)}
-        <div
-          class="absolute pointer-events-none transition-all duration-75"
-          style="left: {cursor.x * pixelSize}px; top: {cursor.y * pixelSize}px; transform: translate(-50%, -50%);"
-        >
-          <!-- Cursor dot -->
-          <div
-            class="w-3 h-3 rounded-full border-2 border-white shadow-lg"
-            style="background-color: {cursor.color}"
-          ></div>
-          <!-- User ID label -->
-          <div
-            class="absolute top-4 left-1/2 -translate-x-1/2 px-1.5 py-0.5 bg-gray-900 text-white text-xs rounded whitespace-nowrap shadow-lg"
-            style="font-size: 10px;"
-          >
-            {cursor.id}
+    <!-- Stats - top left, smaller on mobile -->
+    <div 
+      class="fixed z-50 transition-all duration-200 {isMobile ? 'top-2 left-2' : 'top-6 left-6'} {isMobile && !showUI ? 'opacity-0 -translate-y-4' : 'opacity-100 translate-y-0'}"
+    >
+      <div class="bg-white/90 backdrop-blur rounded-xl shadow-lg {isMobile ? 'px-3 py-2' : 'px-4 py-3'}">
+        <div class="flex items-center gap-2">
+          {#if isMobile}
+            <a href="/" class="text-neutral-400">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+              </svg>
+            </a>
+          {/if}
+          <div>
+            <h1 class="{isMobile ? 'text-xs' : 'text-sm'} font-semibold text-neutral-900">Pixels</h1>
+            <p class="{isMobile ? 'text-[10px]' : 'text-xs'} text-neutral-500">{stats.total_pixels.toLocaleString()} · {stats.unique_users} artists</p>
           </div>
         </div>
-      {/each}
+      </div>
     </div>
+
+    <!-- Coordinates - only on desktop -->
+    {#if hoveredPixel && !isMobile}
+      <div class="fixed top-6 right-6 bg-neutral-900 text-white px-3 py-2 rounded-lg text-xs font-mono">
+        {hoveredPixel.x}, {hoveredPixel.y}
+      </div>
+    {/if}
   </div>
 </div>
 
@@ -383,13 +624,38 @@
     image-rendering: crisp-edges;
   }
 
-  /* Hide scrollbar for color palette */
-  .scrollbar-hide {
-    -ms-overflow-style: none;  /* IE and Edge */
-    scrollbar-width: none;  /* Firefox */
+  .animate-in {
+    animation: fadeIn 0.15s ease-out;
   }
 
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;  /* Chrome, Safari and Opera */
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .animate-hint {
+    animation: hintFade 4s ease-out forwards;
+  }
+
+  @keyframes hintFade {
+    0% { opacity: 0; transform: scale(0.9); }
+    10% { opacity: 1; transform: scale(1); }
+    80% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+
+  .animate-bounce-x {
+    animation: bounceX 1.5s ease-in-out infinite;
+  }
+
+  @keyframes bounceX {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
   }
 </style>
