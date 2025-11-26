@@ -43,25 +43,23 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_path={@current_path}>
-      <div class="h-[calc(100vh-4rem)]">
-        <.svelte
-          name="PixelCanvas"
-          props={%{
-            width: @canvas_width,
-            height: @canvas_height,
-            pixels: serialize_pixels(@pixels),
-            pixelsVersion: @pixels_version,
-            colors: @colors,
-            selectedColor: @selected_color,
-            canPlace: @can_place,
-            secondsRemaining: @seconds_remaining,
-            cooldownSeconds: @cooldown_seconds,
-            stats: @stats,
-            cursors: serialize_cursors(@cursors)
-          }}
-          socket={@socket}
-        />
-      </div>
+      <.svelte
+        name="PixelCanvas"
+        props={%{
+          width: @canvas_width,
+          height: @canvas_height,
+          pixels: serialize_pixels(@pixels),
+          pixelsVersion: @pixels_version,
+          colors: @colors,
+          selectedColor: @selected_color,
+          canPlace: @can_place,
+          secondsRemaining: @seconds_remaining,
+          cooldownSeconds: @cooldown_seconds,
+          stats: @stats,
+          cursors: serialize_cursors(@cursors)
+        }}
+        socket={@socket}
+      />
     </Layouts.app>
     """
   end

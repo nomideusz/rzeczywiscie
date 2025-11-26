@@ -325,7 +325,10 @@
       if (colors[idx]) selectColor(colors[idx])
     }
     if (e.key === '0' && colors[9]) selectColor(colors[9])
-    if (e.key === 'Escape') showHelp = false
+    if (e.key === 'Escape') {
+      showHelp = false
+      showPalette = false
+    }
   }
 
   function handleClickOutside(e) {
@@ -335,43 +338,86 @@
 
 <svelte:window on:keydown={handleKeyDown} on:mouseup={handleMouseUp} on:click={handleClickOutside} />
 
-<div class="h-full bg-base-200 flex flex-col">
-  <!-- Sub-header with stats and controls -->
-  <div class="bg-base-100 border-b-2 border-base-content flex-shrink-0 z-20">
+<!-- Main container with fixed toolbar and scrollable canvas -->
+<div class="bg-base-200">
+  <!-- Toolbar - sticky at top -->
+  <div class="sticky top-0 z-30 bg-base-100 border-b-2 border-base-content">
     <div class="container mx-auto px-4 py-2">
-      <div class="flex items-center justify-between gap-4">
-        <div class="flex items-center gap-4">
-          <div>
-            <h1 class="text-base md:text-lg font-black uppercase tracking-tight">🎨 Pixel Canvas</h1>
-          </div>
-          
-          <!-- Stats -->
-          <div class="hidden md:flex items-center gap-1 border-2 border-base-content">
-            <div class="px-3 py-1 border-r border-base-content/30">
-              <span class="font-black text-primary">{stats.total_pixels.toLocaleString()}</span>
-              <span class="text-[10px] font-bold uppercase opacity-50 ml-1">pixels</span>
+      <div class="flex items-center justify-between gap-2 flex-wrap">
+        <!-- Left: Color picker -->
+        <div class="palette-container relative flex items-center gap-2">
+          <!-- Current color with cooldown -->
+          <button
+            class="w-10 h-10 border-2 border-base-content cursor-pointer relative overflow-hidden flex-shrink-0"
+            style="background-color: {selectedColor};"
+            onclick={() => showPalette = !showPalette}
+          >
+            {#if !canPlace}
+              <div class="absolute inset-0 bg-black/40 flex items-center justify-center">
+                <span class="text-white text-xs font-black">{secondsRemaining}</span>
+              </div>
+            {/if}
+            <div class="absolute bottom-0 left-0 h-0.5 bg-white/60" style="width: {cooldownProgress * 100}%"></div>
+          </button>
+
+          <!-- Expanded palette popup -->
+          {#if showPalette}
+            <div class="absolute top-12 left-0 bg-base-100 border-2 border-base-content p-2 z-50 shadow-lg">
+              <div class="grid grid-cols-5 gap-1">
+                {#each colors as color, i}
+                  <button
+                    class="w-7 h-7 cursor-pointer {selectedColor === color ? 'ring-2 ring-base-content' : 'hover:scale-110'} transition-all"
+                    style="background-color: {color};"
+                    onclick={() => selectColor(color)}
+                  ></button>
+                {/each}
+              </div>
+              {#if !isMobile}
+                <p class="text-[9px] font-bold uppercase tracking-wide opacity-40 mt-1.5 text-center">Keys 1-0</p>
+              {/if}
             </div>
-            <div class="px-3 py-1">
-              <span class="font-black text-secondary">{stats.unique_users}</span>
-              <span class="text-[10px] font-bold uppercase opacity-50 ml-1">artists</span>
-            </div>
+          {/if}
+
+          <!-- Color strip (desktop) -->
+          <div class="hidden md:flex border-2 border-base-content">
+            {#each colors.slice(0, 10) as color}
+              <button
+                class="w-6 h-6 cursor-pointer transition-all {selectedColor === color ? 'ring-1 ring-base-content ring-inset' : 'hover:brightness-110'}"
+                style="background-color: {color};"
+                onclick={() => selectColor(color)}
+              ></button>
+            {/each}
           </div>
         </div>
 
-        <div class="flex items-center gap-2">
-          <!-- Zoom Controls -->
-          <div class="hidden sm:flex items-center border-2 border-base-content">
-            <button class="w-7 h-7 text-sm font-bold hover:bg-base-200 transition-colors cursor-pointer" onclick={() => adjustZoom(-0.25)}>−</button>
-            <span class="w-10 text-center text-xs font-bold">{Math.round(zoom * 100)}%</span>
-            <button class="w-7 h-7 text-sm font-bold hover:bg-base-200 transition-colors cursor-pointer border-l border-base-content/30" onclick={() => adjustZoom(0.25)}>+</button>
+        <!-- Center: Stats -->
+        <div class="flex items-center gap-3 text-xs">
+          <div class="flex items-center gap-1">
+            <span class="font-black text-primary">{stats.total_pixels.toLocaleString()}</span>
+            <span class="opacity-50 hidden sm:inline">pixels</span>
           </div>
+          <div class="hidden sm:flex items-center gap-1">
+            <span class="font-black text-secondary">{stats.unique_users}</span>
+            <span class="opacity-50">artists</span>
+          </div>
+          {#if hoveredPixel}
+            <div class="px-1.5 py-0.5 bg-base-content text-base-100 font-mono text-[10px] font-bold">
+              {hoveredPixel.x},{hoveredPixel.y}
+            </div>
+          {/if}
+        </div>
 
+        <!-- Right: Zoom + Help -->
+        <div class="flex items-center gap-1">
+          <div class="flex items-center border-2 border-base-content">
+            <button class="w-7 h-7 text-sm font-bold hover:bg-base-200 cursor-pointer" onclick={() => adjustZoom(-0.25)}>−</button>
+            <span class="w-9 text-center text-[10px] font-bold">{Math.round(zoom * 100)}%</span>
+            <button class="w-7 h-7 text-sm font-bold hover:bg-base-200 cursor-pointer border-l border-base-content/30" onclick={() => adjustZoom(0.25)}>+</button>
+          </div>
           <button
-            class="px-2 py-1 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-200 transition-colors cursor-pointer"
+            class="w-7 h-7 text-xs font-bold border-2 border-base-content hover:bg-base-200 cursor-pointer"
             onclick={() => showHelp = !showHelp}
-          >
-            ?
-          </button>
+          >?</button>
         </div>
       </div>
     </div>
@@ -379,11 +425,12 @@
 
   <!-- Canvas Area -->
   <div 
-    class="flex-1 overflow-auto relative"
+    class="overflow-auto relative"
+    style="height: calc(100vh - 12rem);"
     use:initScrollContainer
     use:initContainer
   >
-    <div class="flex items-center justify-center min-h-full p-4" style="min-width: max-content;">
+    <div class="flex items-center justify-center p-4 min-h-full" style="min-width: max-content;">
       <div class="border-2 border-base-content bg-base-100 p-1">
         <canvas
           use:initCanvas
@@ -410,138 +457,35 @@
       </div>
     {/each}
   </div>
-
-  <!-- Bottom Toolbar -->
-  <div class="bg-base-100 border-t-2 border-base-content flex-shrink-0">
-    <div class="container mx-auto px-4 py-2">
-      <div class="flex items-center justify-between gap-4">
-        <!-- Color Picker -->
-        <div class="palette-container relative flex items-center gap-3">
-          <!-- Current color with cooldown -->
-          <button
-            class="w-12 h-12 border-2 border-base-content cursor-pointer relative overflow-hidden flex-shrink-0"
-            style="background-color: {selectedColor};"
-            onclick={() => showPalette = !showPalette}
-          >
-            {#if !canPlace}
-              <div class="absolute inset-0 bg-black/30 flex items-center justify-center">
-                <span class="text-white text-sm font-black drop-shadow">{secondsRemaining}</span>
-              </div>
-            {/if}
-            <!-- Cooldown border -->
-            <div 
-              class="absolute bottom-0 left-0 h-1 bg-white/50 transition-all duration-1000"
-              style="width: {cooldownProgress * 100}%"
-            ></div>
-          </button>
-
-          <!-- Expanded palette -->
-          {#if showPalette}
-            <div class="absolute bottom-16 left-0 bg-base-100 border-2 border-base-content p-2 z-50">
-              <div class="grid grid-cols-5 gap-1" style="width: 180px;">
-                {#each colors as color, i}
-                  <button
-                    class="w-8 h-8 cursor-pointer relative {selectedColor === color ? 'ring-2 ring-base-content ring-offset-1' : 'hover:scale-110'} transition-all"
-                    style="background-color: {color};"
-                    onclick={() => selectColor(color)}
-                  >
-                    {#if i < 10 && !isMobile}
-                      <span class="absolute -top-1 -right-1 w-3.5 h-3.5 bg-base-content text-base-100 text-[8px] font-bold flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                        {i < 9 ? i + 1 : 0}
-                      </span>
-                    {/if}
-                  </button>
-                {/each}
-              </div>
-              {#if !isMobile}
-                <p class="text-[9px] font-bold uppercase tracking-wide opacity-40 mt-2 text-center">Keys 1-0</p>
-              {/if}
-            </div>
-          {/if}
-
-          <!-- Color strip (desktop) -->
-          <div class="hidden md:flex border-2 border-base-content">
-            {#each colors.slice(0, 10) as color, i}
-              <button
-                class="w-7 h-7 cursor-pointer transition-all {selectedColor === color ? 'scale-110 z-10 ring-1 ring-base-content' : 'hover:scale-105'}"
-                style="background-color: {color};"
-                onclick={() => selectColor(color)}
-              ></button>
-            {/each}
-          </div>
-        </div>
-
-        <!-- Mobile Stats -->
-        <div class="md:hidden flex items-center gap-2 text-xs">
-          <span class="font-black text-primary">{stats.total_pixels.toLocaleString()}</span>
-          <span class="opacity-50">pixels</span>
-        </div>
-
-        <!-- Coordinates & Zoom (mobile) -->
-        <div class="flex items-center gap-2">
-          {#if hoveredPixel}
-            <div class="hidden sm:block px-2 py-1 bg-base-content text-base-100 text-xs font-mono font-bold">
-              {hoveredPixel.x},{hoveredPixel.y}
-            </div>
-          {/if}
-
-          <!-- Mobile zoom -->
-          <div class="sm:hidden flex items-center border-2 border-base-content">
-            <button class="w-8 h-8 text-sm font-bold active:bg-base-200 cursor-pointer" onclick={() => adjustZoom(-0.25)}>−</button>
-            <button class="w-8 h-8 text-sm font-bold active:bg-base-200 cursor-pointer border-l border-base-content/30" onclick={() => adjustZoom(0.25)}>+</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
 </div>
 
 <!-- Help Modal -->
 {#if showHelp}
   <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onclick={() => showHelp = false}>
-    <div class="bg-base-100 border-2 border-base-content max-w-sm w-full" onclick={(e) => e.stopPropagation()}>
-      <div class="px-4 py-3 border-b-2 border-base-content bg-base-200 flex items-center justify-between">
-        <span class="text-sm font-bold uppercase tracking-wide">How to Play</span>
-        <button class="text-lg opacity-50 hover:opacity-100 cursor-pointer" onclick={() => showHelp = false}>✕</button>
+    <div class="bg-base-100 border-2 border-base-content max-w-xs w-full" onclick={(e) => e.stopPropagation()}>
+      <div class="px-3 py-2 border-b-2 border-base-content bg-base-200 flex items-center justify-between">
+        <span class="text-xs font-bold uppercase tracking-wide">How to Play</span>
+        <button class="opacity-50 hover:opacity-100 cursor-pointer" onclick={() => showHelp = false}>✕</button>
       </div>
-      <div class="p-4 space-y-3 text-sm">
-        <div class="flex items-start gap-3">
-          <span class="text-lg">🎨</span>
-          <div>
-            <div class="font-bold">Place Pixels</div>
-            <div class="text-xs opacity-60">Click/tap any square to place a pixel in your selected color</div>
-          </div>
+      <div class="p-3 space-y-2 text-xs">
+        <div class="flex items-start gap-2">
+          <span>🎨</span>
+          <div><span class="font-bold">Place Pixels</span> — Click/tap to place your color</div>
         </div>
-        <div class="flex items-start gap-3">
-          <span class="text-lg">⏱️</span>
-          <div>
-            <div class="font-bold">Cooldown</div>
-            <div class="text-xs opacity-60">{cooldownSeconds} second wait between placements</div>
-          </div>
+        <div class="flex items-start gap-2">
+          <span>⏱️</span>
+          <div><span class="font-bold">Cooldown</span> — {cooldownSeconds}s wait between placements</div>
         </div>
-        <div class="flex items-start gap-3">
-          <span class="text-lg">🔍</span>
-          <div>
-            <div class="font-bold">Navigate</div>
-            <div class="text-xs opacity-60">Scroll to pan, pinch or use +/- to zoom</div>
-          </div>
+        <div class="flex items-start gap-2">
+          <span>🔍</span>
+          <div><span class="font-bold">Navigate</span> — Scroll to pan, +/- to zoom</div>
         </div>
         {#if !isMobile}
-          <div class="flex items-start gap-3">
-            <span class="text-lg">⌨️</span>
-            <div>
-              <div class="font-bold">Keyboard</div>
-              <div class="text-xs opacity-60">Press 1-0 to quickly select colors</div>
-            </div>
+          <div class="flex items-start gap-2">
+            <span>⌨️</span>
+            <div><span class="font-bold">Keyboard</span> — Press 1-0 for colors</div>
           </div>
         {/if}
-        <div class="flex items-start gap-3">
-          <span class="text-lg">👥</span>
-          <div>
-            <div class="font-bold">Collaborate</div>
-            <div class="text-xs opacity-60">See other artists' cursors in real-time</div>
-          </div>
-        </div>
       </div>
     </div>
   </div>
