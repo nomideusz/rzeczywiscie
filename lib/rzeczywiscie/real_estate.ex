@@ -429,6 +429,21 @@ defmodule Rzeczywiscie.RealEstate do
   end
 
   @doc """
+  Update notes on a favorite.
+  """
+  def update_favorite_notes(favorite_id, notes) do
+    case Repo.get(Favorite, favorite_id) do
+      nil ->
+        {:error, :not_found}
+
+      favorite ->
+        favorite
+        |> Favorite.changeset(%{notes: notes})
+        |> Repo.update()
+    end
+  end
+
+  @doc """
   Get all favorites for a user.
   """
   def list_favorites(user_id) do
