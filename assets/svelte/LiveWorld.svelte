@@ -141,11 +141,28 @@
         map = new google.maps.Map(mapElement, {
             zoom: currentUser.lat ? 5 : 2,
             center: center,
-            styles: [{ featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] }],
-            mapTypeControl: true,
-            mapTypeControlOptions: {
-                position: google.maps.ControlPosition.TOP_RIGHT
-            },
+            styles: [
+                { elementType: "geometry", stylers: [{ color: "#1a1a2e" }] },
+                { elementType: "labels.text.stroke", stylers: [{ color: "#0f0f1e" }] },
+                { elementType: "labels.text.fill", stylers: [{ color: "#8b92ab" }] },
+                { featureType: "administrative", elementType: "geometry.stroke", stylers: [{ color: "#2d3561" }] },
+                { featureType: "administrative.land_parcel", elementType: "labels", stylers: [{ visibility: "off" }] },
+                { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#c4c7d9" }] },
+                { featureType: "poi", elementType: "labels.text", stylers: [{ visibility: "off" }] },
+                { featureType: "poi", elementType: "geometry", stylers: [{ color: "#232844" }] },
+                { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#1f3a3a" }] },
+                { featureType: "poi.park", elementType: "labels.text.fill", stylers: [{ color: "#4a7c59" }] },
+                { featureType: "road", elementType: "geometry", stylers: [{ color: "#2a2f4d" }] },
+                { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#1f2339" }] },
+                { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#3a3f5c" }] },
+                { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#2a2f4d" }] },
+                { featureType: "road.highway", elementType: "labels.text.fill", stylers: [{ color: "#b8bfdb" }] },
+                { featureType: "transit", stylers: [{ visibility: "off" }] },
+                { featureType: "transit.line", elementType: "geometry", stylers: [{ color: "#2a2f4d" }] },
+                { featureType: "water", elementType: "geometry", stylers: [{ color: "#0f1929" }] },
+                { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#4a6d8c" }] }
+            ],
+            mapTypeControl: false,
             streetViewControl: false,
             fullscreenControl: true,
             fullscreenControlOptions: {
