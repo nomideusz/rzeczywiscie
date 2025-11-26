@@ -19,7 +19,8 @@
   let canvasElement
   let ctx
   let lastCursorSend = 0
-  let zoom = 1
+  let zoom = 0.8
+  let showPalette = false
   let isMobile = false
   const CURSOR_THROTTLE_MS = 250
 
@@ -191,58 +192,85 @@
       if (colors[idx]) selectColor(colors[idx])
     }
     if (e.key === '0' && colors[9]) selectColor(colors[9])
-    if (e.key === '+' || e.key === '=') adjustZoom(0.2)
-    if (e.key === '-') adjustZoom(-0.2)
+    if (e.key === '+' || e.key === '=') adjustZoom(0.15)
+    if (e.key === '-') adjustZoom(-0.15)
+    if (e.key === 'Escape') showPalette = false
+  }
+
+  function handleClickOutside(e) {
+    if (showPalette && !e.target.closest('.relative')) {
+      showPalette = false
+    }
   }
 </script>
 
-<svelte:window onkeydown={handleKeyDown} />
+<svelte:window onkeydown={handleKeyDown} onclick={handleClickOutside} />
 
 <div class="bg-base-200">
-  <div class="container mx-auto px-4 py-4">
-    <!-- Brutalist toolbar -->
-    <div class="flex items-center justify-between gap-4 mb-4">
-      <!-- Colors -->
-      <div class="flex border-2 border-base-content">
-        {#each colors as color}
-          <button
-            class="relative w-7 h-7 sm:w-8 sm:h-8 cursor-pointer transition-all"
-            style="background-color: {color};"
-            onclick={() => selectColor(color)}
-          >
-            {#if selectedColor === color}
-              <div class="absolute inset-0 border-2 border-base-content"></div>
-              {#if !canPlace}
-                <div class="absolute inset-0 bg-black/40 flex items-center justify-center">
-                  <span class="text-white text-[10px] font-black">{secondsRemaining}</span>
-                </div>
-                <div class="absolute bottom-0 left-0 h-1 bg-white" style="width: {cooldownProgress * 100}%"></div>
-              {/if}
-            {/if}
-          </button>
-        {/each}
+  <div class="container mx-auto px-4 py-3">
+    <!-- Compact toolbar -->
+    <div class="flex items-center justify-between gap-3">
+      <!-- Left: Current color (click to expand on mobile) + desktop palette -->
+      <div class="relative flex items-center gap-2">
+        <!-- Current color button -->
+        <button
+          class="relative w-9 h-9 border-2 border-base-content cursor-pointer"
+          style="background-color: {selectedColor};"
+          onclick={() => showPalette = !showPalette}
+        >
+          {#if !canPlace}
+            <div class="absolute inset-0 bg-black/50 flex items-center justify-center">
+              <span class="text-white text-xs font-black">{secondsRemaining}</span>
+            </div>
+            <div class="absolute bottom-0 left-0 h-1 bg-white/80" style="width: {cooldownProgress * 100}%"></div>
+          {/if}
+        </button>
+
+        <!-- Desktop: inline palette -->
+        <div class="hidden md:flex border-2 border-base-content">
+          {#each colors as color}
+            <button
+              class="w-6 h-6 cursor-pointer {selectedColor === color ? 'ring-1 ring-inset ring-base-content' : ''}"
+              style="background-color: {color};"
+              onclick={() => selectColor(color)}
+            ></button>
+          {/each}
+        </div>
+
+        <!-- Mobile: dropdown palette -->
+        {#if showPalette}
+          <div class="absolute top-11 left-0 z-50 bg-base-100 border-2 border-base-content p-1.5 md:hidden">
+            <div class="grid grid-cols-5 gap-1">
+              {#each colors as color}
+                <button
+                  class="w-9 h-9 cursor-pointer {selectedColor === color ? 'ring-2 ring-inset ring-base-content' : ''}"
+                  style="background-color: {color};"
+                  onclick={() => { selectColor(color); showPalette = false; }}
+                ></button>
+              {/each}
+            </div>
+          </div>
+        {/if}
       </div>
 
-      <!-- Stats + Zoom -->
-      <div class="flex items-center gap-2">
-        <div class="hidden sm:flex items-center gap-1 border-2 border-base-content">
-          <div class="px-3 py-1 border-r border-base-content/30">
-            <span class="text-xs font-black">{stats.total_pixels.toLocaleString()}</span>
-            <span class="text-[10px] font-bold uppercase opacity-50 ml-1">px</span>
-          </div>
-          <div class="px-3 py-1">
-            <span class="text-xs font-black">{stats.unique_users}</span>
-            <span class="text-[10px] font-bold uppercase opacity-50 ml-1">artists</span>
-          </div>
+      <!-- Right: Stats + Zoom -->
+      <div class="flex items-center gap-2 text-xs">
+        <!-- Stats -->
+        <div class="hidden sm:block opacity-50">
+          <span class="font-bold">{stats.total_pixels.toLocaleString()}</span> px
+          <span class="mx-1">·</span>
+          <span class="font-bold">{stats.unique_users}</span> artists
         </div>
-        
+
+        <!-- Zoom -->
         <div class="flex items-center border-2 border-base-content">
-          <button class="w-8 h-8 text-sm font-black hover:bg-base-content hover:text-base-100 transition-colors cursor-pointer" onclick={() => adjustZoom(-0.2)}>−</button>
-          <span class="w-12 text-center text-xs font-bold border-x border-base-content/30">{Math.round(zoom * 100)}%</span>
-          <button class="w-8 h-8 text-sm font-black hover:bg-base-content hover:text-base-100 transition-colors cursor-pointer" onclick={() => adjustZoom(0.2)}>+</button>
+          <button class="w-7 h-7 font-bold hover:bg-base-content hover:text-base-100 transition-colors cursor-pointer" onclick={() => adjustZoom(-0.15)}>−</button>
+          <span class="w-10 text-center text-[11px] font-bold">{Math.round(zoom * 100)}%</span>
+          <button class="w-7 h-7 font-bold hover:bg-base-content hover:text-base-100 transition-colors cursor-pointer" onclick={() => adjustZoom(0.15)}>+</button>
         </div>
       </div>
     </div>
+  </div>
 
     <!-- Canvas wrapper -->
     <div class="flex justify-center">
