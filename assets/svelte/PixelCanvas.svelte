@@ -38,6 +38,13 @@
   onMount(() => {
     isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0
     
+    // Set default zoom higher on mobile so pixels are visible
+    if (isMobile) {
+      zoom = 2
+      // Redraw with new zoom
+      if (ctx) drawCanvas()
+    }
+    
     const savedColor = localStorage.getItem('pixels_selected_color')
     if (savedColor && colors.includes(savedColor)) {
       selectedColor = savedColor
@@ -87,21 +94,17 @@
   function calculatePixelSize() {
     if (!canvasContainer) return
 
-    // Account for margin: m-4 (16px each side = 32px total) on mobile
-    // sm:m-8 (32px each side = 64px total) on desktop
-    const isSmallScreen = canvasContainer.clientWidth < 640
-    const margin = isSmallScreen ? 32 : 64  // 16px * 2 or 32px * 2
-    const containerWidth = canvasContainer.clientWidth - margin
-    const containerHeight = canvasContainer.clientHeight - margin
+    // Account for padding: 2rem (32px) each side = 64px total
+    const padding = 64
+    const containerWidth = canvasContainer.clientWidth - padding
+    const containerHeight = canvasContainer.clientHeight - padding
 
     const maxPixelWidth = Math.floor(containerWidth / width)
     const maxPixelHeight = Math.floor(containerHeight / height)
 
-    // On small screens, fit canvas to screen; on large screens allow some flexibility
+    // Fit canvas nicely in viewport
     const fittedSize = Math.min(maxPixelWidth, maxPixelHeight)
-    const newPixelSize = isSmallScreen 
-      ? Math.max(2, fittedSize)  // On mobile, fit to screen
-      : Math.max(3, Math.min(10, fittedSize))  // On desktop, clamp to reasonable range
+    const newPixelSize = Math.max(2, Math.min(8, fittedSize))
 
     if (newPixelSize !== pixelSize) {
       pixelSize = newPixelSize
@@ -438,8 +441,8 @@
     use:initScrollContainer
     use:initContainer
   >
-    <div class="flex items-center justify-center min-h-full min-w-full">
-      <div class="relative m-4 sm:m-8">
+    <div class="flex items-center justify-center min-h-full" style="min-width: max-content; padding: 2rem;">
+      <div class="relative">
         <canvas
           use:initCanvas
           class="shadow-2xl rounded-sm bg-white {isPanning ? 'cursor-grabbing' : 'cursor-crosshair'}"
