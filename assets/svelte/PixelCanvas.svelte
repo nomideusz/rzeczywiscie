@@ -338,11 +338,11 @@
 
 <svelte:window on:keydown={handleKeyDown} on:mouseup={handleMouseUp} on:click={handleClickOutside} />
 
-<!-- Main container with fixed toolbar and scrollable canvas -->
-<div class="bg-base-200">
-  <!-- Toolbar - sticky at top -->
-  <div class="sticky top-0 z-30 bg-base-100 border-b-2 border-base-content">
-    <div class="container mx-auto px-4 py-2">
+<!-- Main container -->
+<div class="container mx-auto px-4 py-4 bg-base-200">
+  <!-- Toolbar -->
+  <div class="mb-4 bg-base-100 border-2 border-base-content">
+    <div class="px-4 py-2">
       <div class="flex items-center justify-between gap-2 flex-wrap">
         <!-- Left: Color picker -->
         <div class="palette-container relative flex items-center gap-2">
@@ -425,13 +425,13 @@
 
   <!-- Canvas Area -->
   <div 
-    class="overflow-auto relative"
-    style="height: calc(100vh - 12rem);"
+    class="overflow-auto relative border-2 border-base-content bg-base-100"
+    style="max-height: 65vh;"
     use:initScrollContainer
     use:initContainer
   >
-    <div class="flex items-center justify-center p-4 min-h-full" style="min-width: max-content;">
-      <div class="border-2 border-base-content bg-base-100 p-1">
+    <div class="flex items-center justify-center p-4" style="min-width: max-content; min-height: 300px;">
+      <div>
         <canvas
           use:initCanvas
           class="bg-white block {isPanning ? 'cursor-grabbing' : 'cursor-crosshair'}"
