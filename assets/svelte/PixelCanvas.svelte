@@ -160,27 +160,27 @@
     ctx.fillStyle = '#FFFFFF'
     ctx.fillRect(0, 0, actualWidth, actualHeight)
 
-    // Draw grid first
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)'
+    // Draw grid - use single path for better performance and appearance
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.06)'
     ctx.lineWidth = 1
+    ctx.beginPath()
 
     for (let x = 0; x <= width; x++) {
-      ctx.beginPath()
-      ctx.moveTo(x * effectivePixelSize + 0.5, 0)
-      ctx.lineTo(x * effectivePixelSize + 0.5, actualHeight)
-      ctx.stroke()
+      const px = Math.round(x * effectivePixelSize) + 0.5
+      ctx.moveTo(px, 0)
+      ctx.lineTo(px, actualHeight)
     }
 
     for (let y = 0; y <= height; y++) {
-      ctx.beginPath()
-      ctx.moveTo(0, y * effectivePixelSize + 0.5)
-      ctx.lineTo(actualWidth, y * effectivePixelSize + 0.5)
-      ctx.stroke()
+      const py = Math.round(y * effectivePixelSize) + 0.5
+      ctx.moveTo(0, py)
+      ctx.lineTo(actualWidth, py)
     }
 
+    ctx.stroke()
+
     // Draw pixels with 1px inset to show grid border on all sides
-    // Inset from top-left, shrink size to leave gap at bottom-right
-    const inset = Math.max(1, Math.floor(effectivePixelSize * 0.1))
+    const inset = Math.max(1, Math.round(effectivePixelSize * 0.08))
     const pixelDrawSize = Math.max(1, effectivePixelSize - inset * 2)
     
     pixels.forEach(pixel => {
@@ -442,7 +442,7 @@
       <div class="relative m-4 sm:m-8">
         <canvas
           use:initCanvas
-          class="shadow-2xl rounded-sm bg-white {isPanning ? 'cursor-grabbing' : canPlace ? 'cursor-crosshair' : 'cursor-wait'}"
+          class="shadow-2xl rounded-sm bg-white {isPanning ? 'cursor-grabbing' : 'cursor-crosshair'}"
           on:mousedown={handleMouseDown}
           on:click={handleClick}
           on:mousemove={handleMove}
