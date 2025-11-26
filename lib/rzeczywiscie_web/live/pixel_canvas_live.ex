@@ -59,7 +59,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
       }}
       socket={@socket}
     />
-    <.flash_group flash={@flash} />
+    <Layouts.flash_group flash={@flash} />
     """
   end
 
