@@ -309,7 +309,7 @@ defmodule RzeczywiscieWeb.StatsLive do
         :id
       )
 
-    geocoded_percentage = if active_properties > 0, do: geocoded_count / active_properties * 100, else: 0
+    geocoded_percentage = if active_properties > 0, do: geocoded_count / active_properties * 100, else: 0.0
 
     # AQI stats (check air_quality_cache)
     aqi_count =
@@ -326,7 +326,7 @@ defmodule RzeczywiscieWeb.StatsLive do
         _ -> 0
       end
 
-    aqi_percentage = if geocoded_count > 0, do: aqi_count / geocoded_count * 100, else: 0
+    aqi_percentage = if geocoded_count > 0, do: aqi_count / geocoded_count * 100, else: 0.0
 
     # Added today
     today = DateTime.utc_now() |> DateTime.add(-24, :hour)
