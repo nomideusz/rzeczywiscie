@@ -80,7 +80,40 @@
     ctx.fillStyle = '#FFFFFF'
     ctx.fillRect(0, 0, actualWidth, actualHeight)
 
-    // Grid
+    // Pixels (draw first, under the grid)
+    const inset = 0.5 // Fixed sub-pixel inset for clean edges
+    const pixelDrawSize = effectivePixelSize - inset * 2
+
+    pixels.forEach(pixel => {
+      const cellX = Math.round(pixel.x * effectivePixelSize)
+      const cellY = Math.round(pixel.y * effectivePixelSize)
+
+      ctx.fillStyle = pixel.color
+      ctx.fillRect(
+        cellX + inset,
+        cellY + inset,
+        pixelDrawSize,
+        pixelDrawSize
+      )
+    })
+
+    // Hover preview
+    if (hoveredPixel && canPlace) {
+      const cellX = Math.round(hoveredPixel.x * effectivePixelSize)
+      const cellY = Math.round(hoveredPixel.y * effectivePixelSize)
+
+      ctx.globalAlpha = 0.6
+      ctx.fillStyle = selectedColor
+      ctx.fillRect(
+        cellX + inset,
+        cellY + inset,
+        pixelDrawSize,
+        pixelDrawSize
+      )
+      ctx.globalAlpha = 1.0
+    }
+
+    // Grid (draw last, on top of pixels)
     ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)'
     ctx.lineWidth = 1
     ctx.beginPath()
@@ -95,33 +128,6 @@
       ctx.lineTo(actualWidth, py)
     }
     ctx.stroke()
-
-    // Pixels
-    const inset = Math.max(0.5, Math.round(effectivePixelSize * 0.04))
-    const pixelDrawSize = Math.max(1, effectivePixelSize - inset * 2)
-    
-    pixels.forEach(pixel => {
-      ctx.fillStyle = pixel.color
-      ctx.fillRect(
-        pixel.x * effectivePixelSize + inset,
-        pixel.y * effectivePixelSize + inset,
-        pixelDrawSize,
-        pixelDrawSize
-      )
-    })
-
-    // Hover preview
-    if (hoveredPixel && canPlace) {
-      ctx.globalAlpha = 0.6
-      ctx.fillStyle = selectedColor
-      ctx.fillRect(
-        hoveredPixel.x * effectivePixelSize + inset,
-        hoveredPixel.y * effectivePixelSize + inset,
-        pixelDrawSize,
-        pixelDrawSize
-      )
-      ctx.globalAlpha = 1.0
-    }
   }
 
   function getCoords(clientX, clientY) {
@@ -248,16 +254,30 @@
             <div class="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
               <span class="text-white text-xs font-black">{secondsRemaining}</span>
             </div>
-            <!-- Progress border that wraps around -->
+            <!-- Progress border that wraps around (double stroke for contrast) -->
             <svg class="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 40 40">
+              <!-- Dark outer stroke for contrast -->
               <rect
                 x="1"
                 y="1"
                 width="38"
                 height="38"
                 fill="none"
-                stroke="rgba(255,255,255,0.9)"
-                stroke-width="2"
+                stroke="rgba(0,0,0,0.8)"
+                stroke-width="3"
+                stroke-dasharray="{152 * cooldownProgress} 152"
+                stroke-dashoffset="0"
+                pathLength="152"
+              />
+              <!-- Bright inner stroke -->
+              <rect
+                x="1"
+                y="1"
+                width="38"
+                height="38"
+                fill="none"
+                stroke="rgba(255,255,255,0.95)"
+                stroke-width="1.5"
                 stroke-dasharray="{152 * cooldownProgress} 152"
                 stroke-dashoffset="0"
                 pathLength="152"
