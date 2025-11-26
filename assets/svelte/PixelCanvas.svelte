@@ -189,12 +189,19 @@
     drawCanvas()
   }
 
-  // Touch handling
+  // Touch handling - single finger pans, tap places, two fingers zoom
   let lastTouchDistance = 0
-  let touchPanStart = null
   let singleTouchStart = null
   let touchMoved = false
-  const TAP_THRESHOLD = 10
+  let scrollElement = null
+  const TAP_THRESHOLD = 15
+
+  function getScrollElement() {
+    if (!scrollElement && canvasWrapper) {
+      scrollElement = canvasWrapper.querySelector('.overflow-auto')
+    }
+    return scrollElement
+  }
 
   function handleTouchStart(e) {
     if (e.touches.length === 2) {
@@ -202,18 +209,17 @@
       singleTouchStart = null
       touchMoved = true
       const t1 = e.touches[0], t2 = e.touches[1]
-      touchPanStart = { x: (t1.clientX + t2.clientX) / 2, y: (t1.clientY + t2.clientY) / 2 }
-      if (canvasWrapper) scrollStart = { x: canvasWrapper.scrollLeft, y: canvasWrapper.scrollTop }
       lastTouchDistance = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY)
     } else if (e.touches.length === 1) {
       const t = e.touches[0]
-      singleTouchStart = { clientX: t.clientX, clientY: t.clientY }
-      touchMoved = false
-      const { x, y } = getCoords(t.clientX, t.clientY)
-      if (x >= 0 && x < width && y >= 0 && y < height) {
-        hoveredPixel = { x, y }
-        drawCanvas()
+      const scroll = getScrollElement()
+      singleTouchStart = { 
+        clientX: t.clientX, 
+        clientY: t.clientY,
+        scrollLeft: scroll ? scroll.scrollLeft : 0,
+        scrollTop: scroll ? scroll.scrollTop : 0
       }
+      touchMoved = false
     }
   }
 
@@ -221,47 +227,40 @@
     if (e.touches.length === 2) {
       e.preventDefault()
       const t1 = e.touches[0], t2 = e.touches[1]
-      const centerX = (t1.clientX + t2.clientX) / 2
-      const centerY = (t1.clientY + t2.clientY) / 2
-      if (touchPanStart && canvasWrapper) {
-        canvasWrapper.scrollLeft = scrollStart.x + (touchPanStart.x - centerX)
-        canvasWrapper.scrollTop = scrollStart.y + (touchPanStart.y - centerY)
-      }
       const distance = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY)
       if (lastTouchDistance > 0) {
         const scale = distance / lastTouchDistance
-        if (Math.abs(scale - 1) > 0.02) {
+        if (Math.abs(scale - 1) > 0.015) {
           zoom = Math.max(0.5, Math.min(3, zoom * scale))
           drawCanvas()
           lastTouchDistance = distance
         }
       }
-    } else if (e.touches.length === 1) {
+    } else if (e.touches.length === 1 && singleTouchStart) {
       const t = e.touches[0]
-      if (singleTouchStart) {
-        const dx = t.clientX - singleTouchStart.clientX
-        const dy = t.clientY - singleTouchStart.clientY
-        if (Math.hypot(dx, dy) > TAP_THRESHOLD) touchMoved = true
-      }
-      const { x, y } = getCoords(t.clientX, t.clientY)
-      if (x >= 0 && x < width && y >= 0 && y < height) {
-        if (!hoveredPixel || hoveredPixel.x !== x || hoveredPixel.y !== y) {
-          hoveredPixel = { x, y }
-          drawCanvas()
-          sendCursorPosition(x, y)
+      const dx = t.clientX - singleTouchStart.clientX
+      const dy = t.clientY - singleTouchStart.clientY
+      
+      if (Math.hypot(dx, dy) > TAP_THRESHOLD) {
+        touchMoved = true
+        // Pan the scroll container
+        const scroll = getScrollElement()
+        if (scroll) {
+          scroll.scrollLeft = singleTouchStart.scrollLeft - dx
+          scroll.scrollTop = singleTouchStart.scrollTop - dy
         }
       }
     }
   }
 
-  function handleTouchEnd() {
-    if (singleTouchStart && !touchMoved && canPlace && hoveredPixel) {
-      const { x, y } = hoveredPixel
+  function handleTouchEnd(e) {
+    // Only place pixel on tap (not drag)
+    if (singleTouchStart && !touchMoved && canPlace) {
+      const { x, y } = getCoords(singleTouchStart.clientX, singleTouchStart.clientY)
       if (x >= 0 && x < width && y >= 0 && y < height) {
         live.pushEvent("place_pixel", { x, y })
       }
     }
-    touchPanStart = null
     lastTouchDistance = 0
     singleTouchStart = null
     touchMoved = false
@@ -296,22 +295,24 @@
 <div class="flex flex-col bg-base-200" style="height: calc(100vh - 10rem);">
   <!-- Canvas fills available space -->
   <div 
-    class="flex-1 overflow-auto bg-neutral-100 relative"
+    class="flex-1 overflow-hidden bg-neutral-100 relative"
     use:initWrapper
   >
-    <div class="min-h-full min-w-full flex items-center justify-center p-2 sm:p-4">
-      <canvas
-        use:initCanvas
-        class="bg-white shadow-lg {isPanning ? 'cursor-grabbing' : 'cursor-crosshair'}"
-        onmousedown={handleMouseDown}
-        onclick={handleClick}
-        onmousemove={handleMove}
-        onmouseleave={handleLeave}
-        ontouchstart={handleTouchStart}
-        ontouchmove={handleTouchMove}
-        ontouchend={handleTouchEnd}
-        oncontextmenu={(e) => e.preventDefault()}
-      ></canvas>
+    <div class="absolute inset-0 overflow-auto flex items-center justify-center" style="scrollbar-width: thin;">
+      <div class="p-4">
+        <canvas
+          use:initCanvas
+          class="bg-white shadow-lg {isPanning ? 'cursor-grabbing' : 'cursor-crosshair'}"
+          onmousedown={handleMouseDown}
+          onclick={handleClick}
+          onmousemove={handleMove}
+          onmouseleave={handleLeave}
+          ontouchstart={handleTouchStart}
+          ontouchmove={handleTouchMove}
+          ontouchend={handleTouchEnd}
+          oncontextmenu={(e) => e.preventDefault()}
+        ></canvas>
+      </div>
     </div>
 
     <!-- Live Cursors -->
@@ -325,14 +326,14 @@
     {/each}
 
     <!-- Floating zoom controls -->
-    <div class="absolute bottom-3 right-3 flex items-center gap-0.5 bg-base-100/90 backdrop-blur border border-base-content/20 rounded p-0.5">
+    <div class="absolute bottom-3 right-3 flex items-center gap-0.5 bg-base-100/90 backdrop-blur border border-base-content/20 rounded p-0.5 z-10">
       <button class="w-7 h-7 text-sm font-bold hover:bg-base-200 rounded cursor-pointer" onclick={() => adjustZoom(-0.25)}>−</button>
       <span class="w-10 text-center text-[10px] font-bold opacity-60">{Math.round(zoom * 100)}%</span>
       <button class="w-7 h-7 text-sm font-bold hover:bg-base-200 rounded cursor-pointer" onclick={() => adjustZoom(0.25)}>+</button>
     </div>
 
     <!-- Coordinates + stats -->
-    <div class="absolute top-3 left-3 flex items-center gap-2 text-[10px] font-bold opacity-50">
+    <div class="absolute top-3 left-3 flex items-center gap-2 text-[10px] font-bold opacity-50 z-10">
       <span>{stats.total_pixels.toLocaleString()} px</span>
       <span>•</span>
       <span>{stats.unique_users} artists</span>
