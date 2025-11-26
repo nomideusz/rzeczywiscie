@@ -62,17 +62,21 @@
   function checkScrollability() {
     if (!scrollContainer) return
     
-    const isScrollable = scrollContainer.scrollWidth > scrollContainer.clientWidth ||
-                         scrollContainer.scrollHeight > scrollContainer.clientHeight
+    // Add a small threshold (5px) to avoid false positives from rounding
+    const threshold = 5
+    const isScrollable = scrollContainer.scrollWidth > scrollContainer.clientWidth + threshold ||
+                         scrollContainer.scrollHeight > scrollContainer.clientHeight + threshold
     
     canScroll = isScrollable
     
     // Show hint briefly if scrollable and user hasn't scrolled before
-    if (isScrollable && !hasScrolled) {
+    if (isScrollable && !hasScrolled && isMobile) {
       showScrollHint = true
       setTimeout(() => {
         showScrollHint = false
       }, 4000)
+    } else {
+      showScrollHint = false
     }
   }
 
@@ -299,6 +303,10 @@
   let touchPanStart = null
 
   function handleTouchStart(event) {
+    // Show UI when user interacts with canvas
+    if (isMobile && !showUI) {
+      showUI = true
+    }
     resetUITimer()
     
     if (event.touches.length === 2) {
@@ -461,24 +469,17 @@
     {#if showScrollHint && canScroll}
       <div class="absolute inset-0 pointer-events-none flex items-center justify-center">
         <div class="bg-black/70 text-white px-4 py-3 rounded-2xl flex items-center gap-3 animate-hint">
-          <svg class="w-6 h-6 animate-bounce-x" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4"/>
+          <svg class="w-6 h-6 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
           </svg>
-          <span class="text-sm">Scroll to explore</span>
+          <span class="text-sm">Drag to explore</span>
         </div>
       </div>
     {/if}
   </div>
 
-  <!-- Mobile: Tap anywhere to show UI hint -->
+  <!-- Mobile: Minimal floating indicator when UI is hidden (doesn't block canvas) -->
   {#if isMobile && !showUI}
-    <button 
-      class="fixed inset-0 z-40"
-      on:click={toggleUI}
-      aria-label="Show controls"
-    ></button>
-    
-    <!-- Minimal floating color indicator - always visible, tap to show UI -->
     <button
       class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-white/90 backdrop-blur rounded-full shadow-lg px-3 py-2"
       on:click={toggleUI}
