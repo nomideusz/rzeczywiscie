@@ -9,7 +9,7 @@
   export let user_id = null
   export let live
 
-  let currentView = 'table' // 'table' or 'map'
+  let currentView = 'table' // 'table', 'cards', or 'map'
   let selectedPropertyId = null // Property to highlight on map
 
   function switchView(view) {
@@ -31,85 +31,122 @@
       live.pushEvent('trigger_geocoding', {})
     }
   }
+
+  // Calculate percentages for stats
+  $: coordsPercent = stats.total_count > 0 ? Math.round((stats.with_coords / stats.total_count) * 100) : 0
+  $: aqiPercent = stats.total_count > 0 ? Math.round((stats.with_aqi / stats.total_count) * 100) : 0
 </script>
 
-<div class="container mx-auto p-4">
-  <!-- Sub-navigation tabs -->
-  <div class="mb-6">
-    <div class="tabs tabs-boxed bg-base-200 border-2 border-base-content">
-      <a href="/real-estate" class="tab tab-active font-bold">Properties</a>
-      <a href="/favorites" class="tab font-bold">Favorites</a>
-      <a href="/stats" class="tab font-bold">Stats</a>
-      <a href="/admin" class="tab font-bold">Admin</a>
-    </div>
-  </div>
+<div class="min-h-screen bg-base-200">
+  <!-- Page Header -->
+  <div class="bg-base-100 border-b-4 border-base-content">
+    <div class="container mx-auto px-4 py-6">
+      <!-- Breadcrumb Nav -->
+      <nav class="flex gap-1 mb-4">
+        <a href="/real-estate" class="px-3 py-2 text-xs font-bold uppercase tracking-wide bg-base-content text-base-100">
+          Properties
+        </a>
+        <a href="/favorites" class="px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">
+          Favorites
+        </a>
+        <a href="/stats" class="px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">
+          Stats
+        </a>
+        <a href="/admin" class="px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">
+          Admin
+        </a>
+      </nav>
 
-  <!-- Header with view toggle -->
-  <div class="mb-6">
-    <div class="flex justify-between items-center mb-4">
-      <h1 class="text-3xl font-bold">Real Estate Listings - Małopolskie</h1>
+      <!-- Title Row -->
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h1 class="text-2xl md:text-3xl font-black uppercase tracking-tight">
+            Real Estate
+          </h1>
+          <p class="text-sm font-bold uppercase tracking-wide opacity-60">
+            Małopolskie Region
+          </p>
+        </div>
 
-      <!-- View Toggle and Actions -->
-      <div class="flex gap-2">
-        <button
-          onclick={triggerGeocode}
-          class="btn btn-accent btn-sm"
-          title="Add coordinates to properties without geocoding"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
-          Geocode Now
-        </button>
-
-        <div class="btn-group">
+        <!-- View Toggle & Actions -->
+        <div class="flex flex-wrap gap-2">
           <button
-            class="btn btn-sm {currentView === 'table' ? 'btn-active' : ''}"
-            onclick={() => switchView('table')}
+            onclick={triggerGeocode}
+            class="px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 border-success text-success hover:bg-success hover:text-success-content transition-colors cursor-pointer"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-            </svg>
-            Table
+            📍 Geocode
           </button>
-          <button
-            class="btn btn-sm {currentView === 'map' ? 'btn-active' : ''}"
-            onclick={() => switchView('map')}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-            </svg>
-            Map
-          </button>
+
+          <div class="flex border-2 border-base-content">
+            <button
+              class="px-4 py-2 text-xs font-bold uppercase tracking-wide transition-colors cursor-pointer {currentView === 'table' ? 'bg-base-content text-base-100' : 'hover:bg-base-content hover:text-base-100'}"
+              onclick={() => switchView('table')}
+            >
+              Table
+            </button>
+            <button
+              class="px-4 py-2 text-xs font-bold uppercase tracking-wide border-l-2 border-base-content transition-colors cursor-pointer {currentView === 'cards' ? 'bg-base-content text-base-100' : 'hover:bg-base-content hover:text-base-100'}"
+              onclick={() => switchView('cards')}
+            >
+              Cards
+            </button>
+            <button
+              class="px-4 py-2 text-xs font-bold uppercase tracking-wide border-l-2 border-base-content transition-colors cursor-pointer {currentView === 'map' ? 'bg-base-content text-base-100' : 'hover:bg-base-content hover:text-base-100'}"
+              onclick={() => switchView('map')}
+            >
+              Map
+            </button>
+          </div>
         </div>
       </div>
     </div>
+  </div>
 
-    <!-- Stats -->
-    <div class="stats shadow mb-4 w-full">
-      <div class="stat">
-        <div class="stat-title">Total Listings</div>
-        <div class="stat-value text-primary">{stats.total_count}</div>
-        <div class="stat-desc">Showing {properties.length} on page {pagination.page}</div>
-      </div>
-      <div class="stat">
-        <div class="stat-title">With Coordinates</div>
-        <div class="stat-value text-secondary">{stats.with_coords}</div>
-        <div class="stat-desc">Ready for mapping</div>
-      </div>
-      <div class="stat">
-        <div class="stat-title">With AQI Data</div>
-        <div class="stat-value text-accent">{stats.with_aqi}</div>
-        <div class="stat-desc">Air quality analyzed</div>
+  <!-- Stats Bar -->
+  <div class="bg-base-100 border-b-2 border-base-content">
+    <div class="container mx-auto">
+      <div class="grid grid-cols-3 divide-x-2 divide-base-content">
+        <!-- Total Listings -->
+        <div class="py-2 px-3">
+          <div class="text-xl font-black text-primary">{stats.total_count.toLocaleString()}</div>
+          <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">Total · p.{pagination.page}/{pagination.total_pages}</div>
+        </div>
+
+        <!-- With Coordinates -->
+        <div class="py-2 px-3">
+          <div class="text-xl font-black text-secondary">{stats.with_coords.toLocaleString()}</div>
+          <div class="flex items-center gap-2">
+            <span class="text-[10px] font-bold uppercase tracking-wide opacity-60">Geocoded</span>
+            <div class="flex-1 h-1 bg-base-300 max-w-16">
+              <div class="h-1 bg-secondary" style="width: {coordsPercent}%"></div>
+            </div>
+            <span class="text-[10px] font-bold opacity-60">{coordsPercent}%</span>
+          </div>
+        </div>
+
+        <!-- With AQI -->
+        <div class="py-2 px-3">
+          <div class="text-xl font-black text-accent">{stats.with_aqi.toLocaleString()}</div>
+          <div class="flex items-center gap-2">
+            <span class="text-[10px] font-bold uppercase tracking-wide opacity-60">AQI</span>
+            <div class="flex-1 h-1 bg-base-300 max-w-16">
+              <div class="h-1 bg-accent" style="width: {aqiPercent}%"></div>
+            </div>
+            <span class="text-[10px] font-bold opacity-60">{aqiPercent}%</span>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- View Content -->
-  {#if currentView === 'table'}
-    <PropertyTable {properties} {pagination} {user_id} {live} on:viewOnMap={handleViewOnMap} />
-  {:else}
-    <PropertyMap properties={map_properties} {live} {selectedPropertyId} />
-  {/if}
+  <!-- Main Content -->
+  <div class="container mx-auto px-4 py-6">
+    {#if currentView === 'table'}
+      <PropertyTable {properties} {pagination} {user_id} {live} viewMode="table" on:viewOnMap={handleViewOnMap} />
+    {:else if currentView === 'cards'}
+      <PropertyTable {properties} {pagination} {user_id} {live} viewMode="cards" on:viewOnMap={handleViewOnMap} />
+    {:else}
+      <PropertyMap properties={map_properties} {live} {selectedPropertyId} />
+    {/if}
+  </div>
 </div>

@@ -33,11 +33,13 @@ defmodule Rzeczywiscie.RealEstate do
   List all active properties with optional filters.
 
   ## Options
+    * `:search` - Full-text search in title and description
     * `:city` - Filter by city
     * `:min_price` - Minimum price
     * `:max_price` - Maximum price
     * `:min_area` - Minimum area in sqm
     * `:max_area` - Maximum area in sqm
+    * `:rooms` - Filter by number of rooms
     * `:source` - Filter by source (olx, otodom, etc.)
     * `:transaction_type` - Filter by transaction type (sprzedaż, wynajem)
     * `:property_type` - Filter by property type (mieszkanie, dom, etc.)
@@ -99,7 +101,12 @@ defmodule Rzeczywiscie.RealEstate do
 
   defp apply_filters(query, opts) do
     Enum.reduce(opts, query, fn
-      {:city, city}, query when is_binary(city) ->
+      {:search, search}, query when is_binary(search) and search != "" ->
+        # Full-text search in title and description
+        search_term = "%#{search}%"
+        where(query, [p], ilike(p.title, ^search_term) or ilike(p.description, ^search_term))
+
+      {:city, city}, query when is_binary(city) and city != "" ->
         where(query, [p], ilike(p.city, ^"%#{city}%"))
 
       {:min_price, min}, query when is_number(min) ->
@@ -114,14 +121,22 @@ defmodule Rzeczywiscie.RealEstate do
       {:max_area, max}, query when is_number(max) ->
         where(query, [p], p.area_sqm <= ^max)
 
-      {:source, source}, query when is_binary(source) ->
+      {:rooms, rooms}, query when is_integer(rooms) ->
+        # For "5+", match 5 or more rooms
+        if rooms >= 5 do
+          where(query, [p], p.rooms >= ^rooms)
+        else
+          where(query, [p], p.rooms == ^rooms)
+        end
+
+      {:source, source}, query when is_binary(source) and source != "" ->
         where(query, [p], p.source == ^source)
 
-      {:transaction_type, type}, query when is_binary(type) ->
+      {:transaction_type, type}, query when is_binary(type) and type != "" ->
         # Include properties with matching type OR unknown (nil) type
         where(query, [p], p.transaction_type == ^type or is_nil(p.transaction_type))
 
-      {:property_type, type}, query when is_binary(type) ->
+      {:property_type, type}, query when is_binary(type) and type != "" ->
         # Include properties with matching type OR unknown (nil) type
         where(query, [p], p.property_type == ^type or is_nil(p.property_type))
 
@@ -134,13 +149,6 @@ defmodule Rzeczywiscie.RealEstate do
   end
 
   defp apply_sorting(query, column, direction) do
-    # Convert string column to atom, defaulting to :inserted_at if invalid
-    column_atom = try do
-      String.to_existing_atom(column)
-    rescue
-      ArgumentError -> :inserted_at
-    end
-
     # Convert direction string to atom
     direction_atom = case direction do
       "asc" -> :asc
@@ -148,12 +156,29 @@ defmodule Rzeczywiscie.RealEstate do
       _ -> :desc
     end
 
-    # Apply ordering with NULL handling (NULLs last for both directions)
-    case direction_atom do
-      :asc ->
-        order_by(query, [p], [asc_nulls_last: field(p, ^column_atom)])
-      :desc ->
-        order_by(query, [p], [desc_nulls_last: field(p, ^column_atom)])
+    # Handle special case for price_per_sqm (calculated field)
+    if column == "price_per_sqm" do
+      case direction_atom do
+        :asc ->
+          order_by(query, [p], [asc_nulls_last: fragment("CASE WHEN ? > 0 THEN ? / ? ELSE NULL END", p.area_sqm, p.price, p.area_sqm)])
+        :desc ->
+          order_by(query, [p], [desc_nulls_last: fragment("CASE WHEN ? > 0 THEN ? / ? ELSE NULL END", p.area_sqm, p.price, p.area_sqm)])
+      end
+    else
+      # Convert string column to atom, defaulting to :inserted_at if invalid
+      column_atom = try do
+        String.to_existing_atom(column)
+      rescue
+        ArgumentError -> :inserted_at
+      end
+
+      # Apply ordering with NULL handling (NULLs last for both directions)
+      case direction_atom do
+        :asc ->
+          order_by(query, [p], [asc_nulls_last: field(p, ^column_atom)])
+        :desc ->
+          order_by(query, [p], [desc_nulls_last: field(p, ^column_atom)])
+      end
     end
   end
 

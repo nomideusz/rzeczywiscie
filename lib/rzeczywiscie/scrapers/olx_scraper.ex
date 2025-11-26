@@ -444,23 +444,29 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
       "pow\\.użytkowa",
       "powierzchnia",
       "pow\\.",
+      "pow ",
       "mieszkanie",
       "dom",
       "lokal",
-      "garaż"
+      "garaż",
+      "pokój",
+      "kawalerka"
     ]
 
-    # Build regex that looks for keyword + number + m²
-    # Example: "powierzchnia: 75 m²" or "pow. 75m2"
+    # Build regex patterns that look for keyword + number + area unit
+    # Example: "powierzchnia: 75 m²" or "pow. 75m2" or "75 mkw"
+    # Area units: m², m2, m^2, mkw, m.kw., metrów kw
+    area_unit_pattern = "(?:m[\\^²2]|mkw\\.?|m\\.kw\\.?|metrów\\s*kw)"
+
     regex_patterns =
       Enum.map(building_keywords, fn keyword ->
-        ~r/#{keyword}[:\s]*(\d{1,4}(?:[,\.]\d{1,2})?)\s*m[\^²2]/iu
+        ~r/#{keyword}[:\s]*(\d{1,4}(?:[,\.]\d{1,2})?)\s*#{area_unit_pattern}/iu
       end)
 
     # Try each pattern
     result = Enum.find_value(regex_patterns, fn pattern ->
       case Regex.run(pattern, text) do
-        [_, number_str] -> parse_area_number(number_str, max_area: 1000)
+        [_, number_str] -> parse_area_number(number_str, max_area: 2000, min_area: 5)
         _ -> nil
       end
     end)
@@ -469,24 +475,31 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
   end
 
   defp extract_any_area(text) do
-    # Negative keywords - skip if preceded by these (plot/land indicators)
-    # This avoids matching "działka 5000 m²" when we want building area
-    negative_lookbehind = "(?<!działka\\s)(?<!grunt\\s)(?<!teren\\s)(?<!ogród\\s)"
+    # Area units: m², m2, m^2, mkw, m.kw., metrów kw
+    area_unit_pattern = "(?:m[\\^²2]|mkw\\.?|m\\.kw\\.?|metrów\\s*kw)"
 
-    # Match number + m² but exclude very large values (likely plot area)
-    regex = ~r/#{negative_lookbehind}(?<![0-9-])(\d{1,3}(?:[,\.]\d{1,2})?)\s*m[\^²2]/iu
+    # First, try patterns with the number BEFORE the unit (most common)
+    # Match: "75 m²", "45.5m2", "100 mkw"
+    regex_before = ~r/(?<![0-9-])(\d{1,4}(?:[,\.]\d{1,2})?)\s*#{area_unit_pattern}/iu
 
-    case Regex.run(regex, text) do
+    case Regex.run(regex_before, text) do
       [_, number_str] ->
-        # For fallback, use stricter validation (max 1000 m² for buildings)
-        parse_area_number(number_str, max_area: 1000)
+        # For fallback, use stricter validation
+        parse_area_number(number_str, max_area: 2000, min_area: 5)
       _ ->
-        nil
+        # Also try format with number separated: "75 m 2" or with space before
+        regex_spaced = ~r/(\d{1,4}(?:[,\.]\d{1,2})?)\s+m\s*[\^²2]/iu
+
+        case Regex.run(regex_spaced, text) do
+          [_, number_str] -> parse_area_number(number_str, max_area: 2000, min_area: 5)
+          _ -> nil
+        end
     end
   end
 
   defp parse_area_number(number_str, opts) do
     max_area = Keyword.get(opts, :max_area, 50000)
+    min_area = Keyword.get(opts, :min_area, 5)
 
     # Clean up the number: remove spaces and replace comma with dot
     clean_number =
@@ -497,11 +510,12 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
     case Decimal.parse(clean_number) do
       {decimal, _} ->
         # Validate: area should be reasonable
-        if Decimal.compare(decimal, Decimal.new("10")) != :lt and
+        # Lower minimum to 5 m² for parking spots and small storage units
+        if Decimal.compare(decimal, Decimal.new(min_area)) != :lt and
              Decimal.compare(decimal, Decimal.new(max_area)) != :gt do
           decimal
         else
-          Logger.debug("Area out of range: #{clean_number} m² (max: #{max_area}) - ignoring")
+          Logger.debug("Area out of range: #{clean_number} m² (min: #{min_area}, max: #{max_area}) - ignoring")
           nil
         end
 
@@ -512,12 +526,55 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
   end
 
   defp extract_rooms(card) do
-    card
-    |> Floki.text()
-    |> extract_number_with_unit("pokoje")
+    text = Floki.text(card)
+
+    # Try multiple patterns for room count
+    extract_number_with_unit(text, "pokoje")
+    |> case do
+      nil ->
+        # Try alternative patterns
+        extract_number_with_unit(text, "pokoi") ||
+          extract_number_with_unit(text, "pok\\.") ||
+          extract_number_with_unit(text, "pok") ||
+          extract_rooms_from_text(text)
+
+      decimal ->
+        decimal
+    end
     |> case do
       nil -> nil
       decimal -> Decimal.to_integer(decimal)
+    end
+  end
+
+  # Extract rooms from common Polish patterns like "3-pokojowe", "dwupokojowe"
+  defp extract_rooms_from_text(text) do
+    text_lower = String.downcase(text)
+
+    cond do
+      # Pattern: "X-pokojowe" or "X pokojowe"
+      match = Regex.run(~r/(\d+)[\s-]*pokojow/, text_lower) ->
+        [_, num] = match
+        case Decimal.parse(num) do
+          {decimal, _} -> decimal
+          :error -> nil
+        end
+
+      # Polish word numbers
+      String.contains?(text_lower, "jednopokojow") -> Decimal.new(1)
+      String.contains?(text_lower, "dwupokojow") -> Decimal.new(2)
+      String.contains?(text_lower, "trzypokojow") -> Decimal.new(3)
+      String.contains?(text_lower, "czteropokojow") -> Decimal.new(4)
+      String.contains?(text_lower, "pięciopokojow") -> Decimal.new(5)
+      String.contains?(text_lower, "sześciopokojow") -> Decimal.new(6)
+
+      # Pattern: "kawalerka" = 1 room
+      String.contains?(text_lower, "kawalerka") -> Decimal.new(1)
+
+      # Pattern: "studio" = 1 room
+      String.contains?(text_lower, "studio") -> Decimal.new(1)
+
+      true -> nil
     end
   end
 
@@ -625,12 +682,18 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
       String.contains?(text_lower, "sprzedam") -> "sprzedaż"
       String.contains?(text_lower, "sprzedaz") -> "sprzedaż"
       String.contains?(text_lower, "na-sprzedaz") -> "sprzedaż"
+      String.contains?(text_lower, "-sprzedaz-") -> "sprzedaż"
+      String.contains?(text_lower, "/sprzedaz/") -> "sprzedaż"
 
       # URL patterns for rent
       String.contains?(text_lower, "wynajem") -> "wynajem"
       String.contains?(text_lower, "do-wynajecia") -> "wynajem"
       String.contains?(text_lower, "wynajme") -> "wynajem"
       String.contains?(text_lower, "wynajęcia") -> "wynajem"
+      String.contains?(text_lower, "-wynajem-") -> "wynajem"
+      String.contains?(text_lower, "/wynajem/") -> "wynajem"
+      String.contains?(text_lower, "wynajmę") -> "wynajem"
+      String.contains?(text_lower, "wynajmie") -> "wynajem"
 
       # PRIORITY 3: Keywords in text (title, description)
       # Keywords for sale (sprzedaż) - check most specific first
@@ -639,10 +702,26 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
       String.contains?(text_lower, "kupno") -> "sprzedaż"
       String.contains?(text_lower, "na własność") -> "sprzedaż"
       String.contains?(text_lower, "własnościowe") -> "sprzedaż"
+      String.contains?(text_lower, "sprzedam ") -> "sprzedaż"
+      String.contains?(text_lower, " sprzedam") -> "sprzedaż"
+      String.match?(text_lower, ~r/\bsprzedam\b/) -> "sprzedaż"
+      String.contains?(text_lower, "oferta sprzedaży") -> "sprzedaż"
+      String.contains?(text_lower, "cena sprzedaży") -> "sprzedaż"
+      String.contains?(text_lower, "do sprzedania") -> "sprzedaż"
+      String.contains?(text_lower, "na sprzedaz") -> "sprzedaż"
+      String.contains?(text_lower, "okazja") && not String.contains?(text_lower, "wynaj") -> "sprzedaż"
 
       # Keywords for rent (wynajem)
       String.contains?(text_lower, "na wynajem") -> "wynajem"
       String.contains?(text_lower, "do wynaj") -> "wynajem"
+      String.contains?(text_lower, "wynajmowany") -> "wynajem"
+      String.contains?(text_lower, "wynajmuję") -> "wynajem"
+      String.contains?(text_lower, "wynajem ") -> "wynajem"
+      String.contains?(text_lower, " wynajem") -> "wynajem"
+      String.match?(text_lower, ~r/\bwynajem\b/) -> "wynajem"
+      String.contains?(text_lower, "do najmu") -> "wynajem"
+      String.contains?(text_lower, "wynajęcie") -> "wynajem"
+      String.contains?(text_lower, "wynajęciu") -> "wynajem"
 
       # PRIORITY 4: Price indicators - monthly prices usually indicate rent
       # This is a fallback for ambiguous cases
@@ -651,13 +730,30 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
       String.contains?(text_lower, "/mies") -> "wynajem"
       String.contains?(text_lower, "miesięcznie") -> "wynajem"
       String.contains?(text_lower, "mc.") -> "wynajem"
+      String.contains?(text_lower, "/mc") -> "wynajem"
+      String.contains?(text_lower, "pln/m") -> "wynajem"
+      String.contains?(text_lower, "zł/m-c") -> "wynajem"
+      String.contains?(text_lower, "+ opłaty") -> "wynajem"
+      String.contains?(text_lower, "+opłaty") -> "wynajem"
+      String.contains?(text_lower, "+ czynsz") -> "wynajem"
+      String.contains?(text_lower, "+czynsz") -> "wynajem"
 
-      # PRIORITY 5: Fallback - if it's a property listing but no wynajem indicators,
+      # PRIORITY 5: Price-based heuristics
+      # Very high prices (> 500,000) are likely sales, very low (< 5000) are likely rent
+      # This is checked via the price value if available
+
+      # PRIORITY 6: Fallback - if it's a property listing but no wynajem indicators,
       # assume it's for sale (most OLX listings are sales)
       String.contains?(text_lower, "/nieruchomosci/") and
         not String.contains?(text_lower, "wynaj") and
-        not String.contains?(text_lower, "mies") ->
+        not String.contains?(text_lower, "mies") and
+        not String.contains?(text_lower, "najmu") ->
         "sprzedaż"
+
+      # Even more aggressive fallback - if URL mentions property types commonly sold
+      String.contains?(text_lower, "/mieszkania/") -> "sprzedaż"
+      String.contains?(text_lower, "/domy/") -> "sprzedaż"
+      String.contains?(text_lower, "/dzialki/") -> "sprzedaż"
 
       true -> nil
     end
@@ -684,70 +780,139 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
       String.contains?(text_lower, "/biura-lokale/") -> "lokal użytkowy"
       String.contains?(text_lower, "/lokal-uzytkowy/") -> "lokal użytkowy"
       String.contains?(text_lower, "-biuro-") -> "lokal użytkowy"
+      String.contains?(text_lower, "-lokal-") -> "lokal użytkowy"
 
       # Apartment URL patterns
       String.contains?(text_lower, "/mieszkania/") -> "mieszkanie"
       String.contains?(text_lower, "/mieszkanie/") -> "mieszkanie"
       String.contains?(text_lower, "-mieszkanie-") -> "mieszkanie"
+      String.contains?(text_lower, "-m-") && String.contains?(text_lower, "pokoje") -> "mieszkanie"
 
       # House URL patterns
       String.contains?(text_lower, "/domy/") -> "dom"
       String.contains?(text_lower, "-dom-") -> "dom"
       String.contains?(text_lower, "/dom-") -> "dom"
+      String.contains?(text_lower, "-domek-") -> "dom"
 
       # Plot URL patterns
       String.contains?(text_lower, "/dzialki/") -> "działka"
       String.contains?(text_lower, "/dzialka/") -> "działka"
+      String.contains?(text_lower, "-dzialka-") -> "działka"
 
       # Garage URL patterns
       String.contains?(text_lower, "/garaze/") -> "garaż"
       String.contains?(text_lower, "/garaz/") -> "garaż"
+      String.contains?(text_lower, "-garaz-") -> "garaż"
+      String.contains?(text_lower, "-miejsce-postojowe-") -> "garaż"
+      String.contains?(text_lower, "-miejsce-parkingowe-") -> "garaż"
+
+      # Room URL patterns
+      String.contains?(text_lower, "/stancje-pokoje/") -> "pokój"
+      String.contains?(text_lower, "-pokoj-") -> "pokój"
+      String.contains?(text_lower, "-stancja-") -> "pokój"
 
       # PRIORITY 3: Text-based detection (title, description)
-      # Apartment (mieszkanie) - most common
+      # Apartment (mieszkanie) - most common, many variations
       String.contains?(text_lower, "mieszkan") -> "mieszkanie"
       String.contains?(text_lower, "kawalerka") -> "mieszkanie"
       String.contains?(text_lower, "apartament") -> "mieszkanie"
+      String.match?(text_lower, ~r/\d+[\s-]*pokoj/) -> "mieszkanie"
+      String.match?(text_lower, ~r/\b[1-9]-?pokojowe\b/) -> "mieszkanie"
       String.contains?(text_lower, "m²") && String.contains?(text_lower, "pokój") -> "mieszkanie"
+      String.contains?(text_lower, "m2") && String.contains?(text_lower, "pokój") -> "mieszkanie"
+      String.contains?(text_lower, "mkw") && String.contains?(text_lower, "pokój") -> "mieszkanie"
+      String.match?(text_lower, ~r/\b[2-6][\s-]?pok\.?\b/) -> "mieszkanie"
+      String.contains?(text_lower, "studio") -> "mieszkanie"
+      String.contains?(text_lower, "loft") -> "mieszkanie"
+      String.contains?(text_lower, "penthouse") -> "mieszkanie"
+      String.contains?(text_lower, "dwupokojowe") -> "mieszkanie"
+      String.contains?(text_lower, "trzypokojowe") -> "mieszkanie"
+      String.contains?(text_lower, "czteropokojowe") -> "mieszkanie"
+      String.contains?(text_lower, "pięciopokojowe") -> "mieszkanie"
+      String.match?(text_lower, ~r/\bm\d\b/) -> "mieszkanie"  # m2, m3, m4 etc
+      String.contains?(text_lower, "spółdzielcze") -> "mieszkanie"
+      String.contains?(text_lower, "własnościowe") -> "mieszkanie"
 
       # House (dom)
       String.contains?(text_lower, "dom ") -> "dom"
       String.contains?(text_lower, " dom") -> "dom"
       String.match?(text_lower, ~r/\bdom\b/) -> "dom"
+      String.contains?(text_lower, "domek") -> "dom"
       String.contains?(text_lower, "willa") -> "dom"
       String.contains?(text_lower, "bliźniak") -> "dom"
       String.contains?(text_lower, "segment") -> "dom"
+      String.contains?(text_lower, "szeregowiec") -> "dom"
+      String.contains?(text_lower, "szeregowy") -> "dom"
+      String.contains?(text_lower, "dworek") -> "dom"
+      String.contains?(text_lower, "rezydencja") -> "dom"
+      String.contains?(text_lower, "jednorodzinny") -> "dom"
+      String.contains?(text_lower, "wolnostojący") -> "dom"
+      String.contains?(text_lower, "parter + piętro") -> "dom"
+      String.contains?(text_lower, "z ogrodem") && not String.contains?(text_lower, "mieszkan") -> "dom"
 
       # Room (pokój) / Student accommodation (stancja)
-      String.contains?(text_lower, "pokój") -> "pokój"
-      String.contains?(text_lower, "pokoj") -> "pokój"
+      String.contains?(text_lower, "pokój ") -> "pokój"
+      String.contains?(text_lower, " pokój") -> "pokój"
+      String.match?(text_lower, ~r/\bpokój\b/) -> "pokój"
+      String.contains?(text_lower, "pokoj ") -> "pokój"
+      String.contains?(text_lower, " pokoj") -> "pokój"
+      String.match?(text_lower, ~r/\bpokoj\b/) -> "pokój"
       String.contains?(text_lower, "stancja") -> "pokój"
+      String.contains?(text_lower, "kwatera") -> "pokój"
+      String.contains?(text_lower, "miejsce w pokoju") -> "pokój"
+      String.contains?(text_lower, "współlokator") -> "pokój"
+      String.contains?(text_lower, "dla studenta") -> "pokój"
 
-      # Garage (garaż)
+      # Garage (garaż) / Parking
       String.contains?(text_lower, "garaż") -> "garaż"
       String.contains?(text_lower, "garaz") -> "garaż"
-      String.contains?(text_lower, "miejsce") && String.contains?(text_lower, "parking") -> "garaż"
+      String.contains?(text_lower, "miejsce postojowe") -> "garaż"
+      String.contains?(text_lower, "miejsce parkingowe") -> "garaż"
+      String.match?(text_lower, ~r/\bmiejsce\s+(w\s+)?parking/) -> "garaż"
+      String.contains?(text_lower, "parking") && not String.contains?(text_lower, "mieszkan") -> "garaż"
+      String.contains?(text_lower, "stanowisko garażowe") -> "garaż"
+      String.contains?(text_lower, "hala garażowa") -> "garaż"
+      String.contains?(text_lower, "komórka lokatorska") -> "garaż"
+      String.contains?(text_lower, "piwnica") && not String.contains?(text_lower, "mieszkan") -> "garaż"
 
       # Plot/land (działka)
       String.contains?(text_lower, "działka") -> "działka"
       String.contains?(text_lower, "dzialka") -> "działka"
-      String.contains?(text_lower, "grunt") -> "działka"
-      String.contains?(text_lower, "teren") -> "działka"
+      String.match?(text_lower, ~r/\bgrunt\b/) -> "działka"
+      String.match?(text_lower, ~r/\bteren\b/) -> "działka"
+      String.contains?(text_lower, "ziemia") -> "działka"
+      String.contains?(text_lower, "budowlana") -> "działka"
+      String.contains?(text_lower, "rolna") -> "działka"
+      String.contains?(text_lower, "siedliskowa") -> "działka"
+      String.contains?(text_lower, "rekreacyjna") -> "działka"
+      String.contains?(text_lower, "inwestycyjna") -> "działka"
+      String.match?(text_lower, ~r/\b\d+\s*ar\b/) -> "działka"  # 10 ar, 20ar
+      String.match?(text_lower, ~r/\b\d+\s*ha\b/) -> "działka"  # 1 ha, 2ha
 
       # Commercial space (lokal użytkowy) - check text keywords
       String.contains?(text_lower, "lokal użytkowy") -> "lokal użytkowy"
+      String.contains?(text_lower, "lokal uzytkowy") -> "lokal użytkowy"
       String.contains?(text_lower, "lokal-uzytkowy") -> "lokal użytkowy"
       String.contains?(text_lower, "lokal-biurowo") -> "lokal użytkowy"
       String.contains?(text_lower, "lokal-handlowy") -> "lokal użytkowy"
+      String.contains?(text_lower, "lokal handlowy") -> "lokal użytkowy"
+      String.contains?(text_lower, "lokal biurowy") -> "lokal użytkowy"
+      String.contains?(text_lower, "lokal usługowy") -> "lokal użytkowy"
+      String.contains?(text_lower, "lokal gastronomiczny") -> "lokal użytkowy"
       String.contains?(text_lower, "biura i lokale") -> "lokal użytkowy"
-      String.contains?(text_lower, "biuro") -> "lokal użytkowy"
-      String.contains?(text_lower, "biura") -> "lokal użytkowy"
-      String.contains?(text_lower, "lokal") -> "lokal użytkowy"
-      String.contains?(text_lower, "sklep") -> "lokal użytkowy"
-      String.contains?(text_lower, "magazyn") -> "lokal użytkowy"
-      String.contains?(text_lower, "hala") -> "lokal użytkowy"
+      String.match?(text_lower, ~r/\bbiuro\b/) -> "lokal użytkowy"
+      String.match?(text_lower, ~r/\bbiura\b/) -> "lokal użytkowy"
+      String.match?(text_lower, ~r/\blokal\b/) -> "lokal użytkowy"
+      String.match?(text_lower, ~r/\bsklep\b/) -> "lokal użytkowy"
+      String.match?(text_lower, ~r/\bmagazyn\b/) -> "lokal użytkowy"
+      String.match?(text_lower, ~r/\bhala\b/) -> "lokal użytkowy"
       String.contains?(text_lower, "powierzchnia biurowa") -> "lokal użytkowy"
       String.contains?(text_lower, "powierzchnia handlowa") -> "lokal użytkowy"
+      String.contains?(text_lower, "powierzchnia magazynowa") -> "lokal użytkowy"
+      String.contains?(text_lower, "pow. usługowa") -> "lokal użytkowy"
+      String.contains?(text_lower, "pow. biurowa") -> "lokal użytkowy"
+      String.contains?(text_lower, "gabinet") -> "lokal użytkowy"
+      String.contains?(text_lower, "kancelaria") -> "lokal użytkowy"
 
       true -> nil
     end
