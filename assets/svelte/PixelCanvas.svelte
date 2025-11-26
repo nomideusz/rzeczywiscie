@@ -17,33 +17,14 @@
   let hoveredPixel = null
   let pixelSize = 8
   let canvasElement
-  let canvasWrapper
   let ctx
   let lastCursorSend = 0
-  let zoom = 1
+  let zoom = 1.2
   let isMobile = false
   const CURSOR_THROTTLE_MS = 250
 
-  // Pan state
-  let isPanning = false
-  let panStart = { x: 0, y: 0 }
-  let scrollStart = { x: 0, y: 0 }
-
   onMount(() => {
     isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0
-    
-    // Calculate optimal zoom to fill container
-    setTimeout(() => {
-      if (canvasWrapper) {
-        const wrapperWidth = canvasWrapper.clientWidth - 32
-        const wrapperHeight = canvasWrapper.clientHeight - 32
-        const optimalZoomX = wrapperWidth / (width * pixelSize)
-        const optimalZoomY = wrapperHeight / (height * pixelSize)
-        zoom = Math.min(optimalZoomX, optimalZoomY, 2.5)
-        zoom = Math.max(0.8, zoom)
-        drawCanvas()
-      }
-    }, 50)
     
     const savedColor = localStorage.getItem('pixels_selected_color')
     if (savedColor && colors.includes(savedColor)) {
@@ -63,11 +44,6 @@
     return { destroy() {} }
   }
 
-  function initWrapper(node) {
-    canvasWrapper = node
-    return { destroy() {} }
-  }
-
   function drawCanvas() {
     if (!ctx) return
 
@@ -83,7 +59,7 @@
     ctx.fillStyle = '#FFFFFF'
     ctx.fillRect(0, 0, actualWidth, actualHeight)
 
-    // Grid - always visible
+    // Grid
     ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)'
     ctx.lineWidth = 1
     ctx.beginPath()
@@ -114,7 +90,7 @@
     })
 
     // Hover preview
-    if (hoveredPixel && canPlace && !isPanning) {
+    if (hoveredPixel && canPlace) {
       ctx.globalAlpha = 0.6
       ctx.fillStyle = selectedColor
       ctx.fillRect(
@@ -136,23 +112,8 @@
     }
   }
 
-  function handleMouseDown(e) {
-    if (e.button === 1) {
-      e.preventDefault()
-      isPanning = true
-      panStart = { x: e.clientX, y: e.clientY }
-      if (canvasWrapper) {
-        scrollStart = { x: canvasWrapper.scrollLeft, y: canvasWrapper.scrollTop }
-      }
-    }
-  }
-
-  function handleMouseUp() {
-    isPanning = false
-  }
-
   function handleClick(e) {
-    if (isPanning || !canPlace) return
+    if (!canPlace) return
     const { x, y } = getCoords(e.clientX, e.clientY)
     if (x >= 0 && x < width && y >= 0 && y < height) {
       live.pushEvent("place_pixel", { x, y })
@@ -160,11 +121,6 @@
   }
 
   function handleMove(e) {
-    if (isPanning && canvasWrapper) {
-      canvasWrapper.scrollLeft = scrollStart.x + (panStart.x - e.clientX)
-      canvasWrapper.scrollTop = scrollStart.y + (panStart.y - e.clientY)
-      return
-    }
     const { x, y } = getCoords(e.clientX, e.clientY)
     if (x >= 0 && x < width && y >= 0 && y < height) {
       if (!hoveredPixel || hoveredPixel.x !== x || hoveredPixel.y !== y) {
@@ -185,87 +141,37 @@
 
   function handleLeave() {
     hoveredPixel = null
-    isPanning = false
     drawCanvas()
   }
 
-  // Touch handling - single finger pans, tap places, two fingers zoom
-  let lastTouchDistance = 0
-  let singleTouchStart = null
+  // Touch - tap to place
+  let touchStart = null
   let touchMoved = false
-  let scrollElement = null
-  const TAP_THRESHOLD = 15
-
-  function getScrollElement() {
-    if (!scrollElement && canvasWrapper) {
-      scrollElement = canvasWrapper.querySelector('.overflow-auto')
-    }
-    return scrollElement
-  }
 
   function handleTouchStart(e) {
-    if (e.touches.length === 2) {
-      e.preventDefault()
-      singleTouchStart = null
-      touchMoved = true
-      const t1 = e.touches[0], t2 = e.touches[1]
-      lastTouchDistance = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY)
-    } else if (e.touches.length === 1) {
-      const t = e.touches[0]
-      const scroll = getScrollElement()
-      singleTouchStart = { 
-        clientX: t.clientX, 
-        clientY: t.clientY,
-        scrollLeft: scroll ? scroll.scrollLeft : 0,
-        scrollTop: scroll ? scroll.scrollTop : 0
-      }
+    if (e.touches.length === 1) {
+      touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY }
       touchMoved = false
     }
   }
 
   function handleTouchMove(e) {
-    if (e.touches.length === 2) {
-      e.preventDefault()
-      const t1 = e.touches[0], t2 = e.touches[1]
-      const distance = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY)
-      if (lastTouchDistance > 0) {
-        const scale = distance / lastTouchDistance
-        if (Math.abs(scale - 1) > 0.015) {
-          zoom = Math.max(0.5, Math.min(3, zoom * scale))
-          drawCanvas()
-          lastTouchDistance = distance
-        }
-      }
-    } else if (e.touches.length === 1 && singleTouchStart) {
-      const t = e.touches[0]
-      const dx = t.clientX - singleTouchStart.clientX
-      const dy = t.clientY - singleTouchStart.clientY
-      
-      if (Math.hypot(dx, dy) > TAP_THRESHOLD) {
-        touchMoved = true
-        // Pan the scroll container
-        const scroll = getScrollElement()
-        if (scroll) {
-          scroll.scrollLeft = singleTouchStart.scrollLeft - dx
-          scroll.scrollTop = singleTouchStart.scrollTop - dy
-        }
-      }
+    if (touchStart) {
+      const dx = e.touches[0].clientX - touchStart.x
+      const dy = e.touches[0].clientY - touchStart.y
+      if (Math.hypot(dx, dy) > 10) touchMoved = true
     }
   }
 
   function handleTouchEnd(e) {
-    // Only place pixel on tap (not drag)
-    if (singleTouchStart && !touchMoved && canPlace) {
-      const { x, y } = getCoords(singleTouchStart.clientX, singleTouchStart.clientY)
+    if (touchStart && !touchMoved && canPlace) {
+      const { x, y } = getCoords(touchStart.x, touchStart.y)
       if (x >= 0 && x < width && y >= 0 && y < height) {
         live.pushEvent("place_pixel", { x, y })
       }
     }
-    lastTouchDistance = 0
-    singleTouchStart = null
+    touchStart = null
     touchMoved = false
-    hoveredPixel = null
-    drawCanvas()
   }
 
   function selectColor(color) {
@@ -275,7 +181,7 @@
   }
 
   function adjustZoom(delta) {
-    zoom = Math.max(0.5, Math.min(3, zoom + delta))
+    zoom = Math.max(0.5, Math.min(2.5, zoom + delta))
     drawCanvas()
   }
 
@@ -285,80 +191,70 @@
       if (colors[idx]) selectColor(colors[idx])
     }
     if (e.key === '0' && colors[9]) selectColor(colors[9])
-    if (e.key === '+' || e.key === '=') adjustZoom(0.25)
-    if (e.key === '-') adjustZoom(-0.25)
+    if (e.key === '+' || e.key === '=') adjustZoom(0.2)
+    if (e.key === '-') adjustZoom(-0.2)
   }
 </script>
 
-<svelte:window onkeydown={handleKeyDown} onmouseup={handleMouseUp} />
+<svelte:window onkeydown={handleKeyDown} />
 
-<div class="flex flex-col bg-base-200 overflow-hidden" style="height: calc(100vh - 8rem);">
-  <!-- Canvas area - no page scroll needed -->
-  <div 
-    class="flex-1 min-h-0 overflow-auto bg-neutral-100 relative"
-    style="scrollbar-width: thin;"
-    use:initWrapper
-  >
-    <div class="inline-block p-4">
-      <canvas
-          use:initCanvas
-          class="bg-white shadow-lg {isPanning ? 'cursor-grabbing' : 'cursor-crosshair'}"
-          onmousedown={handleMouseDown}
-          onclick={handleClick}
-          onmousemove={handleMove}
-          onmouseleave={handleLeave}
-          ontouchstart={handleTouchStart}
-          ontouchmove={handleTouchMove}
-          ontouchend={handleTouchEnd}
-          oncontextmenu={(e) => e.preventDefault()}
-      ></canvas>
-    </div>
-
-    <!-- Live Cursors -->
-    {#each cursors as cursor (cursor.id)}
-      <div
-        class="absolute pointer-events-none"
-        style="left: calc(50% + {(cursor.x - width/2) * pixelSize * zoom}px); top: calc(50% + {(cursor.y - height/2) * pixelSize * zoom}px);"
-      >
-        <div class="w-2 h-2 rounded-full" style="background-color: {cursor.color}; box-shadow: 0 0 4px {cursor.color};"></div>
+<div class="py-4 bg-base-200">
+  <div class="container mx-auto px-4">
+    <!-- Stats bar -->
+    <div class="flex items-center justify-between mb-3 text-xs opacity-60">
+      <div class="flex items-center gap-3">
+        <span><strong>{stats.total_pixels.toLocaleString()}</strong> pixels</span>
+        <span><strong>{stats.unique_users}</strong> artists</span>
       </div>
-    {/each}
-
-    <!-- Floating zoom controls -->
-    <div class="absolute bottom-3 right-3 flex items-center gap-0.5 bg-base-100/90 backdrop-blur border border-base-content/20 rounded p-0.5 z-10">
-      <button class="w-7 h-7 text-sm font-bold hover:bg-base-200 rounded cursor-pointer" onclick={() => adjustZoom(-0.25)}>−</button>
-      <span class="w-10 text-center text-[10px] font-bold opacity-60">{Math.round(zoom * 100)}%</span>
-      <button class="w-7 h-7 text-sm font-bold hover:bg-base-200 rounded cursor-pointer" onclick={() => adjustZoom(0.25)}>+</button>
+      <div class="flex items-center gap-2">
+        <button class="px-2 py-1 hover:bg-base-300 rounded cursor-pointer" onclick={() => adjustZoom(-0.2)}>−</button>
+        <span class="w-12 text-center">{Math.round(zoom * 100)}%</span>
+        <button class="px-2 py-1 hover:bg-base-300 rounded cursor-pointer" onclick={() => adjustZoom(0.2)}>+</button>
+      </div>
     </div>
 
-    <!-- Coordinates + stats -->
-    <div class="absolute top-3 left-3 flex items-center gap-2 text-[10px] font-bold opacity-50 z-10">
-      <span>{stats.total_pixels.toLocaleString()} px</span>
-      <span>•</span>
-      <span>{stats.unique_users} artists</span>
-      {#if hoveredPixel}
-        <span>•</span>
-        <span class="font-mono">[{hoveredPixel.x},{hoveredPixel.y}]</span>
-      {/if}
+    <!-- Canvas wrapper - scrollable horizontally if needed -->
+    <div class="overflow-x-auto pb-3" style="scrollbar-width: thin;">
+      <div class="flex justify-center">
+        <div class="relative inline-block">
+          <canvas
+            use:initCanvas
+            class="bg-white shadow-lg cursor-crosshair block"
+            onclick={handleClick}
+            onmousemove={handleMove}
+            onmouseleave={handleLeave}
+            ontouchstart={handleTouchStart}
+            ontouchmove={handleTouchMove}
+            ontouchend={handleTouchEnd}
+          ></canvas>
+          
+          <!-- Coordinates overlay -->
+          {#if hoveredPixel}
+            <div class="absolute top-2 right-2 px-2 py-1 bg-black/60 text-white text-xs font-mono rounded">
+              {hoveredPixel.x}, {hoveredPixel.y}
+            </div>
+          {/if}
+        </div>
+      </div>
     </div>
-  </div>
 
-  <!-- Bottom bar - color picker with timer -->
-  <div class="flex items-center justify-center gap-1 px-2 py-2 bg-base-100 border-t border-base-content/10">
-    {#each colors as color}
-      <button
-        class="relative w-8 h-8 sm:w-9 sm:h-9 border-2 cursor-pointer transition-all {selectedColor === color ? 'border-base-content scale-105' : 'border-transparent hover:border-base-content/30'}"
-        style="background-color: {color};"
-        onclick={() => selectColor(color)}
-      >
-        {#if selectedColor === color && !canPlace}
-          <div class="absolute inset-0 bg-black/40 flex items-center justify-center">
-            <span class="text-white text-[10px] font-black">{secondsRemaining}</span>
-          </div>
-          <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-white/70" style="width: {cooldownProgress * 100}%"></div>
-        {/if}
-      </button>
-    {/each}
+    <!-- Color picker -->
+    <div class="flex items-center justify-center gap-1 pt-2">
+      {#each colors as color}
+        <button
+          class="relative w-8 h-8 sm:w-9 sm:h-9 border-2 cursor-pointer transition-all {selectedColor === color ? 'border-base-content scale-110' : 'border-base-content/20 hover:border-base-content/50'}"
+          style="background-color: {color};"
+          onclick={() => selectColor(color)}
+        >
+          {#if selectedColor === color && !canPlace}
+            <div class="absolute inset-0 bg-black/50 flex items-center justify-center">
+              <span class="text-white text-xs font-bold">{secondsRemaining}</span>
+            </div>
+            <div class="absolute bottom-0 left-0 h-1 bg-white/80" style="width: {cooldownProgress * 100}%"></div>
+          {/if}
+        </button>
+      {/each}
+    </div>
   </div>
 </div>
 
@@ -367,6 +263,5 @@
     image-rendering: pixelated;
     image-rendering: -moz-crisp-edges;
     image-rendering: crisp-edges;
-    touch-action: none;
   }
 </style>
