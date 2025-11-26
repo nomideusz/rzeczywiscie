@@ -248,16 +248,30 @@
             <div class="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
               <span class="text-white text-xs font-black">{secondsRemaining}</span>
             </div>
-            <!-- Progress border that wraps around -->
+            <!-- Progress border that wraps around (double stroke for contrast) -->
             <svg class="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 40 40">
+              <!-- Dark outer stroke for contrast -->
               <rect
                 x="1"
                 y="1"
                 width="38"
                 height="38"
                 fill="none"
-                stroke="rgba(255,255,255,0.9)"
-                stroke-width="2"
+                stroke="rgba(0,0,0,0.8)"
+                stroke-width="3"
+                stroke-dasharray="{152 * cooldownProgress} 152"
+                stroke-dashoffset="0"
+                pathLength="152"
+              />
+              <!-- Bright inner stroke -->
+              <rect
+                x="1"
+                y="1"
+                width="38"
+                height="38"
+                fill="none"
+                stroke="rgba(255,255,255,0.95)"
+                stroke-width="1.5"
                 stroke-dasharray="{152 * cooldownProgress} 152"
                 stroke-dashoffset="0"
                 pathLength="152"
