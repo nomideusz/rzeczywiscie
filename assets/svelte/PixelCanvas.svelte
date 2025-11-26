@@ -160,29 +160,8 @@
     ctx.fillStyle = '#FFFFFF'
     ctx.fillRect(0, 0, actualWidth, actualHeight)
 
-    pixels.forEach(pixel => {
-      ctx.fillStyle = pixel.color
-      ctx.fillRect(
-        pixel.x * effectivePixelSize,
-        pixel.y * effectivePixelSize,
-        effectivePixelSize,
-        effectivePixelSize
-      )
-    })
-
-    if (hoveredPixel && canPlace && !isPanning) {
-      ctx.globalAlpha = 0.5
-      ctx.fillStyle = selectedColor
-      ctx.fillRect(
-        hoveredPixel.x * effectivePixelSize,
-        hoveredPixel.y * effectivePixelSize,
-        effectivePixelSize,
-        effectivePixelSize
-      )
-      ctx.globalAlpha = 1.0
-    }
-
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)'
+    // Draw grid first
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)'
     ctx.lineWidth = 1
 
     for (let x = 0; x <= width; x++) {
@@ -197,6 +176,31 @@
       ctx.moveTo(0, y * effectivePixelSize + 0.5)
       ctx.lineTo(actualWidth, y * effectivePixelSize + 0.5)
       ctx.stroke()
+    }
+
+    // Draw pixels with 1px inset to show grid border
+    const inset = 1
+    pixels.forEach(pixel => {
+      ctx.fillStyle = pixel.color
+      ctx.fillRect(
+        pixel.x * effectivePixelSize + inset,
+        pixel.y * effectivePixelSize + inset,
+        effectivePixelSize - inset * 2,
+        effectivePixelSize - inset * 2
+      )
+    })
+
+    // Preview hovered pixel with same inset
+    if (hoveredPixel && canPlace && !isPanning) {
+      ctx.globalAlpha = 0.5
+      ctx.fillStyle = selectedColor
+      ctx.fillRect(
+        hoveredPixel.x * effectivePixelSize + inset,
+        hoveredPixel.y * effectivePixelSize + inset,
+        effectivePixelSize - inset * 2,
+        effectivePixelSize - inset * 2
+      )
+      ctx.globalAlpha = 1.0
     }
   }
 
