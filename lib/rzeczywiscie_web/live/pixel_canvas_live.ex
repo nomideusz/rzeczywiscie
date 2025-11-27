@@ -122,8 +122,9 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
 
           {:noreply, socket}
 
-        {:error, {:cooldown, seconds}} ->
-          {:noreply, put_flash(socket, :error, "Cooldown: #{seconds}s remaining")}
+        {:error, {:cooldown, _seconds}} ->
+          # Don't show toast - visual cooldown timer on button is enough
+          {:noreply, socket}
 
         {:error, :position_occupied} ->
           {:noreply, put_flash(socket, :error, "Position already occupied")}
