@@ -445,10 +445,16 @@
     if (singleTouchStart && !touchMoved && canPlace && hoveredPixel) {
       const { x, y } = hoveredPixel
       if (x >= 0 && x < width && y >= 0 && y < height) {
-        live.pushEvent("place_pixel", { x, y })
+        if (isMassiveMode && userStats.massive_pixels_available > 0) {
+          // Place massive pixel (3x3 grid)
+          live.pushEvent("place_massive_pixel", { x, y })
+        } else {
+          // Place normal pixel
+          live.pushEvent("place_pixel", { x, y })
+        }
       }
     }
-    
+
     touchPanStart = null
     lastTouchDistance = 0
     singleTouchStart = null
@@ -679,7 +685,7 @@
 
     <!-- Coordinates - only on desktop, below stats -->
     {#if hoveredPixel && !isMobile}
-      <div class="fixed top-20 right-6 bg-neutral-900 text-white px-3 py-2 rounded-lg text-xs font-mono shadow-lg">
+      <div class="fixed top-44 right-6 bg-neutral-900 text-white px-3 py-2 rounded-lg text-xs font-mono shadow-lg">
         {hoveredPixel.x}, {hoveredPixel.y}
       </div>
     {/if}
