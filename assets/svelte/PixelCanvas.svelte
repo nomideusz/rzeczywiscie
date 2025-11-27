@@ -12,6 +12,8 @@
   export let cooldownSeconds = 15
   export let stats = { total_pixels: 0, unique_users: 0 }
   export let cursors = []
+  export let userStats = { pixels_placed: 0, massive_pixels_available: 0, progress_to_next: 0 }
+  export let isMassiveMode = false
   export let live
 
   let hoveredPixel = null
@@ -201,6 +203,14 @@
 
     // Draw pixels - use uniform cell size for consistent appearance
     pixels.forEach(pixel => {
+      // Add glow effect for massive pixels
+      if (pixel.is_massive) {
+        ctx.shadowBlur = 8
+        ctx.shadowColor = pixel.color
+      } else {
+        ctx.shadowBlur = 0
+      }
+
       ctx.fillStyle = pixel.color
       ctx.fillRect(
         pixel.x * cellSize + 1,
@@ -210,16 +220,44 @@
       )
     })
 
-    // Preview hovered pixel with same uniform size
+    // Reset shadow
+    ctx.shadowBlur = 0
+
+    // Preview hovered pixel(s)
     if (hoveredPixel && canPlace && !isPanning) {
       ctx.globalAlpha = 0.5
       ctx.fillStyle = selectedColor
-      ctx.fillRect(
-        hoveredPixel.x * cellSize + 1,
-        hoveredPixel.y * cellSize + 1,
-        cellSize - 2,
-        cellSize - 2
-      )
+
+      if (isMassiveMode && userStats.massive_pixels_available > 0) {
+        // Draw 3x3 preview for massive pixel
+        for (let dx = -1; dx <= 1; dx++) {
+          for (let dy = -1; dy <= 1; dy++) {
+            const px = hoveredPixel.x + dx
+            const py = hoveredPixel.y + dy
+            if (px >= 0 && px < width && py >= 0 && py < height) {
+              // Add subtle glow to preview
+              ctx.shadowBlur = 6
+              ctx.shadowColor = selectedColor
+              ctx.fillRect(
+                px * cellSize + 1,
+                py * cellSize + 1,
+                cellSize - 2,
+                cellSize - 2
+              )
+            }
+          }
+        }
+        ctx.shadowBlur = 0
+      } else {
+        // Draw single pixel preview
+        ctx.fillRect(
+          hoveredPixel.x * cellSize + 1,
+          hoveredPixel.y * cellSize + 1,
+          cellSize - 2,
+          cellSize - 2
+        )
+      }
+
       ctx.globalAlpha = 1.0
     }
   }
@@ -250,7 +288,19 @@
     if (isPanning || !canPlace) return
     const { x, y } = getCoords(event.clientX, event.clientY)
     if (x >= 0 && x < width && y >= 0 && y < height) {
-      live.pushEvent("place_pixel", { x, y })
+      if (isMassiveMode && userStats.massive_pixels_available > 0) {
+        // Place massive pixel (3x3 grid)
+        live.pushEvent("place_massive_pixel", { x, y })
+      } else {
+        // Place normal pixel
+        live.pushEvent("place_pixel", { x, y })
+      }
+    }
+  }
+
+  function toggleMassiveMode() {
+    if (userStats.massive_pixels_available > 0) {
+      live.pushEvent("toggle_massive_mode")
     }
   }
 
@@ -584,14 +634,47 @@
       </div>
     </a>
 
-    <!-- Stats - top right, smaller on mobile -->
+    <!-- Stats & Massive Pixel Progress - top right -->
     <div
-      class="fixed z-50 {isMobile ? 'top-3 right-3' : 'top-6 right-6'}"
+      class="fixed z-50 {isMobile ? 'top-3 right-3' : 'top-6 right-6'} flex flex-col gap-2"
     >
+      <!-- Stats -->
       <div class="bg-white/90 backdrop-blur rounded-xl shadow-lg {isMobile ? 'px-3 py-1.5' : 'px-4 py-2.5'}">
         <h1 class="{isMobile ? 'text-xs' : 'text-sm'} font-semibold text-neutral-900">Pixels</h1>
         <p class="{isMobile ? 'text-[10px]' : 'text-xs'} text-neutral-500">{stats.total_pixels.toLocaleString()} · {stats.unique_users} artists</p>
       </div>
+
+      <!-- Massive Pixel Progress -->
+      <div class="bg-white/90 backdrop-blur rounded-xl shadow-lg {isMobile ? 'px-3 py-1.5' : 'px-4 py-2.5'}">
+        <div class="flex items-center justify-between gap-2 mb-1">
+          <span class="{isMobile ? 'text-xs' : 'text-sm'} font-semibold text-neutral-900">Massive Pixel</span>
+          {#if userStats.massive_pixels_available > 0}
+            <span class="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-bold px-2 py-0.5 rounded-full animate-pulse">
+              {userStats.massive_pixels_available}
+            </span>
+          {/if}
+        </div>
+        <!-- Progress bar -->
+        <div class="relative h-2 bg-neutral-200 rounded-full overflow-hidden">
+          <div
+            class="absolute inset-y-0 left-0 bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-300"
+            style="width: {(userStats.progress_to_next / 15) * 100}%"
+          ></div>
+        </div>
+        <p class="{isMobile ? 'text-[10px]' : 'text-xs'} text-neutral-500 mt-1">
+          {userStats.progress_to_next}/15 pixels
+        </p>
+      </div>
+
+      <!-- Massive Mode Toggle (only show if available) -->
+      {#if userStats.massive_pixels_available > 0}
+        <button
+          on:click={toggleMassiveMode}
+          class="bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold py-2 px-4 rounded-xl shadow-lg transition-all hover:scale-105 {isMassiveMode ? 'ring-4 ring-yellow-400' : ''}"
+        >
+          <span class="text-sm">{isMassiveMode ? '🔥 MASSIVE MODE' : '⭐ Use Massive'}</span>
+        </button>
+      {/if}
     </div>
 
     <!-- Coordinates - only on desktop, below stats -->
