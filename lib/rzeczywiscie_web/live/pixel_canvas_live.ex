@@ -13,7 +13,8 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
     {width, height} = PixelCanvas.canvas_size()
     pixels = PixelCanvas.load_canvas()
     stats = PixelCanvas.stats()
-    cooldown = PixelCanvas.check_cooldown(user_id)
+    user_stats = PixelCanvas.get_user_stats(user_id)
+    cooldown = PixelCanvas.check_cooldown(user_id, false)
     seconds_remaining = get_seconds_remaining(cooldown)
 
     # Start cooldown timer if user is on cooldown
@@ -33,6 +34,8 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
       |> assign(:can_place, cooldown == :ok)
       |> assign(:seconds_remaining, seconds_remaining)
       |> assign(:stats, stats)
+      |> assign(:user_stats, user_stats)
+      |> assign(:is_massive_mode, false)
       |> assign(:page_title, "Pixels")
       |> assign(:pixels_version, 0)
       |> assign(:cursors, %{})
@@ -55,7 +58,9 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
         secondsRemaining: @seconds_remaining,
         cooldownSeconds: @cooldown_seconds,
         stats: @stats,
-        cursors: serialize_cursors(@cursors)
+        cursors: serialize_cursors(@cursors),
+        userStats: serialize_user_stats(@user_stats),
+        isMassiveMode: @is_massive_mode
       }}
       socket={@socket}
     />
@@ -67,12 +72,12 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
     color = socket.assigns.selected_color
     user_id = socket.assigns.user_id
 
-    # Check if pixel already exists with same color
+    # Check if pixel already exists
     existing_pixel = Map.get(socket.assigns.pixels, {x, y})
 
-    if existing_pixel && existing_pixel.color == color do
-      # Same color, don't waste cooldown
-      {:noreply, socket}
+    if existing_pixel do
+      # Position occupied - pixels are now permanent!
+      {:noreply, put_flash(socket, :error, "Position already occupied")}
     else
       case PixelCanvas.place_pixel(x, y, color, user_id) do
         {:ok, pixel} ->
@@ -80,38 +85,104 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
           pixels = Map.put(socket.assigns.pixels, {x, y}, %{
             color: color,
             user_id: user_id,
-            updated_at: pixel.updated_at
+            updated_at: pixel.updated_at,
+            is_massive: false
           })
 
           stats = PixelCanvas.stats()
+          user_stats = PixelCanvas.get_user_stats(user_id)
+
+          # Check if user just unlocked a massive pixel
+          unlocked = rem(user_stats.pixels_placed_count, 15) == 0
 
           # Broadcast to all connected clients (including stats)
-          IO.inspect("Broadcasting pixel placement: x=#{x}, y=#{y}, color=#{color}")
           Phoenix.PubSub.broadcast(
             Rzeczywiscie.PubSub,
             @topic,
-            {:pixel_placed, x, y, color, user_id, stats}
+            {:pixel_placed, x, y, color, user_id, false, stats}
           )
 
           # Schedule cooldown update
           Process.send_after(self(), :update_cooldown, 1000)
 
-          {:noreply,
-           socket
+          socket = socket
            |> assign(:pixels, pixels)
            |> assign(:pixels_version, socket.assigns.pixels_version + 1)
            |> assign(:can_place, false)
            |> assign(:seconds_remaining, PixelCanvas.cooldown_seconds())
-           |> assign(:stats, stats)}
+           |> assign(:stats, stats)
+           |> assign(:user_stats, user_stats)
+
+          # Show unlock message if applicable
+          socket = if unlocked do
+            put_flash(socket, :info, "🎉 MASSIVE PIXEL UNLOCKED! You can now place a 3x3 pixel!")
+          else
+            socket
+          end
+
+          {:noreply, socket}
 
         {:error, {:cooldown, seconds}} ->
           {:noreply, put_flash(socket, :error, "Cooldown: #{seconds}s remaining")}
+
+        {:error, :position_occupied} ->
+          {:noreply, put_flash(socket, :error, "Position already occupied")}
 
         {:error, changeset} ->
           error_msg = format_error(changeset)
           {:noreply, put_flash(socket, :error, error_msg)}
       end
     end
+  end
+
+  def handle_event("place_massive_pixel", %{"x" => x, "y" => y}, socket) do
+    color = socket.assigns.selected_color
+    user_id = socket.assigns.user_id
+
+    case PixelCanvas.place_massive_pixel(x, y, color, user_id) do
+      {:ok, _center_pixel} ->
+        # Reload all pixels (easier than updating 9 individually)
+        pixels = PixelCanvas.load_canvas()
+        stats = PixelCanvas.stats()
+        user_stats = PixelCanvas.get_user_stats(user_id)
+
+        # Broadcast massive pixel placement
+        Phoenix.PubSub.broadcast(
+          Rzeczywiscie.PubSub,
+          @topic,
+          {:massive_pixel_placed, x, y, color, user_id, stats}
+        )
+
+        # Schedule cooldown update (massive pixel has 3x cooldown)
+        Process.send_after(self(), :update_cooldown, 1000)
+
+        {:noreply,
+         socket
+         |> assign(:pixels, pixels)
+         |> assign(:pixels_version, socket.assigns.pixels_version + 1)
+         |> assign(:can_place, false)
+         |> assign(:seconds_remaining, 45)
+         |> assign(:stats, stats)
+         |> assign(:user_stats, user_stats)
+         |> put_flash(:info, "Massive pixel placed! 🚀")}
+
+      {:error, {:cooldown, seconds}} ->
+        {:noreply, put_flash(socket, :error, "Cooldown: #{seconds}s remaining")}
+
+      {:error, :no_massive_pixels_available} ->
+        {:noreply, put_flash(socket, :error, "No massive pixels available. Place 15 regular pixels to unlock one!")}
+
+      {:error, :insufficient_space} ->
+        {:noreply, put_flash(socket, :error, "Insufficient space for 3x3 massive pixel")}
+
+      {:error, changeset} ->
+        error_msg = format_error(changeset)
+        {:noreply, put_flash(socket, :error, error_msg)}
+    end
+  end
+
+  def handle_event("toggle_massive_mode", _, socket) do
+    {:noreply, assign(socket, is_massive_mode: !socket.assigns.is_massive_mode)}
   end
 
   def handle_event("select_color", %{"color" => color}, socket) do
@@ -151,16 +222,14 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
   end
 
   # Handle pixel placed by other users
-  def handle_info({:pixel_placed, x, y, color, user_id, stats}, socket) do
-    IO.inspect("Received pixel_placed event: x=#{x}, y=#{y}, my_user_id=#{socket.assigns.user_id}, sender_user_id=#{user_id}")
-
+  def handle_info({:pixel_placed, x, y, color, user_id, is_massive, stats}, socket) do
     # Don't update if this was our own pixel (already updated)
     if user_id != socket.assigns.user_id do
-      IO.inspect("Updating pixels for other user's placement")
       pixels = Map.put(socket.assigns.pixels, {x, y}, %{
         color: color,
         user_id: user_id,
-        updated_at: DateTime.utc_now()
+        updated_at: DateTime.utc_now(),
+        is_massive: is_massive
       })
 
       {:noreply,
@@ -169,7 +238,23 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
        |> assign(:pixels_version, socket.assigns.pixels_version + 1)
        |> assign(:stats, stats)}
     else
-      IO.inspect("Ignoring own pixel placement")
+      {:noreply, socket}
+    end
+  end
+
+  # Handle massive pixel placed by other users
+  def handle_info({:massive_pixel_placed, _x, _y, _color, user_id, stats}, socket) do
+    # Don't update if this was our own pixel (already updated)
+    if user_id != socket.assigns.user_id do
+      # Reload all pixels to get the 3x3 grid
+      pixels = PixelCanvas.load_canvas()
+
+      {:noreply,
+       socket
+       |> assign(:pixels, pixels)
+       |> assign(:pixels_version, socket.assigns.pixels_version + 1)
+       |> assign(:stats, stats)}
+    else
       {:noreply, socket}
     end
   end
@@ -197,7 +282,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
 
   defp serialize_pixels(pixels) do
     Enum.map(pixels, fn {{x, y}, data} ->
-      %{x: x, y: y, color: data.color}
+      %{x: x, y: y, color: data.color, is_massive: data.is_massive || false}
     end)
   end
 
@@ -210,6 +295,14 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
         color: data.color
       }
     end)
+  end
+
+  defp serialize_user_stats(user_stats) do
+    %{
+      pixels_placed: user_stats.pixels_placed_count,
+      massive_pixels_available: user_stats.massive_pixels_available,
+      progress_to_next: rem(user_stats.pixels_placed_count, 15)
+    }
   end
 
   defp get_seconds_remaining(:ok), do: 0
