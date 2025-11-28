@@ -780,7 +780,6 @@
             </span>
           {/if}
         </div>
-        <!-- Progress bar -->
         <div class="relative h-2 bg-neutral-200 border border-neutral-300">
           <div
             class="absolute inset-y-0 left-0 bg-neutral-900 transition-all duration-300"
@@ -792,21 +791,20 @@
         </p>
       </div>
 
-      <!-- Massive Pixel Progress (Dual Track) -->
+      <!-- Massive Pixel Progress -->
       <div class="bg-white/90 backdrop-blur rounded-xl shadow-lg {isMobile ? 'px-3 py-1.5' : 'px-4 py-2.5'}">
         <div class="flex items-center justify-between gap-2 mb-1">
           <span class="{isMobile ? 'text-xs' : 'text-sm'} font-semibold text-neutral-900">Massive Pixel</span>
           {#if userStats.massive_pixels_available > 0}
-            <span class="bg-gradient-to-r from-purple-600 to-pink-600 text-white text-xs font-bold px-2 py-0.5 border-2 border-purple-600 animate-pulse">
-              {userStats.massive_pixels_available} 🌈
+            <span class="bg-neutral-900 text-white text-xs font-bold px-2 py-0.5 border-2 border-neutral-900">
+              {userStats.massive_pixels_available}
             </span>
           {/if}
         </div>
-        <!-- Fusion progress bar -->
         <div class="mb-2">
           <div class="relative h-2 bg-neutral-200 border border-neutral-300">
             <div
-              class="absolute inset-y-0 left-0 bg-gradient-to-r from-purple-600 to-pink-600 transition-all duration-300"
+              class="absolute inset-y-0 left-0 bg-neutral-900 transition-all duration-300"
               style="width: {(userStats.progress_to_massive_fusion / 5) * 100}%"
             ></div>
           </div>
@@ -814,44 +812,41 @@
             Fusion: {userStats.progress_to_massive_fusion}/5 megas
           </p>
         </div>
-        <!-- Bonus progress bar -->
         <div>
           <div class="relative h-2 bg-neutral-200 border border-neutral-300">
             <div
-              class="absolute inset-y-0 left-0 bg-gradient-to-r from-amber-500 to-orange-500 transition-all duration-300"
+              class="absolute inset-y-0 left-0 bg-neutral-900 transition-all duration-300"
               style="width: {(userStats.progress_to_massive_bonus / 100) * 100}%"
             ></div>
           </div>
           <p class="{isMobile ? 'text-[10px]' : 'text-xs'} text-neutral-500 mt-1">
-            Dedication: {userStats.progress_to_massive_bonus}/100 pixels
+            Bonus: {userStats.progress_to_massive_bonus}/100 pixels
           </p>
         </div>
       </div>
 
       <!-- Mode Toggle Buttons -->
-      <div class="flex gap-2 w-full">
+      <div class="grid grid-cols-3 gap-2 w-full">
         <button
           on:click={() => togglePixelMode("normal")}
-          class="flex-1 font-bold py-2 px-3 border-2 shadow-lg transition-all cursor-pointer {pixelMode === 'normal' ? 'bg-neutral-900 text-white border-white' : 'bg-white text-neutral-900 border-neutral-900 hover:bg-neutral-50'}"
+          class="font-bold py-2 px-3 border-2 shadow-lg transition-all cursor-pointer {pixelMode === 'normal' ? 'bg-neutral-900 text-white border-white' : 'bg-white text-neutral-900 border-neutral-900 hover:bg-neutral-50'}"
         >
           <span class="text-xs">Normal</span>
         </button>
-        {#if userStats.mega_pixels_available > 0}
-          <button
-            on:click={() => togglePixelMode("mega")}
-            class="flex-1 font-bold py-2 px-3 border-2 shadow-lg transition-all cursor-pointer {pixelMode === 'mega' ? 'bg-neutral-900 text-white border-white' : 'bg-white text-neutral-900 border-neutral-900 hover:bg-neutral-50'}"
-          >
-            <span class="text-xs">⭐ Mega</span>
-          </button>
-        {/if}
-        {#if userStats.massive_pixels_available > 0}
-          <button
-            on:click={() => togglePixelMode("massive")}
-            class="flex-1 font-bold py-2 px-3 border-2 shadow-lg transition-all cursor-pointer {pixelMode === 'massive' ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white border-white' : 'bg-white text-neutral-900 border-purple-600 hover:bg-purple-50'}"
-          >
-            <span class="text-xs">🌈 Massive</span>
-          </button>
-        {/if}
+        <button
+          on:click={() => togglePixelMode("mega")}
+          disabled={userStats.mega_pixels_available === 0}
+          class="font-bold py-2 px-3 border-2 shadow-lg transition-all {userStats.mega_pixels_available > 0 ? 'cursor-pointer' : 'opacity-40 cursor-not-allowed'} {pixelMode === 'mega' ? 'bg-neutral-900 text-white border-white' : 'bg-white text-neutral-900 border-neutral-900 hover:bg-neutral-50'}"
+        >
+          <span class="text-xs">Mega</span>
+        </button>
+        <button
+          on:click={() => togglePixelMode("massive")}
+          disabled={userStats.massive_pixels_available === 0}
+          class="font-bold py-2 px-3 border-2 shadow-lg transition-all {userStats.massive_pixels_available > 0 ? 'cursor-pointer' : 'opacity-40 cursor-not-allowed'} {pixelMode === 'massive' ? 'bg-neutral-900 text-white border-white' : 'bg-white text-neutral-900 border-neutral-900 hover:bg-neutral-50'}"
+        >
+          <span class="text-xs">Massive</span>
+        </button>
       </div>
     </div>
 
