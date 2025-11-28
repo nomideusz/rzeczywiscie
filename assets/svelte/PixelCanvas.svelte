@@ -37,6 +37,7 @@
   let canScroll = false
   let showScrollHint = false
   let hasScrolled = false
+  let showMobileStats = false  // Toggle for mobile stats expansion
   const CURSOR_THROTTLE_MS = 250
 
   // Pan/drag state
@@ -677,12 +678,9 @@
   <!-- UI Container -->
   <div class="contents">
     
-    <!-- Color picker - bottom center on mobile, bottom left on desktop -->
-    <div
-      class="fixed z-50 {isMobile ? 'bottom-4 left-1/2 -translate-x-1/2' : 'bottom-6 left-6'}"
-    >
-      <div class="palette-container relative flex items-end gap-3">
-
+    <!-- Bottom controls -->
+    <div class="fixed z-50 {isMobile ? 'bottom-4 left-1/2 -translate-x-1/2' : 'bottom-6 left-6'}">
+      <div class="palette-container relative">
         <!-- Expanded palette -->
         {#if showPalette}
           <div class="absolute {isMobile ? 'bottom-16 left-1/2 -translate-x-1/2' : 'bottom-16 left-0'} bg-white rounded-2xl shadow-2xl p-4 animate-in">
@@ -707,30 +705,80 @@
           </div>
         {/if}
 
-        <!-- Current color button -->
-        <button
-          class="w-14 h-14 sm:w-12 sm:h-12 rounded-full shadow-lg transition-all active:scale-95 relative overflow-hidden"
-          style="background-color: {selectedColor};"
-          on:click={openPalette}
-        >
-          <svg class="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 36 36">
-            <circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="3"/>
-            <circle cx="18" cy="18" r="16" fill="none" stroke="white" stroke-width="3"
-              stroke-dasharray="100" stroke-dashoffset={100 - cooldownProgress * 100} stroke-linecap="round"
-              class="transition-all duration-1000 ease-linear"/>
-          </svg>
-          {#if !canPlace}
-            <span class="absolute inset-0 flex items-center justify-center text-white text-sm font-bold" style="text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 0 4px #000;">
-              {secondsRemaining}
-            </span>
-          {/if}
-        </button>
-
-        <!-- Zoom controls - inline on mobile -->
+        <!-- Mobile: Compact bottom bar -->
         {#if isMobile}
-          <div class="bg-white rounded-full shadow-lg flex items-center overflow-hidden">
-            <button class="w-10 h-10 text-neutral-600 active:bg-neutral-100 text-lg font-medium" on:click={() => adjustZoom(-0.25)}>−</button>
-            <button class="w-10 h-10 text-neutral-600 active:bg-neutral-100 text-lg font-medium" on:click={() => adjustZoom(0.25)}>+</button>
+          <div class="bg-white rounded-full shadow-lg flex items-center gap-1 p-1">
+            <!-- Color button -->
+            <button
+              class="w-10 h-10 rounded-full transition-all active:scale-95 relative overflow-hidden flex-shrink-0"
+              style="background-color: {selectedColor};"
+              on:click={openPalette}
+            >
+              <svg class="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 36 36">
+                <circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="3"/>
+                <circle cx="18" cy="18" r="16" fill="none" stroke="white" stroke-width="3"
+                  stroke-dasharray="100" stroke-dashoffset={100 - cooldownProgress * 100} stroke-linecap="round"
+                  class="transition-all duration-1000 ease-linear"/>
+              </svg>
+              {#if !canPlace}
+                <span class="absolute inset-0 flex items-center justify-center text-white text-xs font-bold" style="text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 0 4px #000;">
+                  {secondsRemaining}
+                </span>
+              {/if}
+            </button>
+
+            <!-- Divider -->
+            <div class="w-px h-6 bg-neutral-200"></div>
+
+            <!-- Mode buttons -->
+            <button
+              on:click={() => togglePixelMode("normal")}
+              class="w-10 h-10 font-bold text-xs transition-all active:scale-95 flex items-center justify-center {pixelMode === 'normal' ? 'bg-neutral-900 text-white rounded-full' : 'text-neutral-900'}"
+            >
+              N
+            </button>
+            <button
+              on:click={() => togglePixelMode("mega")}
+              disabled={userStats.mega_pixels_available === 0}
+              class="w-10 h-10 font-bold text-xs transition-all active:scale-95 flex items-center justify-center {userStats.mega_pixels_available === 0 ? 'opacity-40 text-neutral-400' : pixelMode === 'mega' ? 'bg-neutral-900 text-white rounded-full' : 'text-neutral-900'}"
+            >
+              M
+            </button>
+            <button
+              on:click={() => togglePixelMode("massive")}
+              disabled={userStats.massive_pixels_available === 0}
+              class="w-10 h-10 font-bold text-xs transition-all active:scale-95 flex items-center justify-center {userStats.massive_pixels_available === 0 ? 'opacity-40 text-neutral-400' : pixelMode === 'massive' ? 'bg-neutral-900 text-white rounded-full' : 'text-neutral-900'}"
+            >
+              X
+            </button>
+
+            <!-- Divider -->
+            <div class="w-px h-6 bg-neutral-200"></div>
+
+            <!-- Zoom controls -->
+            <button class="w-10 h-10 text-neutral-600 active:bg-neutral-100 text-lg font-medium rounded-full" on:click={() => adjustZoom(-0.25)}>−</button>
+            <button class="w-10 h-10 text-neutral-600 active:bg-neutral-100 text-lg font-medium rounded-full" on:click={() => adjustZoom(0.25)}>+</button>
+          </div>
+        {:else}
+          <!-- Desktop: Original layout -->
+          <div class="flex items-end gap-3">
+            <button
+              class="w-12 h-12 rounded-full shadow-lg transition-all active:scale-95 relative overflow-hidden"
+              style="background-color: {selectedColor};"
+              on:click={openPalette}
+            >
+              <svg class="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 36 36">
+                <circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="3"/>
+                <circle cx="18" cy="18" r="16" fill="none" stroke="white" stroke-width="3"
+                  stroke-dasharray="100" stroke-dashoffset={100 - cooldownProgress * 100} stroke-linecap="round"
+                  class="transition-all duration-1000 ease-linear"/>
+              </svg>
+              {#if !canPlace}
+                <span class="absolute inset-0 flex items-center justify-center text-white text-sm font-bold" style="text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 0 4px #000;">
+                  {secondsRemaining}
+                </span>
+              {/if}
+            </button>
           </div>
         {/if}
       </div>
@@ -761,94 +809,149 @@
     </a>
 
     <!-- Stats & Massive Pixel Progress - top right -->
-    <div
-      class="fixed z-50 {isMobile ? 'top-3 right-3' : 'top-6 right-6'} flex flex-col gap-2"
-    >
-      <!-- Stats -->
-      <div class="bg-white/90 backdrop-blur rounded-xl shadow-lg {isMobile ? 'px-3 py-1.5' : 'px-4 py-2.5'}">
-        <h1 class="{isMobile ? 'text-xs' : 'text-sm'} font-semibold text-neutral-900">Pixels</h1>
-        <p class="{isMobile ? 'text-[10px]' : 'text-xs'} text-neutral-500">{stats.total_pixels.toLocaleString()} · {stats.unique_users} artists</p>
-      </div>
+    {#if isMobile}
+      <!-- Mobile: Compact collapsible stats -->
+      <div class="fixed z-50 top-3 right-3">
+        <button
+          on:click={() => showMobileStats = !showMobileStats}
+          class="bg-white/90 backdrop-blur rounded-full shadow-lg px-3 py-1.5 flex items-center gap-1.5 active:scale-95 transition-all"
+        >
+          <span class="text-xs font-bold text-neutral-900">
+            {#if userStats.mega_pixels_available > 0 || userStats.massive_pixels_available > 0}
+              M:{userStats.mega_pixels_available} X:{userStats.massive_pixels_available}
+            {:else}
+              {userStats.progress_to_mega}/15
+            {/if}
+          </span>
+          <svg class="w-3 h-3 transition-transform {showMobileStats ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+          </svg>
+        </button>
 
-      <!-- Mega Pixel Progress -->
-      <div class="bg-white/90 backdrop-blur rounded-xl shadow-lg {isMobile ? 'px-3 py-1.5' : 'px-4 py-2.5'}">
-        <div class="flex items-center justify-between gap-2 mb-1">
-          <span class="{isMobile ? 'text-xs' : 'text-sm'} font-semibold text-neutral-900">Mega Pixel</span>
-          {#if userStats.mega_pixels_available > 0}
-            <span class="bg-neutral-900 text-white text-xs font-bold px-2 py-0.5 border-2 border-neutral-900">
-              {userStats.mega_pixels_available}
-            </span>
-          {/if}
-        </div>
-        <div class="relative h-2 bg-neutral-200 border border-neutral-300">
-          <div
-            class="absolute inset-y-0 left-0 bg-neutral-900 transition-all duration-300"
-            style="width: {(userStats.progress_to_mega / 15) * 100}%"
-          ></div>
-        </div>
-        <p class="{isMobile ? 'text-[10px]' : 'text-xs'} text-neutral-500 mt-1">
-          {userStats.progress_to_mega}/15 pixels
-        </p>
-      </div>
+        {#if showMobileStats}
+          <div class="absolute top-12 right-0 bg-white/95 backdrop-blur rounded-xl shadow-2xl p-3 animate-in" style="width: 200px;">
+            <!-- Stats -->
+            <div class="mb-3 pb-3 border-b border-neutral-200">
+              <h1 class="text-xs font-semibold text-neutral-900">Pixels</h1>
+              <p class="text-[10px] text-neutral-500">{stats.total_pixels.toLocaleString()} · {stats.unique_users} artists</p>
+            </div>
 
-      <!-- Massive Pixel Progress -->
-      <div class="bg-white/90 backdrop-blur rounded-xl shadow-lg {isMobile ? 'px-3 py-1.5' : 'px-4 py-2.5'}">
-        <div class="flex items-center justify-between gap-2 mb-1">
-          <span class="{isMobile ? 'text-xs' : 'text-sm'} font-semibold text-neutral-900">Massive Pixel</span>
-          {#if userStats.massive_pixels_available > 0}
-            <span class="bg-neutral-900 text-white text-xs font-bold px-2 py-0.5 border-2 border-neutral-900">
-              {userStats.massive_pixels_available}
-            </span>
-          {/if}
-        </div>
-        <div class="mb-2">
-          <div class="relative h-2 bg-neutral-200 border border-neutral-300">
-            <div
-              class="absolute inset-y-0 left-0 bg-neutral-900 transition-all duration-300"
-              style="width: {(userStats.progress_to_massive_bonus / 100) * 100}%"
-            ></div>
+            <!-- Mega Pixel Progress -->
+            <div class="mb-3">
+              <div class="flex items-center justify-between gap-2 mb-1">
+                <span class="text-xs font-semibold text-neutral-900">Mega</span>
+                {#if userStats.mega_pixels_available > 0}
+                  <span class="bg-neutral-900 text-white text-[10px] font-bold px-1.5 py-0.5">
+                    {userStats.mega_pixels_available}
+                  </span>
+                {/if}
+              </div>
+              <div class="relative h-1.5 bg-neutral-200 border border-neutral-300">
+                <div class="absolute inset-y-0 left-0 bg-neutral-900 transition-all" style="width: {(userStats.progress_to_mega / 15) * 100}%"></div>
+              </div>
+              <p class="text-[10px] text-neutral-500 mt-0.5">{userStats.progress_to_mega}/15</p>
+            </div>
+
+            <!-- Massive Pixel Progress -->
+            <div>
+              <div class="flex items-center justify-between gap-2 mb-1">
+                <span class="text-xs font-semibold text-neutral-900">Massive</span>
+                {#if userStats.massive_pixels_available > 0}
+                  <span class="bg-neutral-900 text-white text-[10px] font-bold px-1.5 py-0.5">
+                    {userStats.massive_pixels_available}
+                  </span>
+                {/if}
+              </div>
+              <div class="mb-2">
+                <div class="relative h-1.5 bg-neutral-200 border border-neutral-300">
+                  <div class="absolute inset-y-0 left-0 bg-neutral-900 transition-all" style="width: {(userStats.progress_to_massive_bonus / 100) * 100}%"></div>
+                </div>
+                <p class="text-[10px] text-neutral-500 mt-0.5">{userStats.progress_to_massive_bonus}/100</p>
+              </div>
+              <div>
+                <div class="relative h-1.5 bg-neutral-200 border border-neutral-300">
+                  <div class="absolute inset-y-0 left-0 bg-neutral-900 transition-all" style="width: {(userStats.progress_to_massive_fusion / 5) * 100}%"></div>
+                </div>
+                <p class="text-[10px] text-neutral-500 mt-0.5">Fusion: {userStats.progress_to_massive_fusion}/5</p>
+              </div>
+            </div>
           </div>
-          <p class="{isMobile ? 'text-[10px]' : 'text-xs'} text-neutral-500 mt-1">
-            {userStats.progress_to_massive_bonus}/100 pixels
-          </p>
-        </div>
-        <div>
-          <div class="relative h-2 bg-neutral-200 border border-neutral-300">
-            <div
-              class="absolute inset-y-0 left-0 bg-neutral-900 transition-all duration-300"
-              style="width: {(userStats.progress_to_massive_fusion / 5) * 100}%"
-            ></div>
-          </div>
-          <p class="{isMobile ? 'text-[10px]' : 'text-xs'} text-neutral-500 mt-1">
-            Fusion: {userStats.progress_to_massive_fusion}/5 megas
-          </p>
-        </div>
+        {/if}
       </div>
+    {:else}
+      <!-- Desktop: Full stats always visible -->
+      <div class="fixed z-50 top-6 right-6 flex flex-col gap-2">
+        <!-- Stats -->
+        <div class="bg-white/90 backdrop-blur rounded-xl shadow-lg px-4 py-2.5">
+          <h1 class="text-sm font-semibold text-neutral-900">Pixels</h1>
+          <p class="text-xs text-neutral-500">{stats.total_pixels.toLocaleString()} · {stats.unique_users} artists</p>
+        </div>
 
-      <!-- Mode Toggle Buttons -->
-      <div class="grid grid-cols-3 gap-2 w-full">
-        <button
-          on:click={() => togglePixelMode("normal")}
-          class="font-bold py-2 px-3 border-2 shadow-lg transition-all cursor-pointer {pixelMode === 'normal' ? 'bg-neutral-900 text-white border-white' : 'bg-white text-neutral-900 border-neutral-900 hover:bg-neutral-50'}"
-        >
-          <span class="text-xs">Normal</span>
-        </button>
-        <button
-          on:click={() => togglePixelMode("mega")}
-          disabled={userStats.mega_pixels_available === 0}
-          class="font-bold py-2 px-3 border-2 shadow-lg transition-all {userStats.mega_pixels_available > 0 ? 'cursor-pointer' : 'opacity-40 cursor-not-allowed'} {pixelMode === 'mega' ? 'bg-neutral-900 text-white border-white' : 'bg-white text-neutral-900 border-neutral-900 hover:bg-neutral-50'}"
-        >
-          <span class="text-xs">Mega</span>
-        </button>
-        <button
-          on:click={() => togglePixelMode("massive")}
-          disabled={userStats.massive_pixels_available === 0}
-          class="font-bold py-2 px-3 border-2 shadow-lg transition-all {userStats.massive_pixels_available > 0 ? 'cursor-pointer' : 'opacity-40 cursor-not-allowed'} {pixelMode === 'massive' ? 'bg-neutral-900 text-white border-white' : 'bg-white text-neutral-900 border-neutral-900 hover:bg-neutral-50'}"
-        >
-          <span class="text-xs">Massive</span>
-        </button>
+        <!-- Mega Pixel Progress -->
+        <div class="bg-white/90 backdrop-blur rounded-xl shadow-lg px-4 py-2.5">
+          <div class="flex items-center justify-between gap-2 mb-1">
+            <span class="text-sm font-semibold text-neutral-900">Mega Pixel</span>
+            {#if userStats.mega_pixels_available > 0}
+              <span class="bg-neutral-900 text-white text-xs font-bold px-2 py-0.5 border-2 border-neutral-900">
+                {userStats.mega_pixels_available}
+              </span>
+            {/if}
+          </div>
+          <div class="relative h-2 bg-neutral-200 border border-neutral-300">
+            <div class="absolute inset-y-0 left-0 bg-neutral-900 transition-all duration-300" style="width: {(userStats.progress_to_mega / 15) * 100}%"></div>
+          </div>
+          <p class="text-xs text-neutral-500 mt-1">{userStats.progress_to_mega}/15 pixels</p>
+        </div>
+
+        <!-- Massive Pixel Progress -->
+        <div class="bg-white/90 backdrop-blur rounded-xl shadow-lg px-4 py-2.5">
+          <div class="flex items-center justify-between gap-2 mb-1">
+            <span class="text-sm font-semibold text-neutral-900">Massive Pixel</span>
+            {#if userStats.massive_pixels_available > 0}
+              <span class="bg-neutral-900 text-white text-xs font-bold px-2 py-0.5 border-2 border-neutral-900">
+                {userStats.massive_pixels_available}
+              </span>
+            {/if}
+          </div>
+          <div class="mb-2">
+            <div class="relative h-2 bg-neutral-200 border border-neutral-300">
+              <div class="absolute inset-y-0 left-0 bg-neutral-900 transition-all duration-300" style="width: {(userStats.progress_to_massive_bonus / 100) * 100}%"></div>
+            </div>
+            <p class="text-xs text-neutral-500 mt-1">{userStats.progress_to_massive_bonus}/100 pixels</p>
+          </div>
+          <div>
+            <div class="relative h-2 bg-neutral-200 border border-neutral-300">
+              <div class="absolute inset-y-0 left-0 bg-neutral-900 transition-all duration-300" style="width: {(userStats.progress_to_massive_fusion / 5) * 100}%"></div>
+            </div>
+            <p class="text-xs text-neutral-500 mt-1">Fusion: {userStats.progress_to_massive_fusion}/5 megas</p>
+          </div>
+        </div>
+
+        <!-- Mode Toggle Buttons (Desktop only) -->
+        <div class="grid grid-cols-3 gap-2 w-full">
+          <button
+            on:click={() => togglePixelMode("normal")}
+            class="font-bold py-2 px-3 border-2 shadow-lg transition-all cursor-pointer {pixelMode === 'normal' ? 'bg-neutral-900 text-white border-white' : 'bg-white text-neutral-900 border-neutral-900 hover:bg-neutral-50'}"
+          >
+            <span class="text-xs">Normal</span>
+          </button>
+          <button
+            on:click={() => togglePixelMode("mega")}
+            disabled={userStats.mega_pixels_available === 0}
+            class="font-bold py-2 px-3 border-2 shadow-lg transition-all {userStats.mega_pixels_available > 0 ? 'cursor-pointer' : 'opacity-40 cursor-not-allowed'} {pixelMode === 'mega' ? 'bg-neutral-900 text-white border-white' : 'bg-white text-neutral-900 border-neutral-900 hover:bg-neutral-50'}"
+          >
+            <span class="text-xs">Mega</span>
+          </button>
+          <button
+            on:click={() => togglePixelMode("massive")}
+            disabled={userStats.massive_pixels_available === 0}
+            class="font-bold py-2 px-3 border-2 shadow-lg transition-all {userStats.massive_pixels_available > 0 ? 'cursor-pointer' : 'opacity-40 cursor-not-allowed'} {pixelMode === 'massive' ? 'bg-neutral-900 text-white border-white' : 'bg-white text-neutral-900 border-neutral-900 hover:bg-neutral-50'}"
+          >
+            <span class="text-xs">Massive</span>
+          </button>
+        </div>
       </div>
-    </div>
+    {/if}
 
     <!-- Coordinates - only on desktop, below stats -->
     {#if hoveredPixel && !isMobile}
