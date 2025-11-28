@@ -739,8 +739,7 @@
       {#if userStats.massive_pixels_available > 0}
         <button
           on:click={toggleMassiveMode}
-          disabled={!canPlace}
-          class="bg-neutral-900 text-white font-bold py-2 px-4 border-2 shadow-lg transition-all {canPlace ? 'hover:scale-105 border-neutral-900' : 'opacity-60 cursor-not-allowed border-neutral-700'} {isMassiveMode ? 'border-white' : 'border-neutral-900'}"
+          class="bg-neutral-900 text-white font-bold py-2 px-4 border-2 shadow-lg transition-all hover:scale-105 {isMassiveMode ? 'border-white' : 'border-neutral-900'}"
         >
           <span class="text-sm">{isMassiveMode ? '🔥 MASSIVE MODE' : '⭐ Use Massive'}</span>
         </button>
