@@ -75,12 +75,28 @@
     // Check scrollability after a short delay to let canvas render
     setTimeout(checkScrollability, 500)
 
-    // Listen for color changes from other tabs
+    // Listen for color and cooldown changes from other tabs
     const handleStorageChange = (event) => {
       if (event.key === 'pixels_selected_color' && event.newValue) {
         if (colors.includes(event.newValue)) {
           selectedColor = event.newValue
           live.pushEvent("select_color", { color: event.newValue })
+        }
+      }
+
+      if (event.key === 'pixels_cooldown_end') {
+        if (event.newValue) {
+          // Another tab placed a pixel, sync cooldown state
+          const endTime = parseInt(event.newValue, 10)
+          const now = Date.now()
+          const remaining = Math.max(0, Math.ceil((endTime - now) / 1000))
+
+          if (remaining > 0) {
+            live.pushEvent("sync_cooldown", { seconds: remaining })
+          }
+        } else {
+          // Cooldown cleared in another tab
+          live.pushEvent("clear_cooldown")
         }
       }
     }
@@ -123,6 +139,16 @@
 
   // Cooldown progress (0 to 1)
   $: cooldownProgress = canPlace ? 1 : (cooldownSeconds - secondsRemaining) / cooldownSeconds
+
+  // Sync cooldown state to localStorage for other tabs
+  $: if (!canPlace && secondsRemaining > 0) {
+    // Store when cooldown will end
+    const endTime = Date.now() + (secondsRemaining * 1000)
+    localStorage.setItem('pixels_cooldown_end', endTime.toString())
+  } else if (canPlace) {
+    // Cooldown finished, clear from localStorage
+    localStorage.removeItem('pixels_cooldown_end')
+  }
 
   // Calculate responsive pixel size based on available space
   function calculatePixelSize() {

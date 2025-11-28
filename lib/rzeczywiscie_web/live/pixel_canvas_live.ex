@@ -204,6 +204,23 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
     {:noreply, socket}
   end
 
+  def handle_event("sync_cooldown", %{"seconds" => seconds}, socket) do
+    # Another tab placed a pixel, sync cooldown state
+    socket = socket
+      |> assign(:can_place, false)
+      |> assign(:seconds_remaining, seconds)
+
+    # Start cooldown update timer
+    Process.send_after(self(), :update_cooldown, 1000)
+
+    {:noreply, socket}
+  end
+
+  def handle_event("clear_cooldown", _, socket) do
+    # Another tab's cooldown expired
+    {:noreply, assign(socket, can_place: true, seconds_remaining: 0)}
+  end
+
   # Update cooldown timer every second
   def handle_info(:update_cooldown, socket) do
     cooldown = PixelCanvas.check_cooldown(socket.assigns.user_id)
