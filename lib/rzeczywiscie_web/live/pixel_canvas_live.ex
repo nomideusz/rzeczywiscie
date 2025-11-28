@@ -200,10 +200,29 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
   end
 
   def handle_event("toggle_massive_mode", _, socket) do
-    {:noreply, assign(socket, is_massive_mode: !socket.assigns.is_massive_mode)}
+    user_id = socket.assigns.user_id
+    new_massive_mode = !socket.assigns.is_massive_mode
+
+    # Broadcast massive mode toggle to all sessions of this user
+    Phoenix.PubSub.broadcast(
+      Rzeczywiscie.PubSub,
+      user_topic(user_id),
+      {:massive_mode_changed, new_massive_mode}
+    )
+
+    {:noreply, assign(socket, is_massive_mode: new_massive_mode)}
   end
 
   def handle_event("select_color", %{"color" => color}, socket) do
+    user_id = socket.assigns.user_id
+
+    # Broadcast color change to all sessions of this user
+    Phoenix.PubSub.broadcast(
+      Rzeczywiscie.PubSub,
+      user_topic(user_id),
+      {:color_changed, color}
+    )
+
     {:noreply, assign(socket, selected_color: color)}
   end
 
@@ -327,6 +346,16 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
      |> assign(:can_place, seconds_remaining == 0)
      |> assign(:seconds_remaining, seconds_remaining)
      |> assign(:user_stats, user_stats)}
+  end
+
+  # Handle color changes from other tabs/sessions
+  def handle_info({:color_changed, color}, socket) do
+    {:noreply, assign(socket, selected_color: color)}
+  end
+
+  # Handle massive mode toggle from other tabs/sessions
+  def handle_info({:massive_mode_changed, is_massive}, socket) do
+    {:noreply, assign(socket, is_massive_mode: is_massive)}
   end
 
   defp serialize_pixels(pixels) do
