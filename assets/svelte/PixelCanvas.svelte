@@ -31,19 +31,6 @@
   let hasScrolled = false
   const CURSOR_THROTTLE_MS = 250
 
-  // Track actual cooldown duration for progress calculation
-  let cooldownDuration = 15
-  let prevSecondsRemaining = 0
-
-  // Detect when cooldown starts and capture the duration
-  $: {
-    // When secondsRemaining increases, a new cooldown started
-    if (secondsRemaining > prevSecondsRemaining) {
-      cooldownDuration = secondsRemaining
-    }
-    prevSecondsRemaining = secondsRemaining
-  }
-
   // Pan/drag state
   let isPanning = false
   let panStart = { x: 0, y: 0 }
@@ -160,8 +147,9 @@
     }
   }
 
-  // Cooldown progress (0 to 1) - uses actual cooldown duration (15s or 45s)
-  $: cooldownProgress = canPlace ? 1 : (cooldownDuration - secondsRemaining) / cooldownDuration
+  // Cooldown progress (0 to 1) - detect duration from current countdown
+  // If remaining time is > 15, it's a massive pixel (45s), otherwise normal (15s)
+  $: cooldownProgress = canPlace ? 1 : (secondsRemaining > 15 ? (45 - secondsRemaining) / 45 : (15 - secondsRemaining) / 15)
 
   // Sync cooldown state to localStorage for other tabs
   $: if (!canPlace && secondsRemaining > 0) {
