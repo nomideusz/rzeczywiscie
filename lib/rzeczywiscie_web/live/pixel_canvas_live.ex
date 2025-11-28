@@ -123,13 +123,6 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
            |> assign(:stats, stats)
            |> assign(:user_stats, user_stats)
 
-          # Show unlock message if applicable
-          socket = if unlocked do
-            put_flash(socket, :info, "🎉 MASSIVE PIXEL UNLOCKED! You can now place a 3x3 pixel!")
-          else
-            socket
-          end
-
           {:noreply, socket}
 
         {:error, {:cooldown, _seconds}} ->
