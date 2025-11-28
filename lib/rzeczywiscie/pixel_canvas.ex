@@ -11,8 +11,11 @@ defmodule Rzeczywiscie.PixelCanvas do
   @canvas_width 200
   @canvas_height 200
   @cooldown_seconds 15
-  @massive_pixel_cooldown_seconds 45
-  @pixels_required_for_unlock 15
+  @mega_pixel_cooldown_seconds 45
+  @massive_pixel_cooldown_seconds 120
+  @pixels_required_for_mega_unlock 15
+  @mega_pixels_required_for_massive_unlock 5
+  @pixels_required_for_massive_bonus 100
 
   @doc """
   Returns the canvas dimensions.
@@ -31,7 +34,7 @@ defmodule Rzeczywiscie.PixelCanvas do
 
   @doc """
   Loads all pixels for the canvas.
-  Returns a map of {x, y} => %{color: color, user_id: user_id, updated_at: datetime, is_massive: boolean}
+  Returns a map of {x, y} => %{color: color, user_id: user_id, updated_at: datetime, pixel_tier: atom}
   """
   def load_canvas do
     Pixel
@@ -41,7 +44,7 @@ defmodule Rzeczywiscie.PixelCanvas do
         color: pixel.color,
         user_id: pixel.user_id,
         updated_at: pixel.updated_at,
-        is_massive: pixel.is_massive
+        pixel_tier: pixel.pixel_tier
       }}
     end)
     |> Map.new()
@@ -53,12 +56,12 @@ defmodule Rzeczywiscie.PixelCanvas do
   """
   def place_pixel(x, y, color, user_id) do
     # Check cooldown
-    case check_cooldown(user_id, false) do
+    case check_cooldown(user_id) do
       :ok ->
         # Check if position is already occupied (pixels are now permanent)
         case pixel_at(x, y) do
           nil ->
-            attrs = %{x: x, y: y, color: color, user_id: user_id, is_massive: false}
+            attrs = %{x: x, y: y, color: color, user_id: user_id, pixel_tier: :normal, is_massive: false}
 
             result = %Pixel{}
             |> Pixel.changeset(attrs)
@@ -67,7 +70,7 @@ defmodule Rzeczywiscie.PixelCanvas do
             # Update user stats and check for unlock
             case result do
               {:ok, pixel} ->
-                update_user_progress(user_id)
+                update_user_progress(user_id, :normal)
                 {:ok, pixel}
               error ->
                 error
@@ -86,7 +89,7 @@ defmodule Rzeczywiscie.PixelCanvas do
   Checks if a user can place a pixel (cooldown check).
   Returns :ok or {:error, seconds_remaining}
   """
-  def check_cooldown(user_id, _is_massive \\ false) do
+  def check_cooldown(user_id) do
     last_placement =
       Pixel
       |> where([p], p.user_id == ^user_id)
@@ -99,8 +102,13 @@ defmodule Rzeczywiscie.PixelCanvas do
         :ok
 
       pixel ->
-        # Determine cooldown based on whether the LAST pixel placed was massive
-        cooldown = if pixel.is_massive, do: @massive_pixel_cooldown_seconds, else: @cooldown_seconds
+        # Determine cooldown based on the tier of the LAST pixel placed
+        cooldown = case pixel.pixel_tier do
+          :normal -> @cooldown_seconds
+          :mega -> @mega_pixel_cooldown_seconds
+          :massive -> @massive_pixel_cooldown_seconds
+        end
+
         seconds_since = DateTime.diff(DateTime.utc_now(), pixel.updated_at, :second)
 
         if seconds_since >= cooldown do
@@ -146,17 +154,17 @@ defmodule Rzeczywiscie.PixelCanvas do
   end
 
   @doc """
-  Places a massive pixel (3x3 grid) on the canvas.
+  Places a mega pixel (3x3 grid) on the canvas.
   Returns {:ok, center_pixel} or {:error, reason}
   """
-  def place_massive_pixel(x, y, color, user_id) do
+  def place_mega_pixel(x, y, color, user_id) do
     # Check cooldown
-    case check_cooldown(user_id, true) do
+    case check_cooldown(user_id) do
       :ok ->
-        # Get user stats to check if they have massive pixels available
+        # Get user stats to check if they have mega pixels available
         stats = get_or_create_user_stats(user_id)
 
-        if stats.massive_pixels_available > 0 do
+        if stats.mega_pixels_available > 0 do
           # Check if all 9 positions are free (3x3 grid centered on x,y)
           positions = for dx <- -1..1, dy <- -1..1, do: {x + dx, y + dy}
 
@@ -168,7 +176,7 @@ defmodule Rzeczywiscie.PixelCanvas do
             {:error, :insufficient_space}
           else
             # Insert center pixel first
-            center_attrs = %{x: x, y: y, color: color, user_id: user_id, is_massive: true}
+            center_attrs = %{x: x, y: y, color: color, user_id: user_id, pixel_tier: :mega, is_massive: true}
 
             case %Pixel{} |> Pixel.changeset(center_attrs) |> Repo.insert() do
               {:ok, center_pixel} ->
@@ -181,6 +189,69 @@ defmodule Rzeczywiscie.PixelCanvas do
                     y: py,
                     color: color,
                     user_id: user_id,
+                    pixel_tier: :mega,
+                    is_massive: true,
+                    parent_pixel_id: center_pixel.id
+                  }
+
+                  %Pixel{} |> Pixel.changeset(attrs) |> Repo.insert()
+                end)
+
+                # Update user stats: decrement available mega pixels, increment used count
+                update_user_progress(user_id, :mega)
+
+                {:ok, center_pixel}
+
+              error ->
+                error
+            end
+          end
+        else
+          {:error, :no_mega_pixels_available}
+        end
+
+      {:error, seconds_remaining} ->
+        {:error, {:cooldown, seconds_remaining}}
+    end
+  end
+
+  @doc """
+  Places a massive pixel (5x5 grid) on the canvas.
+  Returns {:ok, center_pixel} or {:error, reason}
+  """
+  def place_massive_pixel(x, y, color, user_id) do
+    # Check cooldown
+    case check_cooldown(user_id) do
+      :ok ->
+        # Get user stats to check if they have massive pixels available
+        stats = get_or_create_user_stats(user_id)
+
+        if stats.massive_pixels_available > 0 do
+          # Check if all 25 positions are free (5x5 grid centered on x,y)
+          positions = for dx <- -2..2, dy <- -2..2, do: {x + dx, y + dy}
+
+          occupied = Enum.any?(positions, fn {px, py} ->
+            pixel_at(px, py) != nil || px < 0 || py < 0 || px >= @canvas_width || py >= @canvas_height
+          end)
+
+          if occupied do
+            {:error, :insufficient_space}
+          else
+            # Insert center pixel first
+            center_attrs = %{x: x, y: y, color: color, user_id: user_id, pixel_tier: :massive, is_massive: true}
+
+            case %Pixel{} |> Pixel.changeset(center_attrs) |> Repo.insert() do
+              {:ok, center_pixel} ->
+                # Insert surrounding 24 pixels
+                surrounding_positions = positions -- [{x, y}]
+
+                Enum.each(surrounding_positions, fn {px, py} ->
+                  attrs = %{
+                    x: px,
+                    y: py,
+                    color: color,
+                    user_id: user_id,
+                    pixel_tier: :massive,
                     is_massive: true,
                     parent_pixel_id: center_pixel.id
                   }
@@ -236,24 +307,63 @@ defmodule Rzeczywiscie.PixelCanvas do
     end
   end
 
-  defp update_user_progress(user_id) do
+  defp update_user_progress(user_id, pixel_tier) do
     stats = get_or_create_user_stats(user_id)
-    new_count = stats.pixels_placed_count + 1
 
-    # Check if user unlocked a massive pixel (every 15 pixels)
-    {new_massive_count, last_unlock} =
-      if rem(new_count, @pixels_required_for_unlock) == 0 do
-        {stats.massive_pixels_available + 1, DateTime.utc_now()}
-      else
-        {stats.massive_pixels_available, stats.last_unlock_at}
-      end
+    case pixel_tier do
+      :normal ->
+        new_count = stats.pixels_placed_count + 1
 
-    stats
-    |> UserPixelStats.changeset(%{
-      pixels_placed_count: new_count,
-      massive_pixels_available: new_massive_count,
-      last_unlock_at: last_unlock
-    })
-    |> Repo.update()
+        # Check if user unlocked a mega pixel (every 15 normal pixels)
+        {new_mega_count, mega_last_unlock} =
+          if rem(new_count, @pixels_required_for_mega_unlock) == 0 do
+            {stats.mega_pixels_available + 1, DateTime.utc_now()}
+          else
+            {stats.mega_pixels_available, stats.mega_last_unlock_at}
+          end
+
+        # Check if user unlocked a massive pixel (bonus: every 100 normal pixels)
+        {new_massive_count, last_unlock} =
+          if rem(new_count, @pixels_required_for_massive_bonus) == 0 do
+            {stats.massive_pixels_available + 1, DateTime.utc_now()}
+          else
+            {stats.massive_pixels_available, stats.last_unlock_at}
+          end
+
+        stats
+        |> UserPixelStats.changeset(%{
+          pixels_placed_count: new_count,
+          mega_pixels_available: new_mega_count,
+          mega_last_unlock_at: mega_last_unlock,
+          massive_pixels_available: new_massive_count,
+          last_unlock_at: last_unlock
+        })
+        |> Repo.update()
+
+      :mega ->
+        # Mega pixel used - decrement available, increment used count
+        new_used_count = stats.mega_pixels_used_count + 1
+
+        # Check if user unlocked a massive pixel (fusion: every 5 mega pixels used)
+        {new_massive_count, last_unlock} =
+          if rem(new_used_count, @mega_pixels_required_for_massive_unlock) == 0 do
+            {stats.massive_pixels_available + 1, DateTime.utc_now()}
+          else
+            {stats.massive_pixels_available, stats.last_unlock_at}
+          end
+
+        stats
+        |> UserPixelStats.changeset(%{
+          mega_pixels_available: stats.mega_pixels_available - 1,
+          mega_pixels_used_count: new_used_count,
+          massive_pixels_available: new_massive_count,
+          last_unlock_at: last_unlock
+        })
+        |> Repo.update()
+
+      :massive ->
+        # Massive pixel used - no progression, just track
+        {:ok, stats}
+    end
   end
 end

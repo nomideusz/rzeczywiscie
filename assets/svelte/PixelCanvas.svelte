@@ -12,8 +12,16 @@
   export let cooldownSeconds = 15
   export let stats = { total_pixels: 0, unique_users: 0 }
   export let cursors = []
-  export let userStats = { pixels_placed: 0, massive_pixels_available: 0, progress_to_next: 0 }
-  export let isMassiveMode = false
+  export let userStats = {
+    pixels_placed: 0,
+    mega_pixels_available: 0,
+    mega_pixels_used: 0,
+    massive_pixels_available: 0,
+    progress_to_mega: 0,
+    progress_to_massive_fusion: 0,
+    progress_to_massive_bonus: 0
+  }
+  export let pixelMode = "normal"  // "normal", "mega", or "massive"
   export let live
 
   let hoveredPixel = null
@@ -75,6 +83,18 @@
     // Check scrollability after a short delay to let canvas render
     setTimeout(checkScrollability, 500)
 
+    // Animate rainbow glow for massive pixels
+    let animationId
+    const animate = () => {
+      // Check if there are any massive pixels to animate
+      const hasMassivePixels = pixels.some(p => p.pixel_tier === "massive")
+      if (hasMassivePixels && ctx) {
+        drawCanvas()
+      }
+      animationId = requestAnimationFrame(animate)
+    }
+    animationId = requestAnimationFrame(animate)
+
     // Listen for color, cooldown, and stats changes from other tabs
     const handleStorageChange = (event) => {
       if (event.key === 'pixels_selected_color' && event.newValue) {
@@ -115,6 +135,7 @@
 
     return () => {
       window.removeEventListener('storage', handleStorageChange)
+      if (animationId) cancelAnimationFrame(animationId)
     }
   })
 
@@ -148,8 +169,11 @@
   }
 
   // Cooldown progress (0 to 1) - detect duration from current countdown
-  // If remaining time is > 15, it's a massive pixel (45s), otherwise normal (15s)
-  $: cooldownProgress = canPlace ? 1 : (secondsRemaining > 15 ? (45 - secondsRemaining) / 45 : (15 - secondsRemaining) / 15)
+  $: cooldownProgress = canPlace ? 1 : (
+    secondsRemaining > 45 ? (120 - secondsRemaining) / 120 :  // Massive (120s)
+    secondsRemaining > 15 ? (45 - secondsRemaining) / 45 :    // Mega (45s)
+    (15 - secondsRemaining) / 15                               // Normal (15s)
+  )
 
   // Sync cooldown state to localStorage for other tabs
   $: if (!canPlace && secondsRemaining > 0) {
@@ -261,8 +285,13 @@
 
     // Draw pixels - use uniform cell size for consistent appearance
     pixels.forEach(pixel => {
-      // Add glow effect for massive pixels
-      if (pixel.is_massive) {
+      // Add visual effects based on tier
+      if (pixel.pixel_tier === "massive") {
+        // Rainbow glow for massive pixels
+        ctx.shadowBlur = 12
+        ctx.shadowColor = `hsl(${(Date.now() / 20) % 360}, 100%, 60%)`
+      } else if (pixel.pixel_tier === "mega") {
+        // Regular glow for mega pixels
         ctx.shadowBlur = 8
         ctx.shadowColor = pixel.color
       } else {
@@ -286,14 +315,32 @@
       ctx.globalAlpha = 0.5
       ctx.fillStyle = selectedColor
 
-      if (isMassiveMode && userStats.massive_pixels_available > 0) {
-        // Draw 3x3 preview for massive pixel
+      if (pixelMode === "massive" && userStats.massive_pixels_available > 0) {
+        // Draw 5x5 preview for massive pixel with rainbow glow
+        for (let dx = -2; dx <= 2; dx++) {
+          for (let dy = -2; dy <= 2; dy++) {
+            const px = hoveredPixel.x + dx
+            const py = hoveredPixel.y + dy
+            if (px >= 0 && px < width && py >= 0 && py < height) {
+              ctx.shadowBlur = 8
+              ctx.shadowColor = `hsl(${(Date.now() / 20) % 360}, 100%, 60%)`
+              ctx.fillRect(
+                px * cellSize + 1,
+                py * cellSize + 1,
+                cellSize - 2,
+                cellSize - 2
+              )
+            }
+          }
+        }
+        ctx.shadowBlur = 0
+      } else if (pixelMode === "mega" && userStats.mega_pixels_available > 0) {
+        // Draw 3x3 preview for mega pixel
         for (let dx = -1; dx <= 1; dx++) {
           for (let dy = -1; dy <= 1; dy++) {
             const px = hoveredPixel.x + dx
             const py = hoveredPixel.y + dy
             if (px >= 0 && px < width && py >= 0 && py < height) {
-              // Add subtle glow to preview
               ctx.shadowBlur = 6
               ctx.shadowColor = selectedColor
               ctx.fillRect(
@@ -346,9 +393,12 @@
     if (isPanning || !canPlace) return
     const { x, y } = getCoords(event.clientX, event.clientY)
     if (x >= 0 && x < width && y >= 0 && y < height) {
-      if (isMassiveMode && userStats.massive_pixels_available > 0) {
-        // Place massive pixel (3x3 grid)
+      if (pixelMode === "massive" && userStats.massive_pixels_available > 0) {
+        // Place massive pixel (5x5 grid)
         live.pushEvent("place_massive_pixel", { x, y })
+      } else if (pixelMode === "mega" && userStats.mega_pixels_available > 0) {
+        // Place mega pixel (3x3 grid)
+        live.pushEvent("place_mega_pixel", { x, y })
       } else {
         // Place normal pixel
         live.pushEvent("place_pixel", { x, y })
@@ -356,10 +406,8 @@
     }
   }
 
-  function toggleMassiveMode() {
-    if (userStats.massive_pixels_available > 0) {
-      live.pushEvent("toggle_massive_mode")
-    }
+  function togglePixelMode(mode) {
+    live.pushEvent("toggle_pixel_mode", { mode })
   }
 
   function handleMove(event) {
@@ -509,9 +557,12 @@
       const { x, y } = getCoords(touch.clientX, touch.clientY)
 
       if (x >= 0 && x < width && y >= 0 && y < height) {
-        if (isMassiveMode && userStats.massive_pixels_available > 0) {
-          // Place massive pixel (3x3 grid)
+        if (pixelMode === "massive" && userStats.massive_pixels_available > 0) {
+          // Place massive pixel (5x5 grid)
           live.pushEvent("place_massive_pixel", { x, y })
+        } else if (pixelMode === "mega" && userStats.mega_pixels_available > 0) {
+          // Place mega pixel (3x3 grid)
+          live.pushEvent("place_mega_pixel", { x, y })
         } else {
           // Place normal pixel
           live.pushEvent("place_pixel", { x, y })
@@ -719,13 +770,13 @@
         <p class="{isMobile ? 'text-[10px]' : 'text-xs'} text-neutral-500">{stats.total_pixels.toLocaleString()} · {stats.unique_users} artists</p>
       </div>
 
-      <!-- Massive Pixel Progress -->
+      <!-- Mega Pixel Progress -->
       <div class="bg-white/90 backdrop-blur rounded-xl shadow-lg {isMobile ? 'px-3 py-1.5' : 'px-4 py-2.5'}">
         <div class="flex items-center justify-between gap-2 mb-1">
-          <span class="{isMobile ? 'text-xs' : 'text-sm'} font-semibold text-neutral-900">Massive Pixel</span>
-          {#if userStats.massive_pixels_available > 0}
+          <span class="{isMobile ? 'text-xs' : 'text-sm'} font-semibold text-neutral-900">Mega Pixel</span>
+          {#if userStats.mega_pixels_available > 0}
             <span class="bg-neutral-900 text-white text-xs font-bold px-2 py-0.5 border-2 border-neutral-900">
-              {userStats.massive_pixels_available}
+              {userStats.mega_pixels_available}
             </span>
           {/if}
         </div>
@@ -733,23 +784,75 @@
         <div class="relative h-2 bg-neutral-200 border border-neutral-300">
           <div
             class="absolute inset-y-0 left-0 bg-neutral-900 transition-all duration-300"
-            style="width: {(userStats.progress_to_next / 15) * 100}%"
+            style="width: {(userStats.progress_to_mega / 15) * 100}%"
           ></div>
         </div>
         <p class="{isMobile ? 'text-[10px]' : 'text-xs'} text-neutral-500 mt-1">
-          {userStats.progress_to_next}/15 pixels
+          {userStats.progress_to_mega}/15 pixels
         </p>
       </div>
 
-      <!-- Massive Mode Toggle (only show if available) -->
-      {#if userStats.massive_pixels_available > 0}
+      <!-- Massive Pixel Progress (Dual Track) -->
+      <div class="bg-white/90 backdrop-blur rounded-xl shadow-lg {isMobile ? 'px-3 py-1.5' : 'px-4 py-2.5'}">
+        <div class="flex items-center justify-between gap-2 mb-1">
+          <span class="{isMobile ? 'text-xs' : 'text-sm'} font-semibold text-neutral-900">Massive Pixel</span>
+          {#if userStats.massive_pixels_available > 0}
+            <span class="bg-gradient-to-r from-purple-600 to-pink-600 text-white text-xs font-bold px-2 py-0.5 border-2 border-purple-600 animate-pulse">
+              {userStats.massive_pixels_available} 🌈
+            </span>
+          {/if}
+        </div>
+        <!-- Fusion progress bar -->
+        <div class="mb-2">
+          <div class="relative h-2 bg-neutral-200 border border-neutral-300">
+            <div
+              class="absolute inset-y-0 left-0 bg-gradient-to-r from-purple-600 to-pink-600 transition-all duration-300"
+              style="width: {(userStats.progress_to_massive_fusion / 5) * 100}%"
+            ></div>
+          </div>
+          <p class="{isMobile ? 'text-[10px]' : 'text-xs'} text-neutral-500 mt-1">
+            Fusion: {userStats.progress_to_massive_fusion}/5 megas
+          </p>
+        </div>
+        <!-- Bonus progress bar -->
+        <div>
+          <div class="relative h-2 bg-neutral-200 border border-neutral-300">
+            <div
+              class="absolute inset-y-0 left-0 bg-gradient-to-r from-amber-500 to-orange-500 transition-all duration-300"
+              style="width: {(userStats.progress_to_massive_bonus / 100) * 100}%"
+            ></div>
+          </div>
+          <p class="{isMobile ? 'text-[10px]' : 'text-xs'} text-neutral-500 mt-1">
+            Dedication: {userStats.progress_to_massive_bonus}/100 pixels
+          </p>
+        </div>
+      </div>
+
+      <!-- Mode Toggle Buttons -->
+      <div class="flex gap-2">
         <button
-          on:click={toggleMassiveMode}
-          class="bg-neutral-900 text-white font-bold py-2 px-4 border-2 shadow-lg transition-all hover:scale-105 {isMassiveMode ? 'border-white' : 'border-neutral-900'}"
+          on:click={() => togglePixelMode("normal")}
+          class="flex-1 font-bold py-2 px-3 border-2 shadow-lg transition-all {pixelMode === 'normal' ? 'bg-neutral-900 text-white border-white' : 'bg-white text-neutral-900 border-neutral-900'}"
         >
-          <span class="text-sm">{isMassiveMode ? '🔥 MASSIVE MODE' : '⭐ Use Massive'}</span>
+          <span class="text-xs">Normal</span>
         </button>
-      {/if}
+        {#if userStats.mega_pixels_available > 0}
+          <button
+            on:click={() => togglePixelMode("mega")}
+            class="flex-1 font-bold py-2 px-3 border-2 shadow-lg transition-all {pixelMode === 'mega' ? 'bg-neutral-900 text-white border-white' : 'bg-white text-neutral-900 border-neutral-900'}"
+          >
+            <span class="text-xs">⭐ Mega</span>
+          </button>
+        {/if}
+        {#if userStats.massive_pixels_available > 0}
+          <button
+            on:click={() => togglePixelMode("massive")}
+            class="flex-1 font-bold py-2 px-3 border-2 shadow-lg transition-all {pixelMode === 'massive' ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white border-white' : 'bg-white text-neutral-900 border-purple-600'}"
+          >
+            <span class="text-xs">🌈 Massive</span>
+          </button>
+        {/if}
+      </div>
     </div>
 
     <!-- Coordinates - only on desktop, below stats -->
