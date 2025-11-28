@@ -681,7 +681,7 @@
               class="transition-all duration-1000 ease-linear"/>
           </svg>
           {#if !canPlace}
-            <span class="absolute inset-0 flex items-center justify-center text-white text-sm font-bold drop-shadow-lg">
+            <span class="absolute inset-0 flex items-center justify-center text-white text-sm font-bold" style="text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 0 4px #000;">
               {secondsRemaining}
             </span>
           {/if}
