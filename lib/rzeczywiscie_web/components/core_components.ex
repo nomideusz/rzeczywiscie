@@ -62,9 +62,9 @@ defmodule RzeczywiscieWeb.CoreComponents do
       {@rest}
     >
       <div class={[
-        "flex items-start gap-2 sm:gap-3 sm:w-80 p-3 sm:p-4 border-2 shadow-lg",
-        @kind == :info && "bg-info/10 border-info text-info",
-        @kind == :error && "bg-error/10 border-error text-error"
+        "flex items-start gap-2 sm:gap-3 sm:w-80 p-3 sm:p-4 border-2 shadow-lg bg-white",
+        @kind == :info && "border-info text-info",
+        @kind == :error && "border-error text-error"
       ]}>
         <div class={[
           "flex-shrink-0 w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center text-xs sm:text-sm font-black",
