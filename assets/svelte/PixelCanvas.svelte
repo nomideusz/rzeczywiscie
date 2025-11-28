@@ -51,21 +51,23 @@
   let claimerName = ''  // Name entered by user
   const CURSOR_THROTTLE_MS = 250
 
-  // Generate device fingerprint based on stable hardware/browser characteristics
+  // Generate device fingerprint based on stable hardware characteristics
   // This creates the same ID across different browsers on the same physical device
+  // Using only hardware-level properties that don't change between browsers
   function generateDeviceFingerprint() {
     const components = [
-      navigator.platform,                           // OS platform (Windows/Mac/Linux)
-      screen.colorDepth,                           // Screen color depth
-      screen.width + 'x' + screen.height,          // Screen resolution
-      new Date().getTimezoneOffset(),              // Timezone
-      navigator.hardwareConcurrency || 'unknown',  // CPU cores
-      navigator.deviceMemory || 'unknown',         // RAM (if available)
-      navigator.maxTouchPoints || 0,               // Touch capability
-      navigator.language                           // Browser language
+      screen.width + 'x' + screen.height,          // Screen resolution - same across browsers
+      screen.colorDepth,                           // Screen color depth - same across browsers
+      navigator.hardwareConcurrency || 'unknown',  // CPU cores - same across browsers
+      new Date().getTimezoneOffset(),              // Timezone - same across browsers
+      navigator.maxTouchPoints || 0                // Touch capability - same across browsers
     ]
     
     const fingerprint = components.join('|')
+    
+    // Debug: log fingerprint components to verify consistency
+    console.log('Device Fingerprint Components:', components)
+    console.log('Fingerprint String:', fingerprint)
     
     // Simple hash function (FNV-1a variant)
     let hash = 2166136261 // FNV offset basis
@@ -75,7 +77,9 @@
     }
     
     // Convert to positive hex string
-    return (hash >>> 0).toString(16)
+    const deviceId = (hash >>> 0).toString(16)
+    console.log('Generated Device ID:', deviceId)
+    return deviceId
   }
 
   // Pan/drag state
@@ -104,19 +108,12 @@
   onMount(() => {
     isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0
 
-    // Get or generate device fingerprint
-    // First, try to retrieve existing fingerprint from localStorage
-    let storedFingerprint = localStorage.getItem('pixels_device_id')
+    // Always generate device fingerprint based on hardware characteristics
+    // This creates the same ID across all browsers on the same physical device
+    deviceId = generateDeviceFingerprint()
     
-    if (storedFingerprint) {
-      // Use existing fingerprint to maintain progress across refreshes
-      deviceId = storedFingerprint
-    } else {
-      // Generate new device fingerprint based on hardware/browser characteristics
-      // This creates the same ID across all browsers on the same physical device
-      deviceId = generateDeviceFingerprint()
-      localStorage.setItem('pixels_device_id', deviceId)
-    }
+    // Store it for reference (debugging), but always regenerate on load
+    localStorage.setItem('pixels_device_id', deviceId)
 
     // Send device-specific user_id to server for cooldown tracking
     live.pushEvent("set_user_id", { user_id: deviceId })
