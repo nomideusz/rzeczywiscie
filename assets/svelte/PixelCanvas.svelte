@@ -38,8 +38,35 @@
   let showScrollHint = false
   let hasScrolled = false
   let showMobileStats = false  // Toggle for mobile stats expansion
-  let deviceId = ''  // Unique ID for this device to prevent cross-device localStorage sync
+  let deviceId = ''  // Unique ID for this physical device (fingerprint-based)
   const CURSOR_THROTTLE_MS = 250
+
+  // Generate device fingerprint based on stable hardware/browser characteristics
+  // This creates the same ID across different browsers on the same physical device
+  function generateDeviceFingerprint() {
+    const components = [
+      navigator.platform,                           // OS platform (Windows/Mac/Linux)
+      screen.colorDepth,                           // Screen color depth
+      screen.width + 'x' + screen.height,          // Screen resolution
+      new Date().getTimezoneOffset(),              // Timezone
+      navigator.hardwareConcurrency || 'unknown',  // CPU cores
+      navigator.deviceMemory || 'unknown',         // RAM (if available)
+      navigator.maxTouchPoints || 0,               // Touch capability
+      navigator.language                           // Browser language
+    ]
+    
+    const fingerprint = components.join('|')
+    
+    // Simple hash function (FNV-1a variant)
+    let hash = 2166136261 // FNV offset basis
+    for (let i = 0; i < fingerprint.length; i++) {
+      hash ^= fingerprint.charCodeAt(i)
+      hash += (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24)
+    }
+    
+    // Convert to positive hex string
+    return (hash >>> 0).toString(16)
+  }
 
   // Pan/drag state
   let isPanning = false
@@ -67,15 +94,16 @@
   onMount(() => {
     isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0
 
-    // Generate or retrieve device ID for this specific browser
-    // This is used as user_id to ensure different browsers get different cooldowns
-    deviceId = localStorage.getItem('pixels_device_id') || ''
-    if (!deviceId) {
-      deviceId = crypto.randomUUID()
-      localStorage.setItem('pixels_device_id', deviceId)
-    }
+    // Generate device fingerprint based on hardware/browser characteristics
+    // This creates the same ID across all browsers on the same physical device
+    const fingerprint = generateDeviceFingerprint()
+    
+    // Store fingerprint in localStorage for reference (but always regenerate on load)
+    // This ensures the ID is consistent across Chrome, Firefox, Edge, etc. on same device
+    deviceId = fingerprint
+    localStorage.setItem('pixels_device_id', deviceId)
 
-    // Send browser-specific user_id to server for cooldown tracking
+    // Send device-specific user_id to server for cooldown tracking
     live.pushEvent("set_user_id", { user_id: deviceId })
 
     // Set default zoom higher on mobile so pixels are visible
