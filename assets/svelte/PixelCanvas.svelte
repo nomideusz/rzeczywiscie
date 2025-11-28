@@ -17,11 +17,18 @@
     mega_pixels_available: 0,
     mega_pixels_used: 0,
     massive_pixels_available: 0,
+    special_pixels_available: {},
     progress_to_mega: 0,
     progress_to_massive_fusion: 0,
     progress_to_massive_bonus: 0
   }
-  export let pixelMode = "normal"  // "normal", "mega", or "massive"
+  export let pixelMode = "normal"  // "normal", "mega", "massive", or "special"
+  export let milestoneProgress = {
+    total_pixels: 0,
+    next_milestone: null,
+    unlocked_rewards: [],
+    all_milestones: []
+  }
   export let live
 
   let hoveredPixel = null
@@ -39,6 +46,9 @@
   let hasScrolled = false
   let showMobileStats = false  // Toggle for mobile stats expansion
   let deviceId = ''  // Unique ID for this physical device (fingerprint-based)
+  let showNameModal = false  // Modal for entering name when placing special pixel
+  let pendingSpecialPixel = null  // {x, y, type} for special pixel to be placed
+  let claimerName = ''  // Name entered by user
   const CURSOR_THROTTLE_MS = 250
 
   // Generate device fingerprint based on stable hardware/browser characteristics
@@ -283,8 +293,12 @@
 
     // Draw pixels - use uniform cell size for consistent appearance
     pixels.forEach(pixel => {
-      // Add visual effects based on tier
-      if (pixel.pixel_tier === "massive") {
+      // Add visual effects based on tier and special status
+      if (pixel.is_special) {
+        // Extra bright sparkle effect for special pixels
+        ctx.shadowBlur = 16
+        ctx.shadowColor = `hsl(${(Date.now() / 15) % 360}, 100%, 70%)`
+      } else if (pixel.pixel_tier === "massive") {
         // Rainbow glow for massive pixels
         ctx.shadowBlur = 12
         ctx.shadowColor = `hsl(${(Date.now() / 20) % 360}, 100%, 60%)`
@@ -303,6 +317,16 @@
         cellSize - 2,
         cellSize - 2
       )
+
+      // Draw a small star indicator for special pixels
+      if (pixel.is_special && cellSize >= 6) {
+        ctx.shadowBlur = 0
+        ctx.fillStyle = 'white'
+        ctx.font = `${cellSize * 0.6}px serif`
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText('✨', pixel.x * cellSize + cellSize / 2, pixel.y * cellSize + cellSize / 2)
+      }
     })
 
     // Reset shadow
@@ -391,7 +415,11 @@
     if (isPanning || !canPlace) return
     const { x, y } = getCoords(event.clientX, event.clientY)
     if (x >= 0 && x < width && y >= 0 && y < height) {
-      if (pixelMode === "massive" && userStats.massive_pixels_available > 0) {
+      if (pixelMode === "special") {
+        // Show modal to enter name for special pixel
+        pendingSpecialPixel = { x, y }
+        showNameModal = true
+      } else if (pixelMode === "massive" && userStats.massive_pixels_available > 0) {
         // Place massive pixel (5x5 grid)
         live.pushEvent("place_massive_pixel", { x, y })
       } else if (pixelMode === "mega" && userStats.mega_pixels_available > 0) {
@@ -402,6 +430,25 @@
         live.pushEvent("place_pixel", { x, y })
       }
     }
+  }
+
+  function confirmSpecialPixel() {
+    if (pendingSpecialPixel && claimerName.trim()) {
+      live.pushEvent("place_special_pixel", {
+        x: pendingSpecialPixel.x,
+        y: pendingSpecialPixel.y,
+        name: claimerName.trim()
+      })
+      showNameModal = false
+      pendingSpecialPixel = null
+      claimerName = ''
+    }
+  }
+
+  function cancelSpecialPixel() {
+    showNameModal = false
+    pendingSpecialPixel = null
+    claimerName = ''
   }
 
   function togglePixelMode(mode) {
@@ -555,7 +602,11 @@
       const { x, y } = getCoords(touch.clientX, touch.clientY)
 
       if (x >= 0 && x < width && y >= 0 && y < height) {
-        if (pixelMode === "massive" && userStats.massive_pixels_available > 0) {
+        if (pixelMode === "special") {
+          // Show modal for special pixel
+          pendingSpecialPixel = { x, y }
+          showNameModal = true
+        } else if (pixelMode === "massive" && userStats.massive_pixels_available > 0) {
           // Place massive pixel (5x5 grid)
           live.pushEvent("place_massive_pixel", { x, y })
         } else if (pixelMode === "mega" && userStats.mega_pixels_available > 0) {
@@ -928,6 +979,42 @@
           </div>
         </div>
 
+        <!-- Global Milestone Progress -->
+        {#if milestoneProgress.next_milestone}
+          <div class="bg-gradient-to-r from-purple-500/90 to-pink-500/90 backdrop-blur rounded-xl shadow-lg px-4 py-2.5">
+            <div class="flex items-center justify-between gap-2 mb-1">
+              <span class="text-sm font-semibold text-white">
+                {milestoneProgress.next_milestone.emoji} {milestoneProgress.next_milestone.name}
+              </span>
+            </div>
+            <div class="relative h-2 bg-white/30 border border-white/50">
+              <div class="absolute inset-y-0 left-0 bg-white transition-all duration-300" style="width: {(milestoneProgress.total_pixels / milestoneProgress.next_milestone.threshold) * 100}%"></div>
+            </div>
+            <p class="text-xs text-white/90 mt-1">{milestoneProgress.total_pixels}/{milestoneProgress.next_milestone.threshold} pixels</p>
+            <p class="text-[10px] text-white/70 mt-0.5">Community goal - all earn reward!</p>
+          </div>
+        {/if}
+
+        <!-- Special Pixels (if available) -->
+        {#if Object.keys(userStats.special_pixels_available || {}).length > 0}
+          <div class="bg-gradient-to-r from-amber-500/90 to-yellow-500/90 backdrop-blur rounded-xl shadow-lg px-4 py-2.5">
+            <div class="text-sm font-semibold text-white mb-2">✨ Special Pixels</div>
+            <div class="flex flex-wrap gap-2">
+              {#each Object.entries(userStats.special_pixels_available) as [type, count]}
+                {#if count > 0}
+                  <button
+                    on:click={() => live.pushEvent("select_special_pixel", { special_type: type })}
+                    class="bg-white text-neutral-900 px-3 py-1.5 rounded-lg text-xs font-bold shadow hover:scale-105 transition-transform"
+                  >
+                    {#if type === 'unicorn'}🦄{:else if type === 'star'}⭐{:else if type === 'diamond'}💎{:else if type === 'rainbow'}🌈{:else if type === 'crown'}👑{/if}
+                    ×{count}
+                  </button>
+                {/if}
+              {/each}
+            </div>
+          </div>
+        {/if}
+
         <!-- Mode Toggle Buttons (Desktop only) -->
         <div class="grid grid-cols-3 gap-2 w-full">
           <button
@@ -958,6 +1045,42 @@
     {#if hoveredPixel && !isMobile}
       <div class="fixed top-44 right-6 bg-neutral-900 text-white px-3 py-2 rounded-lg text-xs font-mono shadow-lg">
         {hoveredPixel.x}, {hoveredPixel.y}
+      </div>
+    {/if}
+
+    <!-- Name entry modal for special pixels -->
+    {#if showNameModal}
+      <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
+        <div class="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4 animate-in">
+          <h3 class="text-lg font-bold text-neutral-900 mb-2">Claim Special Pixel! ✨</h3>
+          <p class="text-sm text-neutral-600 mb-4">Enter your name to claim this special pixel forever:</p>
+          
+          <input
+            type="text"
+            bind:value={claimerName}
+            placeholder="Your name"
+            maxlength="20"
+            class="w-full px-4 py-2 border-2 border-neutral-300 rounded-lg focus:border-neutral-900 focus:outline-none mb-4"
+            on:keydown={(e) => e.key === 'Enter' && confirmSpecialPixel()}
+            autofocus
+          />
+          
+          <div class="flex gap-2">
+            <button
+              on:click={cancelSpecialPixel}
+              class="flex-1 px-4 py-2 border-2 border-neutral-300 text-neutral-700 rounded-lg hover:bg-neutral-50 transition-colors font-medium"
+            >
+              Cancel
+            </button>
+            <button
+              on:click={confirmSpecialPixel}
+              disabled={!claimerName.trim()}
+              class="flex-1 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Claim!
+            </button>
+          </div>
+        </div>
       </div>
     {/if}
   </div>

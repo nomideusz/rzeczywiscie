@@ -20,6 +20,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
     user_stats = PixelCanvas.get_user_stats(user_id)
     cooldown = PixelCanvas.check_cooldown(user_id)
     seconds_remaining = get_seconds_remaining(cooldown)
+    milestone_progress = PixelCanvas.milestone_progress()
 
     # Start cooldown timer if user is on cooldown
     if connected?(socket) && seconds_remaining > 0 do
@@ -40,7 +41,9 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
       |> assign(:seconds_remaining, seconds_remaining)
       |> assign(:stats, stats)
       |> assign(:user_stats, user_stats)
-      |> assign(:pixel_mode, :normal)  # Can be :normal, :mega, or :massive
+      |> assign(:pixel_mode, :normal)  # Can be :normal, :mega, :massive, or :special
+      |> assign(:selected_special_type, nil)
+      |> assign(:milestone_progress, milestone_progress)
       |> assign(:page_title, "Pixels")
       |> assign(:pixels_version, 0)
       |> assign(:cursors, %{})
@@ -65,7 +68,8 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
         stats: @stats,
         cursors: serialize_cursors(@cursors),
         userStats: serialize_user_stats(@user_stats),
-        pixelMode: @pixel_mode
+        pixelMode: @pixel_mode,
+        milestoneProgress: @milestone_progress
       }}
       socket={@socket}
     />
@@ -96,12 +100,13 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
 
           stats = PixelCanvas.stats()
           user_stats = PixelCanvas.get_user_stats(user_id)
+          milestone_progress = PixelCanvas.milestone_progress()
 
-          # Broadcast to all connected clients (including stats)
+          # Broadcast to all connected clients (including stats and milestone progress)
           Phoenix.PubSub.broadcast(
             Rzeczywiscie.PubSub,
             @topic,
-            {:pixel_placed, x, y, color, user_id, :normal, stats, socket.assigns.session_id}
+            {:pixel_placed, x, y, color, user_id, :normal, stats, milestone_progress, socket.assigns.session_id}
           )
 
           # Schedule cooldown update
@@ -114,6 +119,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
            |> assign(:seconds_remaining, PixelCanvas.cooldown_seconds())
            |> assign(:stats, stats)
            |> assign(:user_stats, user_stats)
+           |> assign(:milestone_progress, milestone_progress)
 
           {:noreply, socket}
 
@@ -141,12 +147,13 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
         pixels = PixelCanvas.load_canvas()
         stats = PixelCanvas.stats()
         user_stats = PixelCanvas.get_user_stats(user_id)
+        milestone_progress = PixelCanvas.milestone_progress()
 
         # Broadcast mega pixel placement
         Phoenix.PubSub.broadcast(
           Rzeczywiscie.PubSub,
           @topic,
-          {:mega_pixel_placed, x, y, color, user_id, stats, socket.assigns.session_id}
+          {:mega_pixel_placed, x, y, color, user_id, stats, milestone_progress, socket.assigns.session_id}
         )
 
         # Schedule cooldown update (mega pixel has 45s cooldown)
@@ -160,6 +167,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
          |> assign(:seconds_remaining, 45)
          |> assign(:stats, stats)
          |> assign(:user_stats, user_stats)
+         |> assign(:milestone_progress, milestone_progress)
          |> put_flash(:info, "Mega pixel placed! ⭐")}
 
       {:error, {:cooldown, _seconds}} ->
@@ -188,12 +196,13 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
         pixels = PixelCanvas.load_canvas()
         stats = PixelCanvas.stats()
         user_stats = PixelCanvas.get_user_stats(user_id)
+        milestone_progress = PixelCanvas.milestone_progress()
 
         # Broadcast massive pixel placement
         Phoenix.PubSub.broadcast(
           Rzeczywiscie.PubSub,
           @topic,
-          {:massive_pixel_placed, x, y, color, user_id, stats, socket.assigns.session_id}
+          {:massive_pixel_placed, x, y, color, user_id, stats, milestone_progress, socket.assigns.session_id}
         )
 
         # Schedule cooldown update (massive pixel has 120s cooldown)
@@ -207,6 +216,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
          |> assign(:seconds_remaining, 120)
          |> assign(:stats, stats)
          |> assign(:user_stats, user_stats)
+         |> assign(:milestone_progress, milestone_progress)
          |> put_flash(:info, "Massive pixel placed! 🌈")}
 
       {:error, {:cooldown, _seconds}} ->
@@ -231,16 +241,84 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
     {:noreply, assign(socket, pixel_mode: new_mode)}
   end
 
+  def handle_event("select_special_pixel", %{"special_type" => special_type}, socket) do
+    {:noreply, 
+     socket
+     |> assign(:pixel_mode, :special)
+     |> assign(:selected_special_type, special_type)}
+  end
+
+  def handle_event("place_special_pixel", %{"x" => x, "y" => y, "name" => name}, socket) do
+    color = socket.assigns.selected_color
+    user_id = socket.assigns.user_id
+    special_type = socket.assigns.selected_special_type
+
+    case PixelCanvas.place_special_pixel(x, y, color, user_id, special_type, name, color) do
+      {:ok, pixel} ->
+        pixels = Map.put(socket.assigns.pixels, {x, y}, %{
+          color: color,
+          user_id: user_id,
+          updated_at: pixel.updated_at,
+          pixel_tier: :normal,
+          is_special: true,
+          special_type: special_type,
+          claimer_name: name,
+          claimer_color: color
+        })
+
+        stats = PixelCanvas.stats()
+        user_stats = PixelCanvas.get_user_stats(user_id)
+        milestone_progress = PixelCanvas.milestone_progress()
+
+        # Broadcast special pixel placement
+        Phoenix.PubSub.broadcast(
+          Rzeczywiscie.PubSub,
+          @topic,
+          {:special_pixel_placed, x, y, color, user_id, special_type, name, color, stats, milestone_progress, socket.assigns.session_id}
+        )
+
+        # Schedule cooldown update
+        Process.send_after(self(), :update_cooldown, 1000)
+
+        {:noreply,
+         socket
+         |> assign(:pixels, pixels)
+         |> assign(:pixels_version, socket.assigns.pixels_version + 1)
+         |> assign(:can_place, false)
+         |> assign(:seconds_remaining, PixelCanvas.cooldown_seconds())
+         |> assign(:stats, stats)
+         |> assign(:user_stats, user_stats)
+         |> assign(:milestone_progress, milestone_progress)
+         |> assign(:pixel_mode, :normal)
+         |> assign(:selected_special_type, nil)
+         |> put_flash(:info, "Special #{special_type} pixel claimed! #{name} ✨")}
+
+      {:error, :no_special_pixel_available} ->
+        {:noreply, put_flash(socket, :error, "You don't have this special pixel available")}
+
+      {:error, :position_occupied} ->
+        {:noreply, put_flash(socket, :error, "Position already occupied")}
+
+      {:error, {:cooldown, _seconds}} ->
+        {:noreply, socket}
+
+      {:error, changeset} ->
+        error_msg = format_error(changeset)
+        {:noreply, put_flash(socket, :error, error_msg)}
+    end
+  end
+
   def handle_event("select_color", %{"color" => color}, socket) do
     {:noreply, assign(socket, selected_color: color)}
   end
 
   def handle_event("set_user_id", %{"user_id" => client_user_id}, socket) do
     # Client sends device-specific user_id from localStorage
-    # Reload user stats with the correct device fingerprint user_id
+    # Reload user stats and milestone progress with the correct device fingerprint user_id
     user_stats = PixelCanvas.get_user_stats(client_user_id)
     cooldown = PixelCanvas.check_cooldown(client_user_id)
     seconds_remaining = get_seconds_remaining(cooldown)
+    milestone_progress = PixelCanvas.milestone_progress()
     
     # Start cooldown timer if needed
     if connected?(socket) && seconds_remaining > 0 do
@@ -251,6 +329,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
      socket
      |> assign(:user_id, client_user_id)
      |> assign(:user_stats, user_stats)
+     |> assign(:milestone_progress, milestone_progress)
      |> assign(:can_place, cooldown == :ok)
      |> assign(:seconds_remaining, seconds_remaining)}
   end
@@ -289,60 +368,119 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
   end
 
   # Handle pixel placed by other sessions (including same user on different devices)
-  def handle_info({:pixel_placed, x, y, color, user_id, pixel_tier, stats, from_session_id}, socket) do
+  def handle_info({:pixel_placed, x, y, color, user_id, pixel_tier, stats, milestone_progress, from_session_id}, socket) do
     # Update pixels for all sessions except the one that placed it
     if from_session_id != socket.assigns.session_id do
       pixels = Map.put(socket.assigns.pixels, {x, y}, %{
         color: color,
         user_id: user_id,
         updated_at: DateTime.utc_now(),
-        pixel_tier: pixel_tier
+        pixel_tier: pixel_tier,
+        is_special: false,
+        special_type: nil,
+        claimer_name: nil,
+        claimer_color: nil
       })
+
+      # Reload user stats to get any newly unlocked special pixels
+      user_stats = PixelCanvas.get_user_stats(socket.assigns.user_id)
 
       {:noreply,
        socket
        |> assign(:pixels, pixels)
        |> assign(:pixels_version, socket.assigns.pixels_version + 1)
-       |> assign(:stats, stats)}
+       |> assign(:stats, stats)
+       |> assign(:milestone_progress, milestone_progress)
+       |> assign(:user_stats, user_stats)}
     else
-      # Still update stats even for own session to ensure consistency
-      {:noreply, assign(socket, :stats, stats)}
+      # Still update stats and milestones even for own session to ensure consistency
+      {:noreply, 
+       socket
+       |> assign(:stats, stats)
+       |> assign(:milestone_progress, milestone_progress)}
     end
   end
 
   # Handle mega pixel placed by other sessions (including same user on different devices)
-  def handle_info({:mega_pixel_placed, _x, _y, _color, _user_id, stats, from_session_id}, socket) do
+  def handle_info({:mega_pixel_placed, _x, _y, _color, _user_id, stats, milestone_progress, from_session_id}, socket) do
     # Update pixels for all sessions except the one that placed it
     if from_session_id != socket.assigns.session_id do
       # Reload all pixels to get the 3x3 grid
       pixels = PixelCanvas.load_canvas()
+      # Reload user stats to get any newly unlocked special pixels
+      user_stats = PixelCanvas.get_user_stats(socket.assigns.user_id)
 
       {:noreply,
        socket
        |> assign(:pixels, pixels)
        |> assign(:pixels_version, socket.assigns.pixels_version + 1)
-       |> assign(:stats, stats)}
+       |> assign(:stats, stats)
+       |> assign(:milestone_progress, milestone_progress)
+       |> assign(:user_stats, user_stats)}
     else
-      # Still update stats even for own session to ensure consistency
-      {:noreply, assign(socket, :stats, stats)}
+      # Still update stats and milestones even for own session to ensure consistency
+      {:noreply, 
+       socket
+       |> assign(:stats, stats)
+       |> assign(:milestone_progress, milestone_progress)}
     end
   end
 
   # Handle massive pixel placed by other sessions (including same user on different devices)
-  def handle_info({:massive_pixel_placed, _x, _y, _color, _user_id, stats, from_session_id}, socket) do
+  def handle_info({:massive_pixel_placed, _x, _y, _color, _user_id, stats, milestone_progress, from_session_id}, socket) do
     # Update pixels for all sessions except the one that placed it
     if from_session_id != socket.assigns.session_id do
       # Reload all pixels to get the 5x5 grid
       pixels = PixelCanvas.load_canvas()
+      # Reload user stats to get any newly unlocked special pixels
+      user_stats = PixelCanvas.get_user_stats(socket.assigns.user_id)
 
       {:noreply,
        socket
        |> assign(:pixels, pixels)
        |> assign(:pixels_version, socket.assigns.pixels_version + 1)
-       |> assign(:stats, stats)}
+       |> assign(:stats, stats)
+       |> assign(:milestone_progress, milestone_progress)
+       |> assign(:user_stats, user_stats)}
     else
-      # Still update stats even for own session to ensure consistency
-      {:noreply, assign(socket, :stats, stats)}
+      # Still update stats and milestones even for own session to ensure consistency
+      {:noreply, 
+       socket
+       |> assign(:stats, stats)
+       |> assign(:milestone_progress, milestone_progress)}
+    end
+  end
+
+  # Handle special pixel placed by other sessions
+  def handle_info({:special_pixel_placed, x, y, color, user_id, special_type, claimer_name, claimer_color, stats, milestone_progress, from_session_id}, socket) do
+    # Update pixels for all sessions except the one that placed it
+    if from_session_id != socket.assigns.session_id do
+      pixels = Map.put(socket.assigns.pixels, {x, y}, %{
+        color: color,
+        user_id: user_id,
+        updated_at: DateTime.utc_now(),
+        pixel_tier: :normal,
+        is_special: true,
+        special_type: special_type,
+        claimer_name: claimer_name,
+        claimer_color: claimer_color
+      })
+
+      # Reload user stats to get updated special pixels count
+      user_stats = PixelCanvas.get_user_stats(socket.assigns.user_id)
+
+      {:noreply,
+       socket
+       |> assign(:pixels, pixels)
+       |> assign(:pixels_version, socket.assigns.pixels_version + 1)
+       |> assign(:stats, stats)
+       |> assign(:milestone_progress, milestone_progress)
+       |> assign(:user_stats, user_stats)}
+    else
+      {:noreply, 
+       socket
+       |> assign(:stats, stats)
+       |> assign(:milestone_progress, milestone_progress)}
     end
   end
 
@@ -370,7 +508,16 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
 
   defp serialize_pixels(pixels) do
     Enum.map(pixels, fn {{x, y}, data} ->
-      %{x: x, y: y, color: data.color, pixel_tier: Atom.to_string(data.pixel_tier)}
+      %{
+        x: x,
+        y: y,
+        color: data.color,
+        pixel_tier: Atom.to_string(data.pixel_tier),
+        is_special: data.is_special,
+        special_type: data.special_type,
+        claimer_name: data.claimer_name,
+        claimer_color: data.claimer_color
+      }
     end)
   end
 
@@ -391,6 +538,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
       mega_pixels_available: user_stats.mega_pixels_available,
       mega_pixels_used: user_stats.mega_pixels_used_count,
       massive_pixels_available: user_stats.massive_pixels_available,
+      special_pixels_available: user_stats.special_pixels_available || %{},
       progress_to_mega: rem(user_stats.pixels_placed_count, 15),
       progress_to_massive_fusion: rem(user_stats.mega_pixels_used_count, 5),
       progress_to_massive_bonus: rem(user_stats.pixels_placed_count, 100)

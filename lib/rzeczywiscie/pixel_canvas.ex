@@ -7,6 +7,7 @@ defmodule Rzeczywiscie.PixelCanvas do
   alias Rzeczywiscie.Repo
   alias Rzeczywiscie.PixelCanvas.Pixel
   alias Rzeczywiscie.PixelCanvas.UserPixelStats
+  alias Rzeczywiscie.PixelCanvas.GlobalMilestone
 
   @canvas_width 200
   @canvas_height 200
@@ -34,7 +35,7 @@ defmodule Rzeczywiscie.PixelCanvas do
 
   @doc """
   Loads all pixels for the canvas.
-  Returns a map of {x, y} => %{color: color, user_id: user_id, updated_at: datetime, pixel_tier: atom}
+  Returns a map of {x, y} => %{color: color, user_id: user_id, updated_at: datetime, pixel_tier: atom, ...}
   """
   def load_canvas do
     Pixel
@@ -44,10 +45,78 @@ defmodule Rzeczywiscie.PixelCanvas do
         color: pixel.color,
         user_id: pixel.user_id,
         updated_at: pixel.updated_at,
-        pixel_tier: pixel.pixel_tier
+        pixel_tier: pixel.pixel_tier,
+        is_special: pixel.is_special,
+        special_type: pixel.special_type,
+        claimer_name: pixel.claimer_name,
+        claimer_color: pixel.claimer_color
       }}
     end)
     |> Map.new()
+  end
+
+  @doc """
+  Places a special pixel on the canvas with the user's name and color.
+  Returns {:ok, pixel} or {:error, reason}
+  """
+  def place_special_pixel(x, y, color, user_id, special_type, claimer_name, claimer_color) do
+    # Check cooldown
+    case check_cooldown(user_id) do
+      :ok ->
+        # Check if user has this special pixel available
+        stats = get_or_create_user_stats(user_id)
+        available_count = Map.get(stats.special_pixels_available || %{}, special_type, 0)
+
+        if available_count > 0 do
+          # Check if position is already occupied
+          case pixel_at(x, y) do
+            nil ->
+              attrs = %{
+                x: x,
+                y: y,
+                color: color,
+                user_id: user_id,
+                pixel_tier: :normal,
+                is_massive: false,
+                is_special: true,
+                special_type: special_type,
+                claimer_name: claimer_name,
+                claimer_color: claimer_color
+              }
+
+              result = %Pixel{}
+              |> Pixel.changeset(attrs)
+              |> Repo.insert()
+
+              # Decrement available special pixel
+              case result do
+                {:ok, pixel} ->
+                  updated_specials = Map.update(
+                    stats.special_pixels_available,
+                    special_type,
+                    0,
+                    &(&1 - 1)
+                  )
+
+                  stats
+                  |> UserPixelStats.changeset(%{special_pixels_available: updated_specials})
+                  |> Repo.update()
+
+                  {:ok, pixel}
+                error ->
+                  error
+              end
+
+            _pixel ->
+              {:error, :position_occupied}
+          end
+        else
+          {:error, :no_special_pixel_available}
+        end
+
+      {:error, seconds_remaining} ->
+        {:error, {:cooldown, seconds_remaining}}
+    end
   end
 
   @doc """
@@ -330,6 +399,9 @@ defmodule Rzeczywiscie.PixelCanvas do
             {stats.massive_pixels_available, stats.last_unlock_at}
           end
 
+        # Check global milestones and award special pixels
+        check_and_unlock_milestones()
+
         stats
         |> UserPixelStats.changeset(%{
           pixels_placed_count: new_count,
@@ -365,5 +437,92 @@ defmodule Rzeczywiscie.PixelCanvas do
         # Massive pixel used - no progression, just track
         {:ok, stats}
     end
+  end
+
+  @doc """
+  Returns global milestone progress information.
+  """
+  def milestone_progress do
+    total_pixels = Repo.aggregate(Pixel, :count)
+    
+    # Define milestones: every 1000 pixels unlocks a special pixel
+    milestones = [
+      %{threshold: 1000, reward: "unicorn", name: "Unicorn", emoji: "🦄"},
+      %{threshold: 2000, reward: "star", name: "Star", emoji: "⭐"},
+      %{threshold: 3000, reward: "diamond", name: "Diamond", emoji: "💎"},
+      %{threshold: 5000, reward: "rainbow", name: "Rainbow", emoji: "🌈"},
+      %{threshold: 10000, reward: "crown", name: "Crown", emoji: "👑"}
+    ]
+
+    # Find next milestone and current progress
+    next_milestone = Enum.find(milestones, fn m -> total_pixels < m.threshold end)
+    
+    unlocked_rewards = Enum.filter(milestones, fn m -> total_pixels >= m.threshold end)
+                       |> Enum.map(& &1.reward)
+
+    %{
+      total_pixels: total_pixels,
+      next_milestone: next_milestone,
+      unlocked_rewards: unlocked_rewards,
+      all_milestones: milestones
+    }
+  end
+
+  @doc """
+  Check and unlock global milestones, distributing special pixels to all active users.
+  """
+  def check_and_unlock_milestones do
+    total_pixels = Repo.aggregate(Pixel, :count)
+    
+    # Milestones to check
+    milestones_to_check = [
+      %{type: "pixels_1000", threshold: 1000, reward: "unicorn"},
+      %{type: "pixels_2000", threshold: 2000, reward: "star"},
+      %{type: "pixels_3000", threshold: 3000, reward: "diamond"},
+      %{type: "pixels_5000", threshold: 5000, reward: "rainbow"},
+      %{type: "pixels_10000", threshold: 10000, reward: "crown"}
+    ]
+
+    Enum.each(milestones_to_check, fn milestone ->
+      if total_pixels >= milestone.threshold do
+        # Check if already unlocked
+        existing = Repo.get_by(GlobalMilestone, milestone_type: milestone.type)
+        
+        if is_nil(existing) do
+          # Unlock milestone
+          %GlobalMilestone{}
+          |> GlobalMilestone.changeset(%{
+            milestone_type: milestone.type,
+            threshold: milestone.threshold,
+            reward_type: milestone.reward,
+            unlocked_at: DateTime.utc_now(),
+            total_pixels_when_unlocked: total_pixels
+          })
+          |> Repo.insert()
+
+          # Award special pixel to ALL users
+          award_special_pixel_to_all_users(milestone.reward)
+        end
+      end
+    end)
+  end
+
+  defp award_special_pixel_to_all_users(reward_type) do
+    # Get all users who have placed pixels
+    user_stats = Repo.all(UserPixelStats)
+    
+    Enum.each(user_stats, fn stats ->
+      # Add the special pixel to their available map
+      updated_specials = Map.update(
+        stats.special_pixels_available || %{},
+        reward_type,
+        1,
+        &(&1 + 1)
+      )
+      
+      stats
+      |> UserPixelStats.changeset(%{special_pixels_available: updated_specials})
+      |> Repo.update()
+    end)
   end
 end
