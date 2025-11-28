@@ -442,8 +442,11 @@
 
   function handleTouchEnd(event) {
     // Place pixel only if it was a tap (no significant movement) and can place
-    if (singleTouchStart && !touchMoved && canPlace && hoveredPixel) {
-      const { x, y } = hoveredPixel
+    if (singleTouchStart && !touchMoved && canPlace && event.changedTouches.length > 0) {
+      // Use changedTouches to get the exact position where the finger was lifted
+      const touch = event.changedTouches[0]
+      const { x, y } = getCoords(touch.clientX, touch.clientY)
+
       if (x >= 0 && x < width && y >= 0 && y < height) {
         if (isMassiveMode && userStats.massive_pixels_available > 0) {
           // Place massive pixel (3x3 grid)
@@ -655,15 +658,15 @@
         <div class="flex items-center justify-between gap-2 mb-1">
           <span class="{isMobile ? 'text-xs' : 'text-sm'} font-semibold text-neutral-900">Massive Pixel</span>
           {#if userStats.massive_pixels_available > 0}
-            <span class="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-bold px-2 py-0.5 rounded-full animate-pulse">
+            <span class="bg-neutral-900 text-white text-xs font-bold px-2 py-0.5 border-2 border-neutral-900">
               {userStats.massive_pixels_available}
             </span>
           {/if}
         </div>
         <!-- Progress bar -->
-        <div class="relative h-2 bg-neutral-200 rounded-full overflow-hidden">
+        <div class="relative h-2 bg-neutral-200 border border-neutral-300">
           <div
-            class="absolute inset-y-0 left-0 bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-300"
+            class="absolute inset-y-0 left-0 bg-neutral-900 transition-all duration-300"
             style="width: {(userStats.progress_to_next / 15) * 100}%"
           ></div>
         </div>
@@ -677,7 +680,7 @@
         <button
           on:click={toggleMassiveMode}
           disabled={!canPlace}
-          class="relative bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold py-2 px-4 rounded-xl shadow-lg transition-all overflow-hidden {canPlace ? 'hover:scale-105' : 'opacity-60 cursor-not-allowed'} {isMassiveMode ? 'ring-4 ring-yellow-400' : ''}"
+          class="relative bg-neutral-900 text-white font-bold py-2 px-4 border-2 shadow-lg transition-all overflow-hidden {canPlace ? 'hover:scale-105 border-neutral-900' : 'opacity-60 cursor-not-allowed border-neutral-700'} {isMassiveMode ? 'border-white' : 'border-neutral-900'}"
         >
           {#if !canPlace}
             <svg class="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 100 100" style="pointer-events: none;">
