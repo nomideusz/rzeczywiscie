@@ -38,12 +38,16 @@
   let showScrollHint = false
   let hasScrolled = false
   let showMobileStats = false  // Toggle for mobile stats expansion
+  let deviceId = ''  // Unique ID for this device to prevent cross-device localStorage sync
   const CURSOR_THROTTLE_MS = 250
 
   // Pan/drag state
   let isPanning = false
   let panStart = { x: 0, y: 0 }
   let scrollStart = { x: 0, y: 0 }
+
+  // Helper to get device-specific localStorage key
+  const getDeviceKey = (key) => deviceId ? `${deviceId}_${key}` : key
 
   // Center the scroll position
   function centerCanvas() {
@@ -62,6 +66,14 @@
   // Detect mobile and check if canvas is scrollable
   onMount(() => {
     isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0
+
+    // Generate or retrieve device ID for this specific device
+    // This prevents cross-device localStorage sync (e.g., Chrome sync across devices)
+    deviceId = localStorage.getItem('pixels_device_id') || ''
+    if (!deviceId) {
+      deviceId = crypto.randomUUID()
+      localStorage.setItem('pixels_device_id', deviceId)
+    }
 
     // Set default zoom higher on mobile so pixels are visible
     if (isMobile) {
@@ -96,16 +108,16 @@
     }
     animationId = requestAnimationFrame(animate)
 
-    // Listen for color, cooldown, and stats changes from other tabs
+    // Listen for color, cooldown, and stats changes from other tabs ON THIS DEVICE ONLY
     const handleStorageChange = (event) => {
-      if (event.key === 'pixels_selected_color' && event.newValue) {
-        if (colors.includes(event.newValue)) {
-          selectedColor = event.newValue
-          live.pushEvent("select_color", { color: event.newValue })
-        }
+      // Only process events for keys from this device
+      if (!event.key || !event.key.startsWith(deviceId + '_')) {
+        return
       }
 
-      if (event.key === 'pixels_cooldown_end') {
+      const baseKey = event.key.substring(deviceId.length + 1)
+
+      if (baseKey === 'cooldown_end') {
         if (event.newValue) {
           // Another tab placed a pixel, sync cooldown state
           const endTime = parseInt(event.newValue, 10)
@@ -121,13 +133,15 @@
         }
       }
 
-      if (event.key === 'pixels_user_stats' && event.newValue) {
+      if (baseKey === 'user_stats') {
         // Another tab's stats changed, update our display
-        try {
-          const stats = JSON.parse(event.newValue)
-          userStats = stats
-        } catch (e) {
-          console.error('Failed to parse user stats:', e)
+        if (event.newValue) {
+          try {
+            const stats = JSON.parse(event.newValue)
+            userStats = stats
+          } catch (e) {
+            console.error('Failed to parse user stats:', e)
+          }
         }
       }
     }
@@ -139,6 +153,21 @@
       if (animationId) cancelAnimationFrame(animationId)
     }
   })
+
+  // Sync cooldown state to localStorage for other tabs on THIS DEVICE ONLY
+  $: if (deviceId) {
+    if (!canPlace && secondsRemaining > 0) {
+      const endTime = Date.now() + (secondsRemaining * 1000)
+      localStorage.setItem(getDeviceKey('cooldown_end'), endTime.toString())
+    } else if (canPlace) {
+      localStorage.removeItem(getDeviceKey('cooldown_end'))
+    }
+  }
+
+  // Sync user stats to localStorage for other tabs on THIS DEVICE ONLY
+  $: if (deviceId && userStats) {
+    localStorage.setItem(getDeviceKey('user_stats'), JSON.stringify(userStats))
+  }
 
   function checkScrollability() {
     if (!scrollContainer) return
