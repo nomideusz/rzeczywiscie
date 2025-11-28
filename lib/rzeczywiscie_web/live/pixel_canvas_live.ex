@@ -271,7 +271,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
 
   # Handle pixel placed by other users
   def handle_info({:pixel_placed, x, y, color, user_id, is_massive, stats}, socket) do
-    # Don't update if this was our own pixel (already updated)
+    # Update pixels for other users, but always update stats for everyone
     if user_id != socket.assigns.user_id do
       pixels = Map.put(socket.assigns.pixels, {x, y}, %{
         color: color,
@@ -286,13 +286,14 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
        |> assign(:pixels_version, socket.assigns.pixels_version + 1)
        |> assign(:stats, stats)}
     else
-      {:noreply, socket}
+      # Still update stats even for own pixels to ensure consistency
+      {:noreply, assign(socket, :stats, stats)}
     end
   end
 
   # Handle massive pixel placed by other users
   def handle_info({:massive_pixel_placed, _x, _y, _color, user_id, stats}, socket) do
-    # Don't update if this was our own pixel (already updated)
+    # Update pixels for other users, but always update stats for everyone
     if user_id != socket.assigns.user_id do
       # Reload all pixels to get the 3x3 grid
       pixels = PixelCanvas.load_canvas()
@@ -303,7 +304,8 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
        |> assign(:pixels_version, socket.assigns.pixels_version + 1)
        |> assign(:stats, stats)}
     else
-      {:noreply, socket}
+      # Still update stats even for own pixels to ensure consistency
+      {:noreply, assign(socket, :stats, stats)}
     end
   end
 
