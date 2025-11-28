@@ -236,9 +236,23 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
   end
 
   def handle_event("set_user_id", %{"user_id" => client_user_id}, socket) do
-    # Client sends browser-specific user_id from localStorage
-    # This ensures different browsers get different cooldowns
-    {:noreply, assign(socket, user_id: client_user_id)}
+    # Client sends device-specific user_id from localStorage
+    # Reload user stats with the correct device fingerprint user_id
+    user_stats = PixelCanvas.get_user_stats(client_user_id)
+    cooldown = PixelCanvas.check_cooldown(client_user_id)
+    seconds_remaining = get_seconds_remaining(cooldown)
+    
+    # Start cooldown timer if needed
+    if connected?(socket) && seconds_remaining > 0 do
+      Process.send_after(self(), :update_cooldown, 1000)
+    end
+    
+    {:noreply, 
+     socket
+     |> assign(:user_id, client_user_id)
+     |> assign(:user_stats, user_stats)
+     |> assign(:can_place, cooldown == :ok)
+     |> assign(:seconds_remaining, seconds_remaining)}
   end
 
   def handle_event("cursor_move", %{"x" => x, "y" => y}, socket) do
