@@ -31,6 +31,19 @@
   let hasScrolled = false
   const CURSOR_THROTTLE_MS = 250
 
+  // Track actual cooldown duration for progress calculation
+  let cooldownDuration = 15
+  let prevSecondsRemaining = 0
+
+  // Detect when cooldown starts and capture the duration
+  $: {
+    // When secondsRemaining increases, a new cooldown started
+    if (secondsRemaining > prevSecondsRemaining) {
+      cooldownDuration = secondsRemaining
+    }
+    prevSecondsRemaining = secondsRemaining
+  }
+
   // Pan/drag state
   let isPanning = false
   let panStart = { x: 0, y: 0 }
@@ -147,8 +160,8 @@
     }
   }
 
-  // Cooldown progress (0 to 1)
-  $: cooldownProgress = canPlace ? 1 : (cooldownSeconds - secondsRemaining) / cooldownSeconds
+  // Cooldown progress (0 to 1) - uses actual cooldown duration (15s or 45s)
+  $: cooldownProgress = canPlace ? 1 : (cooldownDuration - secondsRemaining) / cooldownDuration
 
   // Sync cooldown state to localStorage for other tabs
   $: if (!canPlace && secondsRemaining > 0) {
@@ -668,11 +681,9 @@
               class="transition-all duration-1000 ease-linear"/>
           </svg>
           {#if !canPlace}
-            <div class="absolute inset-0 flex items-center justify-center">
-              <span class="bg-black/70 text-white text-sm sm:text-base font-bold px-2 py-1 rounded">
-                {secondsRemaining}
-              </span>
-            </div>
+            <span class="absolute inset-0 flex items-center justify-center text-white text-sm font-bold drop-shadow-lg">
+              {secondsRemaining}
+            </span>
           {/if}
         </button>
 
