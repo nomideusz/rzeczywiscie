@@ -314,16 +314,6 @@
         cellSize - 2,
         cellSize - 2
       )
-
-      // Draw a small star indicator for special pixels
-      if (pixel.is_special && cellSize >= 6) {
-        ctx.shadowBlur = 0
-        ctx.fillStyle = 'white'
-        ctx.font = `${cellSize * 0.6}px serif`
-        ctx.textAlign = 'center'
-        ctx.textBaseline = 'middle'
-        ctx.fillText('✨', pixel.x * cellSize + cellSize / 2, pixel.y * cellSize + cellSize / 2)
-      }
     })
 
     // Reset shadow
@@ -978,33 +968,43 @@
 
         <!-- Global Milestone Progress -->
         {#if milestoneProgress.next_milestone}
-          <div class="bg-gradient-to-r from-purple-500/90 to-pink-500/90 backdrop-blur rounded-xl shadow-lg px-4 py-2.5">
+          <div class="bg-white/90 backdrop-blur rounded-xl shadow-lg px-4 py-2.5">
             <div class="flex items-center justify-between gap-2 mb-1">
-              <span class="text-sm font-semibold text-white">
-                {milestoneProgress.next_milestone.emoji} {milestoneProgress.next_milestone.name}
+              <span class="text-sm font-semibold text-neutral-900">
+                {#if milestoneProgress.next_milestone.reward === 'unicorn'}
+                  <span class="bg-gradient-to-r from-purple-600 via-pink-500 to-purple-600 bg-clip-text text-transparent font-bold">
+                    {milestoneProgress.next_milestone.name}
+                  </span>
+                {:else}
+                  {milestoneProgress.next_milestone.name}
+                {/if}
               </span>
             </div>
-            <div class="relative h-2 bg-white/30 border border-white/50">
-              <div class="absolute inset-y-0 left-0 bg-white transition-all duration-300" style="width: {(milestoneProgress.total_pixels / milestoneProgress.next_milestone.threshold) * 100}%"></div>
+            <div class="relative h-2 bg-neutral-200 border border-neutral-300">
+              <div class="absolute inset-y-0 left-0 bg-neutral-900 transition-all duration-300" style="width: {(milestoneProgress.total_pixels / milestoneProgress.next_milestone.threshold) * 100}%"></div>
             </div>
-            <p class="text-xs text-white/90 mt-1">{milestoneProgress.total_pixels}/{milestoneProgress.next_milestone.threshold} pixels</p>
-            <p class="text-[10px] text-white/70 mt-0.5">Community goal - all earn reward!</p>
+            <p class="text-xs text-neutral-500 mt-1">{milestoneProgress.total_pixels}/{milestoneProgress.next_milestone.threshold} pixels</p>
+            <p class="text-[10px] text-neutral-400 mt-0.5">Community unlocks for all</p>
           </div>
         {/if}
 
         <!-- Special Pixels (if available) -->
         {#if Object.keys(userStats.special_pixels_available || {}).length > 0}
-          <div class="bg-gradient-to-r from-amber-500/90 to-yellow-500/90 backdrop-blur rounded-xl shadow-lg px-4 py-2.5">
-            <div class="text-sm font-semibold text-white mb-2">✨ Special Pixels</div>
+          <div class="bg-white/90 backdrop-blur rounded-xl shadow-lg px-4 py-2.5">
+            <div class="text-sm font-semibold text-neutral-900 mb-2">Special Pixels</div>
             <div class="flex flex-wrap gap-2">
               {#each Object.entries(userStats.special_pixels_available) as [type, count]}
                 {#if count > 0}
                   <button
                     on:click={() => live.pushEvent("select_special_pixel", { special_type: type })}
-                    class="bg-white text-neutral-900 px-3 py-1.5 rounded-lg text-xs font-bold shadow hover:scale-105 transition-transform"
+                    class="border-2 border-neutral-900 text-neutral-900 px-3 py-1.5 text-xs font-bold hover:bg-neutral-900 hover:text-white transition-colors"
                   >
-                    {#if type === 'unicorn'}🦄{:else if type === 'star'}⭐{:else if type === 'diamond'}💎{:else if type === 'rainbow'}🌈{:else if type === 'crown'}👑{/if}
-                    ×{count}
+                    {#if type === 'unicorn'}
+                      <span class="bg-gradient-to-r from-purple-600 via-pink-500 to-purple-600 bg-clip-text text-transparent">Unicorn</span>
+                    {:else}
+                      {type.charAt(0).toUpperCase() + type.slice(1)}
+                    {/if}
+                    <span class="ml-1">×{count}</span>
                   </button>
                 {/if}
               {/each}
@@ -1048,16 +1048,16 @@
     <!-- Name entry modal for special pixels -->
     {#if showNameModal}
       <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
-        <div class="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4 animate-in">
-          <h3 class="text-lg font-bold text-neutral-900 mb-2">Claim Special Pixel! ✨</h3>
-          <p class="text-sm text-neutral-600 mb-4">Enter your name to claim this special pixel forever:</p>
+        <div class="bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full mx-4 animate-in">
+          <h3 class="text-lg font-bold text-neutral-900 mb-2">Claim Special Pixel</h3>
+          <p class="text-sm text-neutral-600 mb-4">Enter your name to claim this pixel forever:</p>
           
           <input
             type="text"
             bind:value={claimerName}
             placeholder="Your name"
             maxlength="20"
-            class="w-full px-4 py-2 border-2 border-neutral-300 rounded-lg focus:border-neutral-900 focus:outline-none mb-4"
+            class="w-full px-4 py-2 border-2 border-neutral-300 focus:border-neutral-900 focus:outline-none mb-4"
             on:keydown={(e) => e.key === 'Enter' && confirmSpecialPixel()}
             autofocus
           />
@@ -1065,16 +1065,16 @@
           <div class="flex gap-2">
             <button
               on:click={cancelSpecialPixel}
-              class="flex-1 px-4 py-2 border-2 border-neutral-300 text-neutral-700 rounded-lg hover:bg-neutral-50 transition-colors font-medium"
+              class="flex-1 px-4 py-2 border-2 border-neutral-300 text-neutral-700 hover:bg-neutral-50 transition-colors font-medium"
             >
               Cancel
             </button>
             <button
               on:click={confirmSpecialPixel}
               disabled={!claimerName.trim()}
-              class="flex-1 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+              class="flex-1 px-4 py-2 bg-neutral-900 text-white hover:bg-neutral-800 transition-colors font-bold disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Claim!
+              Claim
             </button>
           </div>
         </div>

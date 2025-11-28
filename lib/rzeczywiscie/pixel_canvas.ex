@@ -447,11 +447,11 @@ defmodule Rzeczywiscie.PixelCanvas do
     
     # Define milestones: every 1000 pixels unlocks a special pixel
     milestones = [
-      %{threshold: 1000, reward: "unicorn", name: "Unicorn", emoji: "🦄"},
-      %{threshold: 2000, reward: "star", name: "Star", emoji: "⭐"},
-      %{threshold: 3000, reward: "diamond", name: "Diamond", emoji: "💎"},
-      %{threshold: 5000, reward: "rainbow", name: "Rainbow", emoji: "🌈"},
-      %{threshold: 10000, reward: "crown", name: "Crown", emoji: "👑"}
+      %{threshold: 1000, reward: "unicorn", name: "Unicorn"},
+      %{threshold: 2000, reward: "star", name: "Star"},
+      %{threshold: 3000, reward: "diamond", name: "Diamond"},
+      %{threshold: 5000, reward: "rainbow", name: "Rainbow"},
+      %{threshold: 10000, reward: "crown", name: "Crown"}
     ]
 
     # Find next milestone and current progress
