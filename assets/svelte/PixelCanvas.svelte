@@ -442,8 +442,11 @@
 
   function handleTouchEnd(event) {
     // Place pixel only if it was a tap (no significant movement) and can place
-    if (singleTouchStart && !touchMoved && canPlace && hoveredPixel) {
-      const { x, y } = hoveredPixel
+    if (singleTouchStart && !touchMoved && canPlace && event.changedTouches.length > 0) {
+      // Use changedTouches to get the exact position where the finger was lifted
+      const touch = event.changedTouches[0]
+      const { x, y } = getCoords(touch.clientX, touch.clientY)
+
       if (x >= 0 && x < width && y >= 0 && y < height) {
         if (isMassiveMode && userStats.massive_pixels_available > 0) {
           // Place massive pixel (3x3 grid)
