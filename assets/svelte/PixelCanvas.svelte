@@ -595,10 +595,15 @@
             class="absolute pointer-events-none transition-all duration-100"
             style="left: {cursor.x * Math.round(pixelSize * zoom)}px; top: {cursor.y * Math.round(pixelSize * zoom)}px;"
           >
+            <!-- Cursor dot with user's selected color -->
             <div
-              class="w-2 h-2 rounded-full border border-white shadow"
+              class="w-3 h-3 rounded-full border-2 border-white shadow-lg"
               style="background-color: {cursor.color}"
             ></div>
+            <!-- Small label showing first chars of user ID -->
+            <div class="absolute -top-5 left-1/2 -translate-x-1/2 bg-black/80 text-white text-[9px] px-1 py-0.5 rounded whitespace-nowrap">
+              {cursor.id}
+            </div>
           </div>
         {/each}
       </div>
@@ -663,9 +668,11 @@
               class="transition-all duration-1000 ease-linear"/>
           </svg>
           {#if !canPlace}
-            <span class="absolute inset-0 flex items-center justify-center text-white text-sm font-bold drop-shadow">
-              {secondsRemaining}
-            </span>
+            <div class="absolute inset-0 flex items-center justify-center">
+              <span class="bg-black/70 text-white text-sm sm:text-base font-bold px-2 py-1 rounded">
+                {secondsRemaining}
+              </span>
+            </div>
           {/if}
         </button>
 
