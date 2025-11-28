@@ -94,14 +94,19 @@
   onMount(() => {
     isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0
 
-    // Generate device fingerprint based on hardware/browser characteristics
-    // This creates the same ID across all browsers on the same physical device
-    const fingerprint = generateDeviceFingerprint()
+    // Get or generate device fingerprint
+    // First, try to retrieve existing fingerprint from localStorage
+    let storedFingerprint = localStorage.getItem('pixels_device_id')
     
-    // Store fingerprint in localStorage for reference (but always regenerate on load)
-    // This ensures the ID is consistent across Chrome, Firefox, Edge, etc. on same device
-    deviceId = fingerprint
-    localStorage.setItem('pixels_device_id', deviceId)
+    if (storedFingerprint) {
+      // Use existing fingerprint to maintain progress across refreshes
+      deviceId = storedFingerprint
+    } else {
+      // Generate new device fingerprint based on hardware/browser characteristics
+      // This creates the same ID across all browsers on the same physical device
+      deviceId = generateDeviceFingerprint()
+      localStorage.setItem('pixels_device_id', deviceId)
+    }
 
     // Send device-specific user_id to server for cooldown tracking
     live.pushEvent("set_user_id", { user_id: deviceId })
