@@ -622,12 +622,12 @@
 
 <div class="fixed inset-0 flex flex-col bg-neutral-100">
   <!-- Canvas Area - full screen -->
-  <div 
+  <div
     class="flex-1 overflow-auto"
     use:initScrollContainer
     use:initContainer
   >
-    <div class="flex items-center justify-center min-h-full" style="min-width: max-content; padding: 2rem;">
+    <div class="flex items-center justify-center min-h-full" style="min-width: max-content; padding: {isMobile ? '4rem 2rem 6rem 2rem' : '2rem'};">
       <div class="relative">
         <canvas
           use:initCanvas
@@ -727,30 +727,34 @@
               {/if}
             </button>
 
-            <!-- Divider -->
-            <div class="w-px h-6 bg-neutral-200"></div>
+            {#if userStats.mega_pixels_available > 0 || userStats.massive_pixels_available > 0}
+              <!-- Divider (only show if we have mode buttons) -->
+              <div class="w-px h-6 bg-neutral-200"></div>
 
-            <!-- Mode buttons -->
-            <button
-              on:click={() => togglePixelMode("normal")}
-              class="w-10 h-10 font-bold text-xs transition-all active:scale-95 flex items-center justify-center {pixelMode === 'normal' ? 'bg-neutral-900 text-white rounded-full' : 'text-neutral-900'}"
-            >
-              N
-            </button>
-            <button
-              on:click={() => togglePixelMode("mega")}
-              disabled={userStats.mega_pixels_available === 0}
-              class="w-10 h-10 font-bold text-xs transition-all active:scale-95 flex items-center justify-center {userStats.mega_pixels_available === 0 ? 'opacity-40 text-neutral-400' : pixelMode === 'mega' ? 'bg-neutral-900 text-white rounded-full' : 'text-neutral-900'}"
-            >
-              M
-            </button>
-            <button
-              on:click={() => togglePixelMode("massive")}
-              disabled={userStats.massive_pixels_available === 0}
-              class="w-10 h-10 font-bold text-xs transition-all active:scale-95 flex items-center justify-center {userStats.massive_pixels_available === 0 ? 'opacity-40 text-neutral-400' : pixelMode === 'massive' ? 'bg-neutral-900 text-white rounded-full' : 'text-neutral-900'}"
-            >
-              X
-            </button>
+              <!-- Mode buttons (only show when unlocked) -->
+              <button
+                on:click={() => togglePixelMode("normal")}
+                class="w-10 h-10 font-bold text-[10px] transition-all active:scale-95 flex items-center justify-center {pixelMode === 'normal' ? 'bg-neutral-900 text-white rounded-full' : 'text-neutral-900'}"
+              >
+                1x1
+              </button>
+              {#if userStats.mega_pixels_available > 0}
+                <button
+                  on:click={() => togglePixelMode("mega")}
+                  class="w-10 h-10 font-bold text-[10px] transition-all active:scale-95 flex items-center justify-center {pixelMode === 'mega' ? 'bg-neutral-900 text-white rounded-full' : 'text-neutral-900'}"
+                >
+                  3x3
+                </button>
+              {/if}
+              {#if userStats.massive_pixels_available > 0}
+                <button
+                  on:click={() => togglePixelMode("massive")}
+                  class="w-10 h-10 font-bold text-[10px] transition-all active:scale-95 flex items-center justify-center {pixelMode === 'massive' ? 'bg-neutral-900 text-white rounded-full' : 'text-neutral-900'}"
+                >
+                  5x5
+                </button>
+              {/if}
+            {/if}
 
             <!-- Divider -->
             <div class="w-px h-6 bg-neutral-200"></div>
