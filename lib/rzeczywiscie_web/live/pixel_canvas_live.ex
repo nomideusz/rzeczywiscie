@@ -5,13 +5,14 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
   @topic "pixel_canvas"
 
   def mount(_params, _session, socket) do
+    # Initially use IP-based user_id, client will send browser-specific ID after mount
     user_id = get_or_create_user_id(socket)
+    # Generate unique session ID for this specific LiveView connection
+    session_id = generate_session_id()
 
     if connected?(socket) do
-      # Subscribe to global canvas updates
+      # Subscribe to global canvas updates only
       Phoenix.PubSub.subscribe(Rzeczywiscie.PubSub, @topic)
-      # Subscribe to user-specific updates (cooldown, stats)
-      Phoenix.PubSub.subscribe(Rzeczywiscie.PubSub, user_topic(user_id))
     end
     {width, height} = PixelCanvas.canvas_size()
     pixels = PixelCanvas.load_canvas()
@@ -28,6 +29,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
     socket =
       socket
       |> assign(:user_id, user_id)
+      |> assign(:session_id, session_id)
       |> assign(:canvas_width, width)
       |> assign(:canvas_height, height)
       |> assign(:pixels, pixels)
@@ -99,14 +101,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
           Phoenix.PubSub.broadcast(
             Rzeczywiscie.PubSub,
             @topic,
-            {:pixel_placed, x, y, color, user_id, :normal, stats}
-          )
-
-          # Broadcast user state to all sessions of this user (normal + incognito tabs)
-          Phoenix.PubSub.broadcast(
-            Rzeczywiscie.PubSub,
-            user_topic(user_id),
-            {:user_state_changed, PixelCanvas.cooldown_seconds(), user_stats}
+            {:pixel_placed, x, y, color, user_id, :normal, stats, socket.assigns.session_id}
           )
 
           # Schedule cooldown update
@@ -151,14 +146,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
         Phoenix.PubSub.broadcast(
           Rzeczywiscie.PubSub,
           @topic,
-          {:mega_pixel_placed, x, y, color, user_id, stats}
-        )
-
-        # Broadcast user state to all sessions of this user (normal + incognito tabs)
-        Phoenix.PubSub.broadcast(
-          Rzeczywiscie.PubSub,
-          user_topic(user_id),
-          {:user_state_changed, 45, user_stats}
+          {:mega_pixel_placed, x, y, color, user_id, stats, socket.assigns.session_id}
         )
 
         # Schedule cooldown update (mega pixel has 45s cooldown)
@@ -205,14 +193,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
         Phoenix.PubSub.broadcast(
           Rzeczywiscie.PubSub,
           @topic,
-          {:massive_pixel_placed, x, y, color, user_id, stats}
-        )
-
-        # Broadcast user state to all sessions of this user (normal + incognito tabs)
-        Phoenix.PubSub.broadcast(
-          Rzeczywiscie.PubSub,
-          user_topic(user_id),
-          {:user_state_changed, 120, user_stats}
+          {:massive_pixel_placed, x, y, color, user_id, stats, socket.assigns.session_id}
         )
 
         # Schedule cooldown update (massive pixel has 120s cooldown)
@@ -245,30 +226,19 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
   end
 
   def handle_event("toggle_pixel_mode", %{"mode" => mode}, socket) do
-    user_id = socket.assigns.user_id
     new_mode = String.to_existing_atom(mode)
-
-    # Broadcast pixel mode change to all sessions of this user
-    Phoenix.PubSub.broadcast(
-      Rzeczywiscie.PubSub,
-      user_topic(user_id),
-      {:pixel_mode_changed, new_mode}
-    )
 
     {:noreply, assign(socket, pixel_mode: new_mode)}
   end
 
   def handle_event("select_color", %{"color" => color}, socket) do
-    user_id = socket.assigns.user_id
-
-    # Broadcast color change to all sessions of this user
-    Phoenix.PubSub.broadcast(
-      Rzeczywiscie.PubSub,
-      user_topic(user_id),
-      {:color_changed, color}
-    )
-
     {:noreply, assign(socket, selected_color: color)}
+  end
+
+  def handle_event("set_user_id", %{"user_id" => client_user_id}, socket) do
+    # Client sends browser-specific user_id from localStorage
+    # This ensures different browsers get different cooldowns
+    {:noreply, assign(socket, user_id: client_user_id)}
   end
 
   def handle_event("cursor_move", %{"x" => x, "y" => y}, socket) do
@@ -285,22 +255,6 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
     {:noreply, socket}
   end
 
-  def handle_event("sync_cooldown", %{"seconds" => seconds}, socket) do
-    # Another tab placed a pixel, sync cooldown state
-    socket = socket
-      |> assign(:can_place, false)
-      |> assign(:seconds_remaining, seconds)
-
-    # Start cooldown update timer
-    Process.send_after(self(), :update_cooldown, 1000)
-
-    {:noreply, socket}
-  end
-
-  def handle_event("clear_cooldown", _, socket) do
-    # Another tab's cooldown expired
-    {:noreply, assign(socket, can_place: true, seconds_remaining: 0)}
-  end
 
   # Update cooldown timer every second
   def handle_info(:update_cooldown, socket) do
@@ -320,10 +274,10 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
     {:noreply, socket}
   end
 
-  # Handle pixel placed by other users
-  def handle_info({:pixel_placed, x, y, color, user_id, pixel_tier, stats}, socket) do
-    # Update pixels for other users, but always update stats for everyone
-    if user_id != socket.assigns.user_id do
+  # Handle pixel placed by other sessions (including same user on different devices)
+  def handle_info({:pixel_placed, x, y, color, user_id, pixel_tier, stats, from_session_id}, socket) do
+    # Update pixels for all sessions except the one that placed it
+    if from_session_id != socket.assigns.session_id do
       pixels = Map.put(socket.assigns.pixels, {x, y}, %{
         color: color,
         user_id: user_id,
@@ -337,15 +291,15 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
        |> assign(:pixels_version, socket.assigns.pixels_version + 1)
        |> assign(:stats, stats)}
     else
-      # Still update stats even for own pixels to ensure consistency
+      # Still update stats even for own session to ensure consistency
       {:noreply, assign(socket, :stats, stats)}
     end
   end
 
-  # Handle mega pixel placed by other users
-  def handle_info({:mega_pixel_placed, _x, _y, _color, user_id, stats}, socket) do
-    # Update pixels for other users, but always update stats for everyone
-    if user_id != socket.assigns.user_id do
+  # Handle mega pixel placed by other sessions (including same user on different devices)
+  def handle_info({:mega_pixel_placed, _x, _y, _color, _user_id, stats, from_session_id}, socket) do
+    # Update pixels for all sessions except the one that placed it
+    if from_session_id != socket.assigns.session_id do
       # Reload all pixels to get the 3x3 grid
       pixels = PixelCanvas.load_canvas()
 
@@ -355,15 +309,15 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
        |> assign(:pixels_version, socket.assigns.pixels_version + 1)
        |> assign(:stats, stats)}
     else
-      # Still update stats even for own pixels to ensure consistency
+      # Still update stats even for own session to ensure consistency
       {:noreply, assign(socket, :stats, stats)}
     end
   end
 
-  # Handle massive pixel placed by other users
-  def handle_info({:massive_pixel_placed, _x, _y, _color, user_id, stats}, socket) do
-    # Update pixels for other users, but always update stats for everyone
-    if user_id != socket.assigns.user_id do
+  # Handle massive pixel placed by other sessions (including same user on different devices)
+  def handle_info({:massive_pixel_placed, _x, _y, _color, _user_id, stats, from_session_id}, socket) do
+    # Update pixels for all sessions except the one that placed it
+    if from_session_id != socket.assigns.session_id do
       # Reload all pixels to get the 5x5 grid
       pixels = PixelCanvas.load_canvas()
 
@@ -373,7 +327,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
        |> assign(:pixels_version, socket.assigns.pixels_version + 1)
        |> assign(:stats, stats)}
     else
-      # Still update stats even for own pixels to ensure consistency
+      # Still update stats even for own session to ensure consistency
       {:noreply, assign(socket, :stats, stats)}
     end
   end
@@ -399,29 +353,6 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
     end
   end
 
-  # Handle user state changes from other tabs/sessions (incognito, different browsers)
-  def handle_info({:user_state_changed, seconds_remaining, user_stats}, socket) do
-    # Start cooldown timer if not already running
-    if seconds_remaining > 0 do
-      Process.send_after(self(), :update_cooldown, 1000)
-    end
-
-    {:noreply,
-     socket
-     |> assign(:can_place, seconds_remaining == 0)
-     |> assign(:seconds_remaining, seconds_remaining)
-     |> assign(:user_stats, user_stats)}
-  end
-
-  # Handle color changes from other tabs/sessions
-  def handle_info({:color_changed, color}, socket) do
-    {:noreply, assign(socket, selected_color: color)}
-  end
-
-  # Handle pixel mode change from other tabs/sessions
-  def handle_info({:pixel_mode_changed, mode}, socket) do
-    {:noreply, assign(socket, pixel_mode: mode)}
-  end
 
   defp serialize_pixels(pixels) do
     Enum.map(pixels, fn {{x, y}, data} ->
@@ -493,8 +424,8 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
     :crypto.strong_rand_bytes(8) |> Base.encode16(case: :lower)
   end
 
-  # Generate user-specific PubSub topic for syncing across all sessions
-  defp user_topic(user_id) do
-    "pixel_canvas:user:#{user_id}"
+  # Generate unique session ID for each LiveView connection
+  defp generate_session_id do
+    :crypto.strong_rand_bytes(16) |> Base.encode16(case: :lower)
   end
 end
