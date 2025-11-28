@@ -627,7 +627,7 @@
     use:initScrollContainer
     use:initContainer
   >
-    <div class="flex items-center justify-center min-h-full" style="min-width: max-content; padding: {isMobile ? '2rem 2rem 6rem 2rem' : '2rem'};">
+    <div class="flex items-center justify-center min-h-full" style="min-width: max-content; padding: {isMobile ? '4rem 2rem 6rem 2rem' : '2rem'};">
       <div class="relative">
         <canvas
           use:initCanvas
