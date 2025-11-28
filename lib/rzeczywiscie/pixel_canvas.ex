@@ -86,7 +86,7 @@ defmodule Rzeczywiscie.PixelCanvas do
   Checks if a user can place a pixel (cooldown check).
   Returns :ok or {:error, seconds_remaining}
   """
-  def check_cooldown(user_id, is_massive \\ false) do
+  def check_cooldown(user_id, _is_massive \\ false) do
     last_placement =
       Pixel
       |> where([p], p.user_id == ^user_id)
@@ -94,13 +94,13 @@ defmodule Rzeczywiscie.PixelCanvas do
       |> limit(1)
       |> Repo.one()
 
-    cooldown = if is_massive, do: @massive_pixel_cooldown_seconds, else: @cooldown_seconds
-
     case last_placement do
       nil ->
         :ok
 
       pixel ->
+        # Determine cooldown based on whether the LAST pixel placed was massive
+        cooldown = if pixel.is_massive, do: @massive_pixel_cooldown_seconds, else: @cooldown_seconds
         seconds_since = DateTime.diff(DateTime.utc_now(), pixel.updated_at, :second)
 
         if seconds_since >= cooldown do
