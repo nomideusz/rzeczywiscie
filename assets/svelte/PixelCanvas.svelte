@@ -500,6 +500,9 @@
   function handleTouchEnd(event) {
     // Place pixel only if it was a tap (no significant movement) and can place
     if (singleTouchStart && !touchMoved && canPlace && event.changedTouches.length > 0) {
+      // Prevent synthetic mouse/click events from firing after touch
+      event.preventDefault()
+
       // Use changedTouches to get the exact position where the finger was lifted
       const touch = event.changedTouches[0]
       const { x, y } = getCoords(touch.clientX, touch.clientY)
