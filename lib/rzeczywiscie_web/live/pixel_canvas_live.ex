@@ -17,7 +17,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
     pixels = PixelCanvas.load_canvas()
     stats = PixelCanvas.stats()
     user_stats = PixelCanvas.get_user_stats(user_id)
-    cooldown = PixelCanvas.check_cooldown(user_id, false)
+    cooldown = PixelCanvas.check_cooldown(user_id)
     seconds_remaining = get_seconds_remaining(cooldown)
 
     # Start cooldown timer if user is on cooldown
