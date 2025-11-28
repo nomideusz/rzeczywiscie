@@ -53,7 +53,7 @@
   // Detect mobile and check if canvas is scrollable
   onMount(() => {
     isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0
-    
+
     // Set default zoom higher on mobile so pixels are visible
     if (isMobile) {
       zoom = 2
@@ -62,7 +62,7 @@
       // Center canvas after a short delay to let it render
       setTimeout(centerCanvas, 100)
     }
-    
+
     const savedColor = localStorage.getItem('pixels_selected_color')
     if (savedColor && colors.includes(savedColor)) {
       selectedColor = savedColor
@@ -74,6 +74,22 @@
 
     // Check scrollability after a short delay to let canvas render
     setTimeout(checkScrollability, 500)
+
+    // Listen for color changes from other tabs
+    const handleStorageChange = (event) => {
+      if (event.key === 'pixels_selected_color' && event.newValue) {
+        if (colors.includes(event.newValue)) {
+          selectedColor = event.newValue
+          live.pushEvent("select_color", { color: event.newValue })
+        }
+      }
+    }
+
+    window.addEventListener('storage', handleStorageChange)
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange)
+    }
   })
 
   function checkScrollability() {
