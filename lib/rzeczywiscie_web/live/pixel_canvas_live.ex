@@ -38,7 +38,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
       |> assign(:seconds_remaining, seconds_remaining)
       |> assign(:stats, stats)
       |> assign(:user_stats, user_stats)
-      |> assign(:is_massive_mode, false)
+      |> assign(:pixel_mode, :normal)  # Can be :normal, :mega, or :massive
       |> assign(:page_title, "Pixels")
       |> assign(:pixels_version, 0)
       |> assign(:cursors, %{})
@@ -63,7 +63,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
         stats: @stats,
         cursors: serialize_cursors(@cursors),
         userStats: serialize_user_stats(@user_stats),
-        isMassiveMode: @is_massive_mode
+        pixelMode: @pixel_mode
       }}
       socket={@socket}
     />
@@ -89,20 +89,17 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
             color: color,
             user_id: user_id,
             updated_at: pixel.updated_at,
-            is_massive: false
+            pixel_tier: :normal
           })
 
           stats = PixelCanvas.stats()
           user_stats = PixelCanvas.get_user_stats(user_id)
 
-          # Check if user just unlocked a massive pixel
-          unlocked = rem(user_stats.pixels_placed_count, 15) == 0
-
           # Broadcast to all connected clients (including stats)
           Phoenix.PubSub.broadcast(
             Rzeczywiscie.PubSub,
             @topic,
-            {:pixel_placed, x, y, color, user_id, false, stats}
+            {:pixel_placed, x, y, color, user_id, :normal, stats}
           )
 
           # Broadcast user state to all sessions of this user (normal + incognito tabs)
@@ -139,13 +136,67 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
     end
   end
 
+  def handle_event("place_mega_pixel", %{"x" => x, "y" => y}, socket) do
+    color = socket.assigns.selected_color
+    user_id = socket.assigns.user_id
+
+    case PixelCanvas.place_mega_pixel(x, y, color, user_id) do
+      {:ok, _center_pixel} ->
+        # Reload all pixels (easier than updating 9 individually)
+        pixels = PixelCanvas.load_canvas()
+        stats = PixelCanvas.stats()
+        user_stats = PixelCanvas.get_user_stats(user_id)
+
+        # Broadcast mega pixel placement
+        Phoenix.PubSub.broadcast(
+          Rzeczywiscie.PubSub,
+          @topic,
+          {:mega_pixel_placed, x, y, color, user_id, stats}
+        )
+
+        # Broadcast user state to all sessions of this user (normal + incognito tabs)
+        Phoenix.PubSub.broadcast(
+          Rzeczywiscie.PubSub,
+          user_topic(user_id),
+          {:user_state_changed, 45, user_stats}
+        )
+
+        # Schedule cooldown update (mega pixel has 45s cooldown)
+        Process.send_after(self(), :update_cooldown, 1000)
+
+        {:noreply,
+         socket
+         |> assign(:pixels, pixels)
+         |> assign(:pixels_version, socket.assigns.pixels_version + 1)
+         |> assign(:can_place, false)
+         |> assign(:seconds_remaining, 45)
+         |> assign(:stats, stats)
+         |> assign(:user_stats, user_stats)
+         |> put_flash(:info, "Mega pixel placed! ⭐")}
+
+      {:error, {:cooldown, _seconds}} ->
+        # Don't show toast - visual cooldown timer on color picker is enough
+        {:noreply, socket}
+
+      {:error, :no_mega_pixels_available} ->
+        {:noreply, put_flash(socket, :error, "No mega pixels available. Place 15 regular pixels to unlock one!")}
+
+      {:error, :insufficient_space} ->
+        {:noreply, put_flash(socket, :error, "Insufficient space for 3x3 mega pixel")}
+
+      {:error, changeset} ->
+        error_msg = format_error(changeset)
+        {:noreply, put_flash(socket, :error, error_msg)}
+    end
+  end
+
   def handle_event("place_massive_pixel", %{"x" => x, "y" => y}, socket) do
     color = socket.assigns.selected_color
     user_id = socket.assigns.user_id
 
     case PixelCanvas.place_massive_pixel(x, y, color, user_id) do
       {:ok, _center_pixel} ->
-        # Reload all pixels (easier than updating 9 individually)
+        # Reload all pixels (easier than updating 25 individually)
         pixels = PixelCanvas.load_canvas()
         stats = PixelCanvas.stats()
         user_stats = PixelCanvas.get_user_stats(user_id)
@@ -161,10 +212,10 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
         Phoenix.PubSub.broadcast(
           Rzeczywiscie.PubSub,
           user_topic(user_id),
-          {:user_state_changed, 45, user_stats}
+          {:user_state_changed, 120, user_stats}
         )
 
-        # Schedule cooldown update (massive pixel has 3x cooldown)
+        # Schedule cooldown update (massive pixel has 120s cooldown)
         Process.send_after(self(), :update_cooldown, 1000)
 
         {:noreply,
@@ -172,20 +223,20 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
          |> assign(:pixels, pixels)
          |> assign(:pixels_version, socket.assigns.pixels_version + 1)
          |> assign(:can_place, false)
-         |> assign(:seconds_remaining, 45)
+         |> assign(:seconds_remaining, 120)
          |> assign(:stats, stats)
          |> assign(:user_stats, user_stats)
-         |> put_flash(:info, "Massive pixel placed! 🚀")}
+         |> put_flash(:info, "Massive pixel placed! 🌈")}
 
       {:error, {:cooldown, _seconds}} ->
         # Don't show toast - visual cooldown timer on color picker is enough
         {:noreply, socket}
 
       {:error, :no_massive_pixels_available} ->
-        {:noreply, put_flash(socket, :error, "No massive pixels available. Place 15 regular pixels to unlock one!")}
+        {:noreply, put_flash(socket, :error, "No massive pixels available. Use 5 mega pixels to unlock one!")}
 
       {:error, :insufficient_space} ->
-        {:noreply, put_flash(socket, :error, "Insufficient space for 3x3 massive pixel")}
+        {:noreply, put_flash(socket, :error, "Insufficient space for 5x5 massive pixel")}
 
       {:error, changeset} ->
         error_msg = format_error(changeset)
@@ -193,18 +244,18 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
     end
   end
 
-  def handle_event("toggle_massive_mode", _, socket) do
+  def handle_event("toggle_pixel_mode", %{"mode" => mode}, socket) do
     user_id = socket.assigns.user_id
-    new_massive_mode = !socket.assigns.is_massive_mode
+    new_mode = String.to_existing_atom(mode)
 
-    # Broadcast massive mode toggle to all sessions of this user
+    # Broadcast pixel mode change to all sessions of this user
     Phoenix.PubSub.broadcast(
       Rzeczywiscie.PubSub,
       user_topic(user_id),
-      {:massive_mode_changed, new_massive_mode}
+      {:pixel_mode_changed, new_mode}
     )
 
-    {:noreply, assign(socket, is_massive_mode: new_massive_mode)}
+    {:noreply, assign(socket, pixel_mode: new_mode)}
   end
 
   def handle_event("select_color", %{"color" => color}, socket) do
@@ -270,15 +321,33 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
   end
 
   # Handle pixel placed by other users
-  def handle_info({:pixel_placed, x, y, color, user_id, is_massive, stats}, socket) do
+  def handle_info({:pixel_placed, x, y, color, user_id, pixel_tier, stats}, socket) do
     # Update pixels for other users, but always update stats for everyone
     if user_id != socket.assigns.user_id do
       pixels = Map.put(socket.assigns.pixels, {x, y}, %{
         color: color,
         user_id: user_id,
         updated_at: DateTime.utc_now(),
-        is_massive: is_massive
+        pixel_tier: pixel_tier
       })
+
+      {:noreply,
+       socket
+       |> assign(:pixels, pixels)
+       |> assign(:pixels_version, socket.assigns.pixels_version + 1)
+       |> assign(:stats, stats)}
+    else
+      # Still update stats even for own pixels to ensure consistency
+      {:noreply, assign(socket, :stats, stats)}
+    end
+  end
+
+  # Handle mega pixel placed by other users
+  def handle_info({:mega_pixel_placed, _x, _y, _color, user_id, stats}, socket) do
+    # Update pixels for other users, but always update stats for everyone
+    if user_id != socket.assigns.user_id do
+      # Reload all pixels to get the 3x3 grid
+      pixels = PixelCanvas.load_canvas()
 
       {:noreply,
        socket
@@ -295,7 +364,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
   def handle_info({:massive_pixel_placed, _x, _y, _color, user_id, stats}, socket) do
     # Update pixels for other users, but always update stats for everyone
     if user_id != socket.assigns.user_id do
-      # Reload all pixels to get the 3x3 grid
+      # Reload all pixels to get the 5x5 grid
       pixels = PixelCanvas.load_canvas()
 
       {:noreply,
@@ -349,14 +418,14 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
     {:noreply, assign(socket, selected_color: color)}
   end
 
-  # Handle massive mode toggle from other tabs/sessions
-  def handle_info({:massive_mode_changed, is_massive}, socket) do
-    {:noreply, assign(socket, is_massive_mode: is_massive)}
+  # Handle pixel mode change from other tabs/sessions
+  def handle_info({:pixel_mode_changed, mode}, socket) do
+    {:noreply, assign(socket, pixel_mode: mode)}
   end
 
   defp serialize_pixels(pixels) do
     Enum.map(pixels, fn {{x, y}, data} ->
-      %{x: x, y: y, color: data.color, is_massive: data.is_massive || false}
+      %{x: x, y: y, color: data.color, pixel_tier: Atom.to_string(data.pixel_tier)}
     end)
   end
 
@@ -374,8 +443,12 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
   defp serialize_user_stats(user_stats) do
     %{
       pixels_placed: user_stats.pixels_placed_count,
+      mega_pixels_available: user_stats.mega_pixels_available,
+      mega_pixels_used: user_stats.mega_pixels_used_count,
       massive_pixels_available: user_stats.massive_pixels_available,
-      progress_to_next: rem(user_stats.pixels_placed_count, 15)
+      progress_to_mega: rem(user_stats.pixels_placed_count, 15),
+      progress_to_massive_fusion: rem(user_stats.mega_pixels_used_count, 5),
+      progress_to_massive_bonus: rem(user_stats.pixels_placed_count, 100)
     }
   end
 

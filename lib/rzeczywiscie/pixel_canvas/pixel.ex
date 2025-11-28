@@ -8,6 +8,7 @@ defmodule Rzeczywiscie.PixelCanvas.Pixel do
     field :color, :string
     field :user_id, :string
     field :is_massive, :boolean, default: false
+    field :pixel_tier, Ecto.Enum, values: [:normal, :mega, :massive], default: :normal
     belongs_to :parent_pixel, __MODULE__
 
     timestamps(type: :utc_datetime)
@@ -16,8 +17,8 @@ defmodule Rzeczywiscie.PixelCanvas.Pixel do
   @doc false
   def changeset(pixel, attrs) do
     pixel
-    |> cast(attrs, [:x, :y, :color, :user_id, :is_massive, :parent_pixel_id])
-    |> validate_required([:x, :y, :color, :user_id])
+    |> cast(attrs, [:x, :y, :color, :user_id, :is_massive, :pixel_tier, :parent_pixel_id])
+    |> validate_required([:x, :y, :color, :user_id, :pixel_tier])
     |> validate_number(:x, greater_than_or_equal_to: 0, less_than: 500)
     |> validate_number(:y, greater_than_or_equal_to: 0, less_than: 500)
     |> validate_inclusion(:color, valid_colors())
