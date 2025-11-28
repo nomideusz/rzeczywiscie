@@ -805,22 +805,22 @@
           <div class="relative h-2 bg-neutral-200 border border-neutral-300">
             <div
               class="absolute inset-y-0 left-0 bg-neutral-900 transition-all duration-300"
-              style="width: {(userStats.progress_to_massive_fusion / 5) * 100}%"
+              style="width: {(userStats.progress_to_massive_bonus / 100) * 100}%"
             ></div>
           </div>
           <p class="{isMobile ? 'text-[10px]' : 'text-xs'} text-neutral-500 mt-1">
-            Fusion: {userStats.progress_to_massive_fusion}/5 megas
+            {userStats.progress_to_massive_bonus}/100 pixels
           </p>
         </div>
         <div>
           <div class="relative h-2 bg-neutral-200 border border-neutral-300">
             <div
               class="absolute inset-y-0 left-0 bg-neutral-900 transition-all duration-300"
-              style="width: {(userStats.progress_to_massive_bonus / 100) * 100}%"
+              style="width: {(userStats.progress_to_massive_fusion / 5) * 100}%"
             ></div>
           </div>
           <p class="{isMobile ? 'text-[10px]' : 'text-xs'} text-neutral-500 mt-1">
-            Bonus: {userStats.progress_to_massive_bonus}/100 pixels
+            Fusion: {userStats.progress_to_massive_fusion}/5 megas
           </p>
         </div>
       </div>
