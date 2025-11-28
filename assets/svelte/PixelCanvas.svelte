@@ -75,12 +75,38 @@
     // Check scrollability after a short delay to let canvas render
     setTimeout(checkScrollability, 500)
 
-    // Listen for color changes from other tabs
+    // Listen for color, cooldown, and stats changes from other tabs
     const handleStorageChange = (event) => {
       if (event.key === 'pixels_selected_color' && event.newValue) {
         if (colors.includes(event.newValue)) {
           selectedColor = event.newValue
           live.pushEvent("select_color", { color: event.newValue })
+        }
+      }
+
+      if (event.key === 'pixels_cooldown_end') {
+        if (event.newValue) {
+          // Another tab placed a pixel, sync cooldown state
+          const endTime = parseInt(event.newValue, 10)
+          const now = Date.now()
+          const remaining = Math.max(0, Math.ceil((endTime - now) / 1000))
+
+          if (remaining > 0) {
+            live.pushEvent("sync_cooldown", { seconds: remaining })
+          }
+        } else {
+          // Cooldown cleared in another tab
+          live.pushEvent("clear_cooldown")
+        }
+      }
+
+      if (event.key === 'pixels_user_stats' && event.newValue) {
+        // Another tab's stats changed, update our display
+        try {
+          const stats = JSON.parse(event.newValue)
+          userStats = stats
+        } catch (e) {
+          console.error('Failed to parse user stats:', e)
         }
       }
     }
@@ -123,6 +149,21 @@
 
   // Cooldown progress (0 to 1)
   $: cooldownProgress = canPlace ? 1 : (cooldownSeconds - secondsRemaining) / cooldownSeconds
+
+  // Sync cooldown state to localStorage for other tabs
+  $: if (!canPlace && secondsRemaining > 0) {
+    // Store when cooldown will end
+    const endTime = Date.now() + (secondsRemaining * 1000)
+    localStorage.setItem('pixels_cooldown_end', endTime.toString())
+  } else if (canPlace) {
+    // Cooldown finished, clear from localStorage
+    localStorage.removeItem('pixels_cooldown_end')
+  }
+
+  // Sync user stats (massive pixel progress) to localStorage for other tabs
+  $: if (userStats) {
+    localStorage.setItem('pixels_user_stats', JSON.stringify(userStats))
+  }
 
   // Calculate responsive pixel size based on available space
   function calculatePixelSize() {
@@ -696,19 +737,9 @@
         <button
           on:click={toggleMassiveMode}
           disabled={!canPlace}
-          class="relative bg-neutral-900 text-white font-bold py-2 px-4 border-2 shadow-lg transition-all overflow-hidden {canPlace ? 'hover:scale-105 border-neutral-900' : 'opacity-60 cursor-not-allowed border-neutral-700'} {isMassiveMode ? 'border-white' : 'border-neutral-900'}"
+          class="bg-neutral-900 text-white font-bold py-2 px-4 border-2 shadow-lg transition-all {canPlace ? 'hover:scale-105 border-neutral-900' : 'opacity-60 cursor-not-allowed border-neutral-700'} {isMassiveMode ? 'border-white' : 'border-neutral-900'}"
         >
-          {#if !canPlace}
-            <svg class="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 100 100" style="pointer-events: none;">
-              <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="10"/>
-              <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="10"
-                stroke-dasharray="283" stroke-dashoffset={283 - cooldownProgress * 283} stroke-linecap="round"
-                class="transition-all duration-1000 ease-linear"/>
-            </svg>
-            <span class="relative text-lg font-bold">{secondsRemaining}</span>
-          {:else}
-            <span class="text-sm">{isMassiveMode ? '🔥 MASSIVE MODE' : '⭐ Use Massive'}</span>
-          {/if}
+          <span class="text-sm">{isMassiveMode ? '🔥 MASSIVE MODE' : '⭐ Use Massive'}</span>
         </button>
       {/if}
     </div>

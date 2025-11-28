@@ -5,11 +5,14 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
   @topic "pixel_canvas"
 
   def mount(_params, _session, socket) do
-    if connected?(socket) do
-      Phoenix.PubSub.subscribe(Rzeczywiscie.PubSub, @topic)
-    end
-
     user_id = get_or_create_user_id(socket)
+
+    if connected?(socket) do
+      # Subscribe to global canvas updates
+      Phoenix.PubSub.subscribe(Rzeczywiscie.PubSub, @topic)
+      # Subscribe to user-specific updates (cooldown, stats)
+      Phoenix.PubSub.subscribe(Rzeczywiscie.PubSub, user_topic(user_id))
+    end
     {width, height} = PixelCanvas.canvas_size()
     pixels = PixelCanvas.load_canvas()
     stats = PixelCanvas.stats()
@@ -102,6 +105,13 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
             {:pixel_placed, x, y, color, user_id, false, stats}
           )
 
+          # Broadcast user state to all sessions of this user (normal + incognito tabs)
+          Phoenix.PubSub.broadcast(
+            Rzeczywiscie.PubSub,
+            user_topic(user_id),
+            {:user_state_changed, PixelCanvas.cooldown_seconds(), user_stats}
+          )
+
           # Schedule cooldown update
           Process.send_after(self(), :update_cooldown, 1000)
 
@@ -154,6 +164,13 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
           {:massive_pixel_placed, x, y, color, user_id, stats}
         )
 
+        # Broadcast user state to all sessions of this user (normal + incognito tabs)
+        Phoenix.PubSub.broadcast(
+          Rzeczywiscie.PubSub,
+          user_topic(user_id),
+          {:user_state_changed, 45, user_stats}
+        )
+
         # Schedule cooldown update (massive pixel has 3x cooldown)
         Process.send_after(self(), :update_cooldown, 1000)
 
@@ -202,6 +219,23 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
     )
 
     {:noreply, socket}
+  end
+
+  def handle_event("sync_cooldown", %{"seconds" => seconds}, socket) do
+    # Another tab placed a pixel, sync cooldown state
+    socket = socket
+      |> assign(:can_place, false)
+      |> assign(:seconds_remaining, seconds)
+
+    # Start cooldown update timer
+    Process.send_after(self(), :update_cooldown, 1000)
+
+    {:noreply, socket}
+  end
+
+  def handle_event("clear_cooldown", _, socket) do
+    # Another tab's cooldown expired
+    {:noreply, assign(socket, can_place: true, seconds_remaining: 0)}
   end
 
   # Update cooldown timer every second
@@ -281,6 +315,20 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
     end
   end
 
+  # Handle user state changes from other tabs/sessions (incognito, different browsers)
+  def handle_info({:user_state_changed, seconds_remaining, user_stats}, socket) do
+    # Start cooldown timer if not already running
+    if seconds_remaining > 0 do
+      Process.send_after(self(), :update_cooldown, 1000)
+    end
+
+    {:noreply,
+     socket
+     |> assign(:can_place, seconds_remaining == 0)
+     |> assign(:seconds_remaining, seconds_remaining)
+     |> assign(:user_stats, user_stats)}
+  end
+
   defp serialize_pixels(pixels) do
     Enum.map(pixels, fn {{x, y}, data} ->
       %{x: x, y: y, color: data.color, is_massive: data.is_massive || false}
@@ -345,5 +393,10 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
 
   defp get_fallback_id do
     :crypto.strong_rand_bytes(8) |> Base.encode16(case: :lower)
+  end
+
+  # Generate user-specific PubSub topic for syncing across all sessions
+  defp user_topic(user_id) do
+    "pixel_canvas:user:#{user_id}"
   end
 end
