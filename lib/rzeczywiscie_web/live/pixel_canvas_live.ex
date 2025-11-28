@@ -184,8 +184,9 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
          |> assign(:user_stats, user_stats)
          |> put_flash(:info, "Massive pixel placed! 🚀")}
 
-      {:error, {:cooldown, seconds}} ->
-        {:noreply, put_flash(socket, :error, "Cooldown: #{seconds}s remaining")}
+      {:error, {:cooldown, _seconds}} ->
+        # Don't show toast - visual cooldown timer on color picker is enough
+        {:noreply, socket}
 
       {:error, :no_massive_pixels_available} ->
         {:noreply, put_flash(socket, :error, "No massive pixels available. Place 15 regular pixels to unlock one!")}
