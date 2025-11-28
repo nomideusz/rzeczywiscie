@@ -676,9 +676,20 @@
       {#if userStats.massive_pixels_available > 0}
         <button
           on:click={toggleMassiveMode}
-          class="bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold py-2 px-4 rounded-xl shadow-lg transition-all hover:scale-105 {isMassiveMode ? 'ring-4 ring-yellow-400' : ''}"
+          disabled={!canPlace}
+          class="relative bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold py-2 px-4 rounded-xl shadow-lg transition-all overflow-hidden {canPlace ? 'hover:scale-105' : 'opacity-60 cursor-not-allowed'} {isMassiveMode ? 'ring-4 ring-yellow-400' : ''}"
         >
-          <span class="text-sm">{isMassiveMode ? '🔥 MASSIVE MODE' : '⭐ Use Massive'}</span>
+          {#if !canPlace}
+            <svg class="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 100 100" style="pointer-events: none;">
+              <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="10"/>
+              <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="10"
+                stroke-dasharray="283" stroke-dashoffset={283 - cooldownProgress * 283} stroke-linecap="round"
+                class="transition-all duration-1000 ease-linear"/>
+            </svg>
+            <span class="relative text-lg font-bold">{secondsRemaining}</span>
+          {:else}
+            <span class="text-sm">{isMassiveMode ? '🔥 MASSIVE MODE' : '⭐ Use Massive'}</span>
+          {/if}
         </button>
       {/if}
     </div>
