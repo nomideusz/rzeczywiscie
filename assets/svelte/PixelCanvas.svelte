@@ -829,17 +829,17 @@
       </div>
 
       <!-- Mode Toggle Buttons -->
-      <div class="flex gap-2">
+      <div class="flex gap-2 w-full">
         <button
           on:click={() => togglePixelMode("normal")}
-          class="flex-1 font-bold py-2 px-3 border-2 shadow-lg transition-all {pixelMode === 'normal' ? 'bg-neutral-900 text-white border-white' : 'bg-white text-neutral-900 border-neutral-900'}"
+          class="flex-1 font-bold py-2 px-3 border-2 shadow-lg transition-all cursor-pointer {pixelMode === 'normal' ? 'bg-neutral-900 text-white border-white' : 'bg-white text-neutral-900 border-neutral-900 hover:bg-neutral-50'}"
         >
           <span class="text-xs">Normal</span>
         </button>
         {#if userStats.mega_pixels_available > 0}
           <button
             on:click={() => togglePixelMode("mega")}
-            class="flex-1 font-bold py-2 px-3 border-2 shadow-lg transition-all {pixelMode === 'mega' ? 'bg-neutral-900 text-white border-white' : 'bg-white text-neutral-900 border-neutral-900'}"
+            class="flex-1 font-bold py-2 px-3 border-2 shadow-lg transition-all cursor-pointer {pixelMode === 'mega' ? 'bg-neutral-900 text-white border-white' : 'bg-white text-neutral-900 border-neutral-900 hover:bg-neutral-50'}"
           >
             <span class="text-xs">⭐ Mega</span>
           </button>
@@ -847,7 +847,7 @@
         {#if userStats.massive_pixels_available > 0}
           <button
             on:click={() => togglePixelMode("massive")}
-            class="flex-1 font-bold py-2 px-3 border-2 shadow-lg transition-all {pixelMode === 'massive' ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white border-white' : 'bg-white text-neutral-900 border-purple-600'}"
+            class="flex-1 font-bold py-2 px-3 border-2 shadow-lg transition-all cursor-pointer {pixelMode === 'massive' ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white border-white' : 'bg-white text-neutral-900 border-purple-600 hover:bg-purple-50'}"
           >
             <span class="text-xs">🌈 Massive</span>
           </button>
