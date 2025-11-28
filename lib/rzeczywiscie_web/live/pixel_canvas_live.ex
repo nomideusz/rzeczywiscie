@@ -399,7 +399,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
 
   # Get or create user ID (same pattern as other features)
   defp get_or_create_user_id(socket) do
-    get_user_agent_id(socket) || get_peer_ip_id(socket) || get_fallback_id()
+    get_peer_ip_id(socket) || get_user_agent_id(socket) || get_fallback_id()
   end
 
   defp get_user_agent_id(socket) do
