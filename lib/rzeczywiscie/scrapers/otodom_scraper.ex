@@ -549,8 +549,8 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
         url: full_url,
         price: price,
         currency: "PLN",
-        area_sqm: extract_area(card),
-        rooms: extract_rooms(card),
+        area_sqm: extract_area(card, title),
+        rooms: extract_rooms(card, title),
         transaction_type: validated_transaction_type,
         property_type: property_type,
         city: extract_city(card),
@@ -708,22 +708,26 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
 
   defp parse_price(text), do: ExtractionHelpers.parse_price(text)
 
-  defp extract_area(card) do
-    text = Floki.text(card)
-    ExtractionHelpers.extract_area_from_text(text)
+  defp extract_area(card, title) do
+    card_text = Floki.text(card)
+    # Combine card text with title for better extraction
+    full_text = if title, do: "#{title} #{card_text}", else: card_text
+    ExtractionHelpers.extract_area_from_text(full_text)
   end
 
-  defp extract_rooms(card) do
-    text = Floki.text(card)
+  defp extract_rooms(card, title) do
+    card_text = Floki.text(card)
+    # Combine card text with title for better extraction
+    full_text = if title, do: "#{title} #{card_text}", else: card_text
 
-    ExtractionHelpers.extract_number_with_unit(text, "pokoje")
+    result = ExtractionHelpers.extract_number_with_unit(full_text, "pokoje")
     |> case do
       nil ->
         # Try alternative patterns
-        ExtractionHelpers.extract_number_with_unit(text, "pokoi") ||
-          ExtractionHelpers.extract_number_with_unit(text, "pok\\.") ||
-          ExtractionHelpers.extract_number_with_unit(text, "pok") ||
-          ExtractionHelpers.extract_rooms_from_text(text)
+        ExtractionHelpers.extract_number_with_unit(full_text, "pokoi") ||
+          ExtractionHelpers.extract_number_with_unit(full_text, "pok\\.") ||
+          ExtractionHelpers.extract_number_with_unit(full_text, "pok") ||
+          ExtractionHelpers.extract_rooms_from_text(full_text)
 
       decimal ->
         Decimal.to_integer(decimal)
@@ -733,6 +737,8 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
       num when is_integer(num) -> num
       decimal -> Decimal.to_integer(decimal)
     end
+    
+    result
   end
 
   defp extract_city(card) do
