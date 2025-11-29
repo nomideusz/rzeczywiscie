@@ -415,10 +415,8 @@ defmodule RzeczywiscieWeb.AdminLive do
 
   # Cleanup helpers
   defp run_cleanup_task(:stale) do
-    case RealEstate.mark_stale_properties_inactive(48) do
-      {:ok, count} -> "Marked #{count} stale properties as inactive"
-      {:error, reason} -> "Error: #{reason}"
-    end
+    {count, _} = RealEstate.mark_stale_properties_inactive(48)
+    "Marked #{count} stale properties as inactive"
   end
 
   defp run_cleanup_task(:duplicates) do
