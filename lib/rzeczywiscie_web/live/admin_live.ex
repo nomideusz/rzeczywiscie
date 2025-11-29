@@ -638,6 +638,9 @@ defmodule RzeczywiscieWeb.AdminLive do
       String.contains?(text_lower, "na sprzedaz") -> "sprzedaż"
       String.contains?(text_lower, "/sprzedaz/") -> "sprzedaż"
       String.match?(text_lower, ~r/\bsprzedaz\b/) -> "sprzedaż"
+      # OLX specific patterns
+      String.contains?(text_lower, "/oferta/") && String.contains?(text_lower, "sprzeda") -> "sprzedaż"
+      String.contains?(text_lower, "id") && String.contains?(text_lower, ".html") && !String.contains?(text_lower, "wynajem") -> "sprzedaż"
       
       # Keywords for rent (wynajem)
       String.contains?(text_lower, "wynajme") -> "wynajem"
@@ -649,6 +652,10 @@ defmodule RzeczywiscieWeb.AdminLive do
       String.contains?(text_lower, "/wynajem/") -> "wynajem"
       String.match?(text_lower, ~r/\bwynajem\b/) -> "wynajem"
       String.contains?(text_lower, "najem") -> "wynajem"
+      String.contains?(text_lower, "najm") -> "wynajem"
+      # Otodom rent patterns
+      String.contains?(text_lower, "rent") -> "wynajem"
+      String.contains?(text_lower, "/pl/oferta/") && String.contains?(text_lower, "miesi") -> "wynajem"
 
       true -> nil
     end
@@ -664,46 +671,73 @@ defmodule RzeczywiscieWeb.AdminLive do
       String.contains?(text_lower, "lokal-biurowy") -> "lokal użytkowy"
       String.contains?(text_lower, "lokal-handlowy") -> "lokal użytkowy"
       String.contains?(text_lower, "/lokal/") -> "lokal użytkowy"
-      String.match?(text_lower, ~r/\blokal\b/) -> "lokal użytkowy"
       String.contains?(text_lower, "biuro") -> "lokal użytkowy"
       String.contains?(text_lower, "sklep") -> "lokal użytkowy"
       String.contains?(text_lower, "magazyn") -> "lokal użytkowy"
       String.contains?(text_lower, "hala") -> "lokal użytkowy"
+      String.contains?(text_lower, "uslugowy") -> "lokal użytkowy"
+      String.contains?(text_lower, "handel") -> "lokal użytkowy"
 
-      # Apartment (mieszkanie)
+      # Apartment (mieszkanie) - most common, check after commercial
       String.contains?(text_lower, "mieszkanie") -> "mieszkanie"
       String.contains?(text_lower, "mieszkania") -> "mieszkanie"
       String.contains?(text_lower, "/mieszkanie/") -> "mieszkanie"
       String.match?(text_lower, ~r/\bmieszkanie\b/) -> "mieszkanie"
+      # OLX apartment patterns
+      String.contains?(text_lower, "/nieruchomosci/mieszkania/") -> "mieszkanie"
+      String.contains?(text_lower, "pokoje") && String.contains?(text_lower, "m2") -> "mieszkanie"
+      # Otodom apartment patterns  
+      String.contains?(text_lower, "/apartment/") -> "mieszkanie"
+      String.contains?(text_lower, "/mieszkania/") -> "mieszkanie"
+      String.contains?(text_lower, "/pl/oferta/") && String.match?(text_lower, ~r/\d+\s*m/) -> "mieszkanie"
+      # Size indicators often mean apartment
+      String.match?(text_lower, ~r/\d{2,3}\s*m2/) && !String.contains?(text_lower, "dom") && !String.contains?(text_lower, "dzialka") -> "mieszkanie"
+      String.match?(text_lower, ~r/\d{1}\s*pok/) -> "mieszkanie"
       # Common abbreviations
       String.match?(text_lower, ~r/\bmiesz\b/) -> "mieszkanie"
       String.match?(text_lower, ~r/\bm\d/) -> "mieszkanie"  # M2, M3, M4 etc.
+      String.match?(text_lower, ~r/\d+\s*pok/) -> "mieszkanie"
 
       # House (dom)
       String.contains?(text_lower, "-dom-") -> "dom"
       String.contains?(text_lower, "/dom-") -> "dom"
       String.contains?(text_lower, "/dom/") -> "dom"
+      String.contains?(text_lower, "/domy/") -> "dom"
       String.match?(text_lower, ~r/\bdom\b/) -> "dom"
-      String.contains?(text_lower, "domy") -> "dom"
       String.contains?(text_lower, "domek") -> "dom"
+      String.contains?(text_lower, "house") -> "dom"
+      # Otodom house patterns
+      String.contains?(text_lower, "/nieruchomosci/domy/") -> "dom"
 
       # Room (pokój)
       String.contains?(text_lower, "pokoj") -> "pokój"
       String.contains?(text_lower, "pokój") -> "pokój"
+      String.contains?(text_lower, "/stancje-pokoje/") -> "pokój"
       String.contains?(text_lower, "stancja") -> "pokój"
       String.contains?(text_lower, "kawalerka") -> "pokój"
+      # Shared accommodation patterns
+      String.contains?(text_lower, "wspolny") -> "pokój"
+      String.contains?(text_lower, "akademik") -> "pokój"
 
       # Garage (garaż)
       String.contains?(text_lower, "garaz") -> "garaż"
       String.contains?(text_lower, "garaż") -> "garaż"
+      String.contains?(text_lower, "/garaze/") -> "garaż"
       String.contains?(text_lower, "miejsce parkingowe") -> "garaż"
       String.contains?(text_lower, "parking") -> "garaż"
+      String.contains?(text_lower, "garage") -> "garaż"
 
       # Plot/land (działka)
       String.contains?(text_lower, "dzialka") -> "działka"
       String.contains?(text_lower, "działka") -> "działka"
+      String.contains?(text_lower, "/dzialki/") -> "działka"
       String.contains?(text_lower, "grunt") -> "działka"
       String.contains?(text_lower, "teren") -> "działka"
+      String.contains?(text_lower, "budowlana") -> "działka"
+      String.contains?(text_lower, "land") -> "działka"
+
+      # If we still can't determine and it looks like OLX apartment listing
+      String.contains?(text_lower, "olx.pl") && String.match?(text_lower, ~r/\d+/) && !String.contains?(text_lower, "dom") -> "mieszkanie"
 
       true -> nil
     end
