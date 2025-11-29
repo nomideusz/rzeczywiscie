@@ -4,6 +4,7 @@ defmodule RzeczywiscieWeb.AdminLive do
   import Ecto.Query
   require Logger
   alias Rzeczywiscie.Repo
+  alias Rzeczywiscie.RealEstate
   alias Rzeczywiscie.RealEstate.Property
 
   @impl true
