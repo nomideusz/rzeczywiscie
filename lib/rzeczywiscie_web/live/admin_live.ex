@@ -923,19 +923,27 @@ defmodule RzeczywiscieWeb.AdminLive do
 
       # ULTRA-AGGRESSIVE FALLBACK: If we still don't know and it's OLX/Otodom
       # Default to mieszkanie (apartment) - most common property type (~70% of listings)
-      # Simplified: just check domain, exclude obvious non-apartments
+      # Use word boundaries to avoid matching "dom" in "otodom"
       (String.contains?(text_lower, "olx.pl") or String.contains?(text_lower, "otodom.pl")) and
-        not String.contains?(text_lower, "dom") and
+        not String.match?(text_lower, ~r/\bdom\b/) and
+        not String.match?(text_lower, ~r/\bdomy\b/) and
+        not String.contains?(text_lower, "/dom/") and
+        not String.contains?(text_lower, "/domy/") and
         not String.contains?(text_lower, "dzialka") and
+        not String.contains?(text_lower, "działka") and
         not String.contains?(text_lower, "garaz") and
+        not String.contains?(text_lower, "garaż") and
         not String.contains?(text_lower, "parking") and
         not String.contains?(text_lower, "grunt") ->
         "mieszkanie"
       
       # EXTREME FALLBACK: If we STILL have no property type
       # Default to mieszkanie (apartment) - most common property type in Poland
-      # Only exclude if we see clear indicators of other types
-      not String.contains?(text_lower, "dom") and
+      # Use word boundaries to avoid false matches
+      not String.match?(text_lower, ~r/\bdom\b/) and
+        not String.match?(text_lower, ~r/\bdomy\b/) and
+        not String.contains?(text_lower, "/dom/") and
+        not String.contains?(text_lower, "/domy/") and
         not String.contains?(text_lower, "house") and
         not String.contains?(text_lower, "dzialka") and
         not String.contains?(text_lower, "działka") and
