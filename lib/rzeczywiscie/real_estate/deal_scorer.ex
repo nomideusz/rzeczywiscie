@@ -364,31 +364,82 @@ defmodule Rzeczywiscie.RealEstate.DealScorer do
     end
   end
 
-  defp score_price_drop(%Property{id: property_id}) do
-    # Check for recent price drops (last 14 days)
-    cutoff = DateTime.utc_now() |> DateTime.add(-14 * 24 * 3600, :second)
-    
-    recent_drop = from(ph in PriceHistory,
-      where: ph.property_id == ^property_id and 
-             ph.detected_at >= ^cutoff and 
-             ph.change_percentage < 0,
-      order_by: [desc: ph.detected_at],
-      limit: 1
+  defp score_price_drop(%Property{id: property_id, price: current_price}) do
+    # Get full price history for trend analysis
+    history = from(ph in PriceHistory,
+      where: ph.property_id == ^property_id,
+      order_by: [asc: ph.detected_at]
     )
-    |> Repo.one()
+    |> Repo.all()
     
-    case recent_drop do
-      nil -> 0
-      %{change_percentage: pct} ->
-        drop = Decimal.to_float(pct) |> abs()
-        cond do
-          drop >= 20 -> 25  # 20%+ drop - huge signal
-          drop >= 15 -> 20
-          drop >= 10 -> 15
-          drop >= 5 -> 10
-          true -> 5
-        end
+    case history do
+      [] -> 0
+      entries ->
+        # Analyze the full price history
+        analyze_price_history(entries, current_price)
     end
+  end
+  
+  defp analyze_price_history(history, current_price) when is_list(history) do
+    # Count price drops (negative change_percentage)
+    drop_count = Enum.count(history, fn h -> 
+      h.change_percentage && Decimal.compare(h.change_percentage, Decimal.new("0")) == :lt
+    end)
+    
+    # Get the original (first) price
+    original_price = case List.first(history) do
+      %{price: price} when not is_nil(price) -> price
+      _ -> nil
+    end
+    
+    # Calculate total drop from original to current
+    total_drop_pct = if original_price && current_price do
+      orig = Decimal.to_float(original_price)
+      curr = Decimal.to_float(current_price)
+      if orig > 0 do
+        ((orig - curr) / orig) * 100
+      else
+        0
+      end
+    else
+      0
+    end
+    
+    # Check for recent activity (drop in last 14 days)
+    recent_cutoff = DateTime.utc_now() |> DateTime.add(-14 * 24 * 3600, :second)
+    has_recent_drop = Enum.any?(history, fn h ->
+      h.change_percentage && 
+      Decimal.compare(h.change_percentage, Decimal.new("0")) == :lt &&
+      DateTime.compare(h.detected_at, recent_cutoff) == :gt
+    end)
+    
+    # Score components:
+    # 1. Multiple drops bonus (motivated seller): 0-10 pts
+    drop_count_score = case drop_count do
+      0 -> 0
+      1 -> 3
+      2 -> 6
+      3 -> 8
+      _ -> 10  # 4+ drops = very motivated
+    end
+    
+    # 2. Total drop from original: 0-15 pts
+    total_drop_score = cond do
+      total_drop_pct >= 30 -> 15  # 30%+ total drop = desperate
+      total_drop_pct >= 25 -> 12
+      total_drop_pct >= 20 -> 10
+      total_drop_pct >= 15 -> 8
+      total_drop_pct >= 10 -> 6
+      total_drop_pct >= 5 -> 4
+      total_drop_pct > 0 -> 2
+      true -> 0
+    end
+    
+    # 3. Recent drop bonus: 0-5 pts
+    recent_drop_score = if has_recent_drop, do: 5, else: 0
+    
+    # Total: max 30 pts (increased from 25 to reflect importance)
+    drop_count_score + total_drop_score + recent_drop_score
   end
 
   # Strong urgency signals (rare, high intent)

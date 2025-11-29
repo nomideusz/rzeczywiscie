@@ -362,8 +362,13 @@ defmodule RzeczywiscieWeb.HotDealsLive do
                     <span class="font-bold">0-25 pts</span>
                   </div>
                   <div class="flex justify-between">
-                    <span>🔻 Recent price drop</span>
-                    <span class="font-bold">0-25 pts</span>
+                    <span>🔻 Price history trend</span>
+                    <span class="font-bold">0-30 pts</span>
+                  </div>
+                  <div class="text-[10px] opacity-60 pl-4 space-y-0.5">
+                    <div>• Multiple drops: 0-10</div>
+                    <div>• Total % dropped: 0-15</div>
+                    <div>• Recent drop: 0-5</div>
                   </div>
                   <div class="flex justify-between">
                     <span>⚡ Urgency keywords</span>
@@ -375,7 +380,7 @@ defmodule RzeczywiscieWeb.HotDealsLive do
                   </div>
                   <div class="border-t border-base-content/20 pt-2 mt-2 flex justify-between font-bold">
                     <span>Max possible</span>
-                    <span>100 pts</span>
+                    <span>105 pts</span>
                   </div>
                 </div>
               </div>
