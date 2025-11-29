@@ -1348,8 +1348,15 @@
               {/if}
             </div>
 
-            <!-- Available Pixels Count (only if any) -->
-            {#if userStats.mega_pixels_available > 0 || userStats.massive_pixels_available > 0 || Object.values(userStats.special_pixels_available || {}).some(c => c > 0)}
+            <!-- Current Mode & Available Pixels -->
+            {#if Object.values(userStats.special_pixels_available || {}).some(c => c > 0)}
+              <div class="pt-2 border-t border-neutral-200">
+                <div class="text-[10px] font-bold text-neutral-900 mb-1 flex items-center gap-1">
+                  <span class="bg-gradient-to-r from-purple-600 via-pink-500 to-purple-600 bg-clip-text text-transparent">Next click: 🦄</span>
+                </div>
+                <div class="text-[9px] text-neutral-400">Tap canvas to place unicorn</div>
+              </div>
+            {:else if userStats.mega_pixels_available > 0 || userStats.massive_pixels_available > 0}
               <div class="pt-2 border-t border-neutral-200">
                 <div class="text-[10px] text-neutral-600 mb-1">Available to place:</div>
                 <div class="flex flex-wrap gap-2">
@@ -1359,17 +1366,6 @@
                   {#if userStats.massive_pixels_available > 0}
                     <span class="text-[10px] font-bold text-neutral-900">5x5 ×{userStats.massive_pixels_available}</span>
                   {/if}
-                  {#each Object.entries(userStats.special_pixels_available || {}) as [type, count]}
-                    {#if count > 0}
-                      <span class="text-[10px] font-bold">
-                        {#if type === 'unicorn'}
-                          <span class="bg-gradient-to-r from-purple-600 via-pink-500 to-purple-600 bg-clip-text text-transparent">🦄 ×{count}</span>
-                        {:else}
-                          {type.charAt(0).toUpperCase() + type.slice(1)} ×{count}
-                        {/if}
-                      </span>
-                    {/if}
-                  {/each}
                 </div>
                 <div class="text-[9px] text-neutral-400 mt-1">Tap modes in bottom bar</div>
               </div>
@@ -1422,8 +1418,17 @@
             {/if}
           </div>
 
-          <!-- Available Pixels (only show when at least one is available) -->
-          {#if userStats.mega_pixels_available > 0 || userStats.massive_pixels_available > 0 || Object.values(userStats.special_pixels_available || {}).some(c => c > 0)}
+          <!-- Current Mode & Available Pixels -->
+          {#if Object.values(userStats.special_pixels_available || {}).some(c => c > 0)}
+            <div class="mt-3 pt-2 border-t border-neutral-200">
+              <div class="text-xs font-bold text-center py-2 px-3 bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded">
+                <div class="bg-gradient-to-r from-purple-600 via-pink-500 to-purple-600 bg-clip-text text-transparent">
+                  Next: 🦄 Unicorn
+                </div>
+                <div class="text-[10px] text-neutral-500 mt-0.5 font-normal">Click canvas to place</div>
+              </div>
+            </div>
+          {:else if userStats.mega_pixels_available > 0 || userStats.massive_pixels_available > 0}
             <div class="mt-3 pt-2 border-t border-neutral-200">
               <div class="grid grid-cols-2 gap-1.5">
                 {#if userStats.mega_pixels_available > 0}
@@ -1442,18 +1447,6 @@
                     Massive ×{userStats.massive_pixels_available}
                   </button>
                 {/if}
-                {#each Object.entries(userStats.special_pixels_available || {}) as [type, count]}
-                  {#if count > 0}
-                    <div class="text-xs font-bold py-1.5 px-2 border-2 border-neutral-900 bg-white text-neutral-900">
-                      {#if type === 'unicorn'}
-                        <span class="bg-gradient-to-r from-purple-600 via-pink-500 to-purple-600 bg-clip-text text-transparent">Unicorn</span>
-                      {:else}
-                        {type.charAt(0).toUpperCase() + type.slice(1)}
-                      {/if}
-                      <span class="ml-0.5">×{count}</span>
-                    </div>
-                  {/if}
-                {/each}
               </div>
             </div>
           {/if}
