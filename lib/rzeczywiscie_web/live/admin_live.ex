@@ -760,12 +760,16 @@ defmodule RzeczywiscieWeb.AdminLive do
   end
 
   defp extract_transaction_type(text) do
-    # Handle nil or empty text - default to sale
-    text_lower = if is_nil(text) or String.trim(text) == "" do
-      ""
+    # Handle nil or empty text - return sale immediately
+    if is_nil(text) or String.trim(text) == "" do
+      "sprzedaż"
     else
-      String.downcase(text)
+      extract_transaction_type_from_text(text)
     end
+  end
+
+  defp extract_transaction_type_from_text(text) do
+    text_lower = String.downcase(text)
 
     cond do
       # Keywords for sale (sprzedaż)
@@ -824,12 +828,16 @@ defmodule RzeczywiscieWeb.AdminLive do
   end
 
   defp extract_property_type(text) do
-    # Handle nil or empty text - default to apartment
-    text_lower = if is_nil(text) or String.trim(text) == "" do
-      ""
+    # Handle nil or empty text - return mieszkanie immediately
+    if is_nil(text) or String.trim(text) == "" do
+      "mieszkanie"
     else
-      String.downcase(text)
+      extract_property_type_from_text(text)
     end
+  end
+
+  defp extract_property_type_from_text(text) do
+    text_lower = String.downcase(text)
 
     cond do
       # Commercial space (lokal użytkowy) - check first as it's most specific
