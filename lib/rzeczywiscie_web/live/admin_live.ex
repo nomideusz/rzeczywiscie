@@ -23,6 +23,8 @@ defmodule RzeczywiscieWeb.AdminLive do
       |> assign(:dedup_running, false)
       |> assign(:dedup_result, nil)
       |> assign(:export_running, false)
+      |> assign(:backfill_rooms_running, false)
+      |> assign(:backfill_rooms_result, nil)
       |> assign(:olx_pages, 2)
       |> assign(:otodom_pages, 2)
       |> assign(:db_stats, get_db_stats())
@@ -190,7 +192,7 @@ defmodule RzeczywiscieWeb.AdminLive do
         </div>
 
         <!-- Maintenance Tasks -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-6">
           <!-- Geocoding -->
           <div class="bg-base-100 border-2 border-base-content">
             <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
@@ -247,6 +249,32 @@ defmodule RzeczywiscieWeb.AdminLive do
                 class={"w-full px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @export_running, do: "border-base-content/30 opacity-50", else: "border-info text-info hover:bg-info hover:text-info-content"}"}
               >
                 <%= if @export_running, do: "⏳ Generating...", else: "📥 Download Missing Types CSV" %>
+              </button>
+            </div>
+          </div>
+
+          <!-- Backfill Rooms -->
+          <div class="bg-base-100 border-2 border-base-content">
+            <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
+              <h3 class="text-sm font-bold uppercase tracking-wide">🛏️ Backfill Rooms</h3>
+            </div>
+            <div class="p-4">
+              <p class="text-xs opacity-60 mb-4">
+                Extract room counts from titles for properties missing this data.
+              </p>
+
+              <%= if @backfill_rooms_result do %>
+                <div class="mb-3 px-3 py-2 text-xs font-bold bg-success/20 text-success border border-success">
+                  ✓ <%= @backfill_rooms_result %>
+                </div>
+              <% end %>
+
+              <button
+                phx-click="run_backfill_rooms"
+                disabled={@backfill_rooms_running}
+                class={"w-full px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @backfill_rooms_running, do: "border-base-content/30 opacity-50", else: "border-base-content hover:bg-base-content hover:text-base-100"}"}
+              >
+                <%= if @backfill_rooms_running, do: "⏳ Running...", else: "Run Room Backfill" %>
               </button>
             </div>
           </div>
@@ -518,6 +546,21 @@ defmodule RzeczywiscieWeb.AdminLive do
   end
 
   @impl true
+  def handle_event("run_backfill_rooms", _params, socket) do
+    Logger.info("Starting room count backfill from admin panel")
+
+    socket = assign(socket, :backfill_rooms_running, true)
+
+    parent = self()
+    Task.start(fn ->
+      result = run_backfill_rooms()
+      send(parent, {:backfill_rooms_complete, result})
+    end)
+
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_info({:backfill_complete, result}, socket) do
     socket =
       socket
@@ -595,6 +638,17 @@ defmodule RzeczywiscieWeb.AdminLive do
         filename: filename,
         data: csv_data
       })
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:backfill_rooms_complete, result}, socket) do
+    socket =
+      socket
+      |> assign(:backfill_rooms_running, false)
+      |> assign(:backfill_rooms_result, result)
+      |> assign(:db_stats, get_db_stats())
 
     {:noreply, socket}
   end
@@ -948,6 +1002,105 @@ defmodule RzeczywiscieWeb.AdminLive do
         error = "Failed: #{inspect(reason)}"
         Logger.error("✗ Deduplication failed: #{error}")
         error
+    end
+  end
+
+  defp run_backfill_rooms do
+    alias Rzeczywiscie.RealEstate
+
+    Logger.info("Starting room count backfill...")
+
+    # Get properties without room count
+    properties = from(p in Property,
+      where: p.active == true and is_nil(p.rooms),
+      select: %{id: p.id, title: p.title, property_type: p.property_type}
+    )
+    |> Repo.all()
+
+    Logger.info("Found #{length(properties)} properties to update")
+
+    if length(properties) == 0 do
+      "No properties need room data"
+    else
+      updated = Enum.reduce(properties, 0, fn property, count ->
+        rooms = extract_rooms_from_title(property.title)
+
+        if rooms do
+          case RealEstate.update_property(
+            Repo.get(Property, property.id),
+            %{rooms: rooms}
+          ) do
+            {:ok, _} ->
+              Logger.info("✓ Updated property #{property.id}: #{rooms} rooms")
+              count + 1
+            {:error, _} ->
+              count
+          end
+        else
+          count
+        end
+      end)
+
+      result = "Updated #{updated} out of #{length(properties)} properties"
+      Logger.info("✓ Room backfill completed: #{result}")
+      result
+    end
+  end
+
+  defp extract_rooms_from_title(title) do
+    if is_nil(title) do
+      nil
+    else
+      text_lower = String.downcase(title)
+      extract_rooms_from_title_text(text_lower)
+    end
+  end
+
+  defp extract_rooms_from_title_text(text_lower) do
+
+    cond do
+      # "3-pokojowe", "2 pokojowe"
+      match = Regex.run(~r/(\d+)[\s-]*pokojow/, text_lower) ->
+        [_, num] = match
+        String.to_integer(num)
+      
+      # "3-pok", "2 pok"
+      match = Regex.run(~r/(\d+)[\s-]*pok(?!oj)/, text_lower) ->
+        [_, num] = match
+        String.to_integer(num)
+      
+      # "3 pokoje", "2-pokoje"
+      match = Regex.run(~r/(\d+)[\s-]*pokoje/, text_lower) ->
+        [_, num] = match
+        String.to_integer(num)
+      
+      # "3 pok.", "2-pok."
+      match = Regex.run(~r/(\d+)[\s-]*pok\./, text_lower) ->
+        [_, num] = match
+        String.to_integer(num)
+      
+      # "2 osobne pokoje", "3 osobne pokoje"  
+      match = Regex.run(~r/(\d+) osobne pokoje/, text_lower) ->
+        [_, num] = match
+        String.to_integer(num)
+
+      # Polish word numbers
+      String.contains?(text_lower, "jednopokojow") -> 1
+      String.contains?(text_lower, "dwupokojow") -> 2
+      String.contains?(text_lower, "trzypokojow") -> 3
+      String.contains?(text_lower, "czteropokojow") -> 4
+      String.contains?(text_lower, "pięciopokojow") || String.contains?(text_lower, "pieciop okojow") -> 5
+      String.contains?(text_lower, "sześciopokojow") || String.contains?(text_lower, "szesciop okojow") -> 6
+
+      # Single room indicators
+      String.contains?(text_lower, "kawalerka") -> 1
+      String.contains?(text_lower, "studio") -> 1
+      String.contains?(text_lower, "garsoniera") -> 1
+      String.contains?(text_lower, "jednoosobowy") -> 1
+      String.match?(text_lower, ~r/1[\s-]*osobow/) -> 1
+      String.contains?(text_lower, "pokój") && !String.match?(text_lower, ~r/\d/) -> 1
+
+      true -> nil
     end
   end
 

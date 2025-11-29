@@ -604,6 +604,22 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
           {decimal, _} -> decimal
           :error -> nil
         end
+      
+      # Pattern: "X-pok" or "X pok" (without period)
+      match = Regex.run(~r/(\d+)[\s-]*pok(?!oj)/, text_lower) ->
+        [_, num] = match
+        case Decimal.parse(num) do
+          {decimal, _} -> decimal
+          :error -> nil
+        end
+      
+      # Pattern: "X pokoje" or "X-pokoje"
+      match = Regex.run(~r/(\d+)[\s-]*pokoje/, text_lower) ->
+        [_, num] = match
+        case Decimal.parse(num) do
+          {decimal, _} -> decimal
+          :error -> nil
+        end
 
       # Polish word numbers
       String.contains?(text_lower, "jednopokojow") -> Decimal.new(1)
@@ -612,12 +628,32 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
       String.contains?(text_lower, "czteropokojow") -> Decimal.new(4)
       String.contains?(text_lower, "pięciopokojow") -> Decimal.new(5)
       String.contains?(text_lower, "sześciopokojow") -> Decimal.new(6)
+      
+      # Abbreviated patterns: "2-pok.", "3 pok."
+      match = Regex.run(~r/(\d+)[\s-]*pok\./, text_lower) ->
+        [_, num] = match
+        case Decimal.parse(num) do
+          {decimal, _} -> decimal
+          :error -> nil
+        end
 
       # Pattern: "kawalerka" = 1 room
       String.contains?(text_lower, "kawalerka") -> Decimal.new(1)
 
       # Pattern: "studio" = 1 room
       String.contains?(text_lower, "studio") -> Decimal.new(1)
+      
+      # Pattern: "jednoosobowy" or "1-osobowy" = 1 room (single person room)
+      String.contains?(text_lower, "jednoosobowy") -> Decimal.new(1)
+      String.match?(text_lower, ~r/1[\s-]*osobow/) -> Decimal.new(1)
+      
+      # Pattern: "dwuosobowy" or "2-osobowy" = typically still 1 room (shared)
+      # But could be 2 separate rooms - default to 2 for "2 osobne pokoje"
+      String.contains?(text_lower, "2 osobne pokoje") -> Decimal.new(2)
+      String.contains?(text_lower, "3 osobne pokoje") -> Decimal.new(3)
+      
+      # Pattern: "garsoniera" = 1 room
+      String.contains?(text_lower, "garsoniera") -> Decimal.new(1)
 
       true -> nil
     end
