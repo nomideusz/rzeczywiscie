@@ -65,10 +65,6 @@
     
     const fingerprint = components.join('|')
     
-    // Debug: log fingerprint components to verify consistency
-    console.log('Device Fingerprint Components:', components)
-    console.log('Fingerprint String:', fingerprint)
-    
     // Simple hash function (FNV-1a variant)
     let hash = 2166136261 // FNV offset basis
     for (let i = 0; i < fingerprint.length; i++) {
@@ -77,9 +73,7 @@
     }
     
     // Convert to positive hex string
-    const deviceId = (hash >>> 0).toString(16)
-    console.log('Generated Device ID:', deviceId)
-    return deviceId
+    return (hash >>> 0).toString(16)
   }
 
   // Pan/drag state
