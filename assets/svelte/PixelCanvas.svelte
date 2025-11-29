@@ -272,6 +272,14 @@
     // Check if first-time mobile user (show color picker hint)
     if (isMobile && !localStorage.getItem(getDeviceKey('seen_color_picker'))) {
       showColorHint = true
+      
+      // Auto-hide hint after 8 seconds as fallback
+      setTimeout(() => {
+        if (showColorHint) {
+          showColorHint = false
+          localStorage.setItem(getDeviceKey('seen_color_picker'), 'true')
+        }
+      }, 8000)
     }
 
     // Check scrollability after a short delay to let canvas render
@@ -1105,7 +1113,7 @@
             <!-- Color button with cooldown and first-time hint -->
             <div class="relative">
               {#if showColorHint}
-                <div class="absolute -top-12 left-1/2 whitespace-nowrap animate-bounce-gentle">
+                <div class="absolute -top-9 left-1/2 whitespace-nowrap animate-bounce-gentle pointer-events-none">
                   <div class="bg-neutral-900 text-white text-[10px] px-2 py-1 rounded-lg shadow-lg">
                     Tap to change color
                   </div>
