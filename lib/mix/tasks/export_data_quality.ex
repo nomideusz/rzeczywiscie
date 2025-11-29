@@ -15,13 +15,13 @@ defmodule Mix.Tasks.ExportDataQuality do
   use Mix.Task
   import Ecto.Query
   require Logger
+  
+  alias Rzeczywiscie.Repo
+  alias Rzeczywiscie.RealEstate.Property
 
   @shortdoc "Export properties with data quality issues"
   def run(args) do
     Mix.Task.run("app.start")
-
-    alias Rzeczywiscie.Repo
-    alias Rzeczywiscie.RealEstate.Property
 
     # Parse arguments
     {opts, _, _} = OptionParser.parse(args, 

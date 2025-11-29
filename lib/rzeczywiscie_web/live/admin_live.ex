@@ -1094,5 +1094,3 @@ defmodule RzeczywiscieWeb.AdminLive do
   end
   defp escape_csv(value), do: to_string(value)
 end
-
-end
