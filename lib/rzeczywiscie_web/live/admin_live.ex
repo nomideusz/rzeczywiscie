@@ -25,6 +25,8 @@ defmodule RzeczywiscieWeb.AdminLive do
       |> assign(:export_running, false)
       |> assign(:backfill_rooms_running, false)
       |> assign(:backfill_rooms_result, nil)
+      |> assign(:rescrape_running, false)
+      |> assign(:rescrape_result, nil)
       |> assign(:olx_pages, 2)
       |> assign(:otodom_pages, 2)
       |> assign(:db_stats, get_db_stats())
@@ -192,7 +194,7 @@ defmodule RzeczywiscieWeb.AdminLive do
         </div>
 
         <!-- Maintenance Tasks -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 mb-6">
           <!-- Geocoding -->
           <div class="bg-base-100 border-2 border-base-content">
             <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
@@ -275,6 +277,32 @@ defmodule RzeczywiscieWeb.AdminLive do
                 class={"w-full px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @backfill_rooms_running, do: "border-base-content/30 opacity-50", else: "border-base-content hover:bg-base-content hover:text-base-100"}"}
               >
                 <%= if @backfill_rooms_running, do: "⏳ Running...", else: "Run Room Backfill" %>
+              </button>
+            </div>
+          </div>
+
+          <!-- Re-scrape Missing Data -->
+          <div class="bg-base-100 border-2 border-base-content">
+            <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
+              <h3 class="text-sm font-bold uppercase tracking-wide">🔄 Re-scrape</h3>
+            </div>
+            <div class="p-4">
+              <p class="text-xs opacity-60 mb-4">
+                Re-fetch up to 50 property pages to extract missing price/area/rooms data.
+              </p>
+
+              <%= if @rescrape_result do %>
+                <div class="mb-3 px-3 py-2 text-xs font-bold bg-success/20 text-success border border-success">
+                  ✓ <%= @rescrape_result %>
+                </div>
+              <% end %>
+
+              <button
+                phx-click="run_rescrape"
+                disabled={@rescrape_running}
+                class={"w-full px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @rescrape_running, do: "border-base-content/30 opacity-50", else: "border-accent text-accent hover:bg-accent hover:text-accent-content"}"}
+              >
+                <%= if @rescrape_running, do: "⏳ Re-scraping...", else: "Re-scrape Missing Prices" %>
               </button>
             </div>
           </div>
@@ -561,6 +589,21 @@ defmodule RzeczywiscieWeb.AdminLive do
   end
 
   @impl true
+  def handle_event("run_rescrape", _params, socket) do
+    Logger.info("Starting re-scrape from admin panel")
+
+    socket = assign(socket, :rescrape_running, true)
+
+    parent = self()
+    Task.start(fn ->
+      result = run_rescrape()
+      send(parent, {:rescrape_complete, result})
+    end)
+
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_info({:backfill_complete, result}, socket) do
     socket =
       socket
@@ -648,6 +691,17 @@ defmodule RzeczywiscieWeb.AdminLive do
       socket
       |> assign(:backfill_rooms_running, false)
       |> assign(:backfill_rooms_result, result)
+      |> assign(:db_stats, get_db_stats())
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:rescrape_complete, result}, socket) do
+    socket =
+      socket
+      |> assign(:rescrape_running, false)
+      |> assign(:rescrape_result, result)
       |> assign(:db_stats, get_db_stats())
 
     {:noreply, socket}
@@ -1007,6 +1061,24 @@ defmodule RzeczywiscieWeb.AdminLive do
 
     {count, _} = RealEstate.mark_stale_properties_inactive(48)
     "Marked #{count} properties as inactive"
+  end
+
+  defp run_rescrape do
+    alias Rzeczywiscie.Scrapers.PropertyRescraper
+
+    Logger.info("Running property re-scrape...")
+
+    case PropertyRescraper.rescrape_missing(limit: 50, delay: 2000, missing: :price) do
+      {:ok, %{total: total, updated: updated, failed: failed}} ->
+        result = "Re-scraped #{total} properties: #{updated} updated, #{failed} failed"
+        Logger.info("✓ Re-scrape completed: #{result}")
+        result
+
+      {:error, reason} ->
+        error = "Failed: #{inspect(reason)}"
+        Logger.error("✗ Re-scrape failed: #{error}")
+        error
+    end
   end
 
   defp run_deduplication do
