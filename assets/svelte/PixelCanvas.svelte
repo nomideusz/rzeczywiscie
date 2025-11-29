@@ -552,8 +552,8 @@
           }
         }
         ctx.shadowBlur = 0
-      } else if (pixelMode === "special" && !pendingSpecialPixel) {
-        // Draw colorful unicorn shape preview following cursor
+      } else if (!pendingSpecialPixel && Object.values(userStats.special_pixels_available || {}).some(c => c > 0)) {
+        // Draw colorful unicorn shape preview following cursor (when unicorn is available)
         ctx.globalAlpha = 0.6
         const hue = (Date.now() / 20) % 360
         ctx.shadowBlur = 12
@@ -639,26 +639,29 @@
     if (isPanning || !canPlace) return
     const { x, y } = getCoords(event.clientX, event.clientY)
     if (x >= 0 && x < width && y >= 0 && y < height) {
-      if (pixelMode === "special") {
-        // Lock position for special pixel placement
-        if (pendingSpecialPixel) {
-          // Already have a pending position - clicking elsewhere cancels and sets new position
-          pendingSpecialPixel = { x, y }
-          claimerName = ''
-        } else {
-          pendingSpecialPixel = { x, y }
-        }
-        // Focus name input after a tick
+      // Check if unicorn modal is already open (reposition)
+      if (pendingSpecialPixel) {
+        pendingSpecialPixel = { x, y }
+        claimerName = ''
         setTimeout(() => nameInputElement?.focus(), 50)
         drawCanvas()
-      } else if (pixelMode === "massive" && userStats.massive_pixels_available > 0) {
-        // Place massive pixel (5x5 grid)
+      }
+      // Auto-open unicorn modal if available
+      else if (Object.values(userStats.special_pixels_available || {}).some(c => c > 0)) {
+        pendingSpecialPixel = { x, y }
+        setTimeout(() => nameInputElement?.focus(), 50)
+        drawCanvas()
+      }
+      // Place massive pixel if mode is active and available
+      else if (pixelMode === "massive" && userStats.massive_pixels_available > 0) {
         live.pushEvent("place_massive_pixel", { x, y })
-      } else if (pixelMode === "mega" && userStats.mega_pixels_available > 0) {
-        // Place mega pixel (3x3 grid)
+      }
+      // Place mega pixel if mode is active and available
+      else if (pixelMode === "mega" && userStats.mega_pixels_available > 0) {
         live.pushEvent("place_mega_pixel", { x, y })
-      } else {
-        // Place normal pixel
+      }
+      // Place normal pixel
+      else {
         live.pushEvent("place_pixel", { x, y })
       }
     }
@@ -943,24 +946,29 @@
       const { x, y } = getCoords(touch.clientX, touch.clientY)
 
       if (x >= 0 && x < width && y >= 0 && y < height) {
-        if (pixelMode === "special") {
-          // Lock position for special pixel - same as click handler
-          if (pendingSpecialPixel) {
-            pendingSpecialPixel = { x, y }
-            claimerName = ''
-          } else {
-            pendingSpecialPixel = { x, y }
-          }
+        // Check if unicorn modal is already open (reposition)
+        if (pendingSpecialPixel) {
+          pendingSpecialPixel = { x, y }
+          claimerName = ''
           setTimeout(() => nameInputElement?.focus(), 50)
           drawCanvas()
-        } else if (pixelMode === "massive" && userStats.massive_pixels_available > 0) {
-          // Place massive pixel (5x5 grid)
+        }
+        // Auto-open unicorn modal if available
+        else if (Object.values(userStats.special_pixels_available || {}).some(c => c > 0)) {
+          pendingSpecialPixel = { x, y }
+          setTimeout(() => nameInputElement?.focus(), 50)
+          drawCanvas()
+        }
+        // Place massive pixel if mode is active and available
+        else if (pixelMode === "massive" && userStats.massive_pixels_available > 0) {
           live.pushEvent("place_massive_pixel", { x, y })
-        } else if (pixelMode === "mega" && userStats.mega_pixels_available > 0) {
-          // Place mega pixel (3x3 grid)
+        }
+        // Place mega pixel if mode is active and available
+        else if (pixelMode === "mega" && userStats.mega_pixels_available > 0) {
           live.pushEvent("place_mega_pixel", { x, y })
-        } else {
-          // Place normal pixel
+        }
+        // Place normal pixel
+        else {
           live.pushEvent("place_pixel", { x, y })
         }
       }
@@ -1171,18 +1179,6 @@
                 class="w-9 h-9 font-bold text-[9px] transition-all active:scale-95 flex items-center justify-center rounded-full {pixelMode === 'massive' ? 'bg-neutral-900 text-white' : 'text-neutral-600'}"
               >
                 5x5
-              </button>
-            {/if}
-
-            {#if Object.values(userStats.special_pixels_available || {}).some(c => c > 0)}
-              <button
-                on:click={() => {
-                  const availableType = Object.entries(userStats.special_pixels_available || {}).find(([_, count]) => count > 0)?.[0]
-                  if (availableType) live.pushEvent("select_special_pixel", { special_type: availableType })
-                }}
-                class="w-9 h-9 font-bold text-sm transition-all active:scale-95 flex items-center justify-center rounded-full {pixelMode === 'special' ? 'bg-neutral-900 text-white' : 'text-neutral-600'}"
-              >
-                🦄
               </button>
             {/if}
 
@@ -1398,17 +1394,14 @@
                 {/if}
                 {#each Object.entries(userStats.special_pixels_available || {}) as [type, count]}
                   {#if count > 0}
-                    <button
-                      on:click={() => live.pushEvent("select_special_pixel", { special_type: type })}
-                      class="text-xs font-bold py-1.5 px-2 border-2 transition-all cursor-pointer {pixelMode === 'special' ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-900 border-neutral-900 hover:bg-neutral-50'}"
-                    >
+                    <div class="text-xs font-bold py-1.5 px-2 border-2 border-neutral-900 bg-white text-neutral-900">
                       {#if type === 'unicorn'}
                         <span class="bg-gradient-to-r from-purple-600 via-pink-500 to-purple-600 bg-clip-text text-transparent">Unicorn</span>
                       {:else}
                         {type.charAt(0).toUpperCase() + type.slice(1)}
                       {/if}
                       <span class="ml-0.5">×{count}</span>
-                    </button>
+                    </div>
                   {/if}
                 {/each}
               </div>

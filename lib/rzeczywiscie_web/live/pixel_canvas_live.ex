@@ -44,8 +44,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
       |> assign(:seconds_remaining, seconds_remaining)
       |> assign(:stats, stats)
       |> assign(:user_stats, user_stats)
-      |> assign(:pixel_mode, :normal)  # Can be :normal, :mega, :massive, or :special
-      |> assign(:selected_special_type, nil)
+      |> assign(:pixel_mode, :normal)  # Can be :normal, :mega, or :massive
       |> assign(:milestone_progress, milestone_progress)
       |> assign(:page_title, "Pixels")
       |> assign(:pixels_version, 0)
@@ -285,17 +284,17 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
     {:noreply, assign(socket, pixel_mode: new_mode)}
   end
 
-  def handle_event("select_special_pixel", %{"special_type" => special_type}, socket) do
-    {:noreply, 
-     socket
-     |> assign(:pixel_mode, :special)
-     |> assign(:selected_special_type, special_type)}
-  end
-
   def handle_event("place_special_pixel", %{"x" => x, "y" => y, "name" => name} = params, socket) do
     color = socket.assigns.selected_color
     user_id = socket.assigns.user_id
-    special_type = socket.assigns.selected_special_type
+    user_stats = socket.assigns.user_stats
+    
+    # Determine which special pixel type to use (find first available)
+    special_type = 
+      Enum.find_value(user_stats.special_pixels_available || %{}, fn {type, count} ->
+        if count > 0, do: type, else: nil
+      end) || "unicorn"
+    
     direction = String.to_existing_atom(params["direction"] || "right")
 
     case PixelCanvas.place_special_pixel(x, y, color, user_id, special_type, name, color, direction) do
@@ -350,7 +349,6 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
          |> assign(:user_stats, user_stats)
          |> assign(:milestone_progress, milestone_progress)
          |> assign(:pixel_mode, :normal)
-         |> assign(:selected_special_type, nil)
          |> put_flash(:info, "#{String.capitalize(to_string(special_type))} claimed by #{name}! 🦄")}
 
       {:error, :no_special_pixel_available} ->
