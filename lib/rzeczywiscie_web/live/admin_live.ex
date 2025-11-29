@@ -22,6 +22,7 @@ defmodule RzeczywiscieWeb.AdminLive do
       |> assign(:cleanup_result, nil)
       |> assign(:dedup_running, false)
       |> assign(:dedup_result, nil)
+      |> assign(:export_running, false)
       |> assign(:olx_pages, 2)
       |> assign(:otodom_pages, 2)
       |> assign(:db_stats, get_db_stats())
@@ -235,9 +236,17 @@ defmodule RzeczywiscieWeb.AdminLive do
               <button
                 phx-click="run_backfill"
                 disabled={@backfill_running}
-                class={"w-full px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @backfill_running, do: "border-base-content/30 opacity-50", else: "border-base-content hover:bg-base-content hover:text-base-100"}"}
+                class={"w-full px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer mb-2 #{if @backfill_running, do: "border-base-content/30 opacity-50", else: "border-base-content hover:bg-base-content hover:text-base-100"}"}
               >
                 <%= if @backfill_running, do: "⏳ Running...", else: "Run Backfill" %>
+              </button>
+
+              <button
+                phx-click="export_missing_types"
+                disabled={@export_running}
+                class={"w-full px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @export_running, do: "border-base-content/30 opacity-50", else: "border-info text-info hover:bg-info hover:text-info-content"}"}
+              >
+                <%= if @export_running, do: "⏳ Generating...", else: "📥 Download Missing Types CSV" %>
               </button>
             </div>
           </div>
@@ -421,6 +430,21 @@ defmodule RzeczywiscieWeb.AdminLive do
   end
 
   @impl true
+  def handle_event("export_missing_types", _params, socket) do
+    Logger.info("Generating missing types CSV export")
+
+    socket = assign(socket, :export_running, true)
+
+    parent = self()
+    Task.start(fn ->
+      csv_data = generate_missing_types_csv()
+      send(parent, {:export_complete, csv_data})
+    end)
+
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_info({:backfill_complete, result}, socket) do
     socket =
       socket
@@ -482,6 +506,20 @@ defmodule RzeczywiscieWeb.AdminLive do
       |> assign(:dedup_running, false)
       |> assign(:dedup_result, result)
       |> assign(:db_stats, get_db_stats())
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:export_complete, csv_data}, socket) do
+    # Trigger file download via JavaScript
+    socket =
+      socket
+      |> assign(:export_running, false)
+      |> push_event("download_csv", %{
+        filename: "missing_types_#{DateTime.utc_now() |> DateTime.to_unix()}.csv",
+        data: csv_data
+      })
 
     {:noreply, socket}
   end
@@ -743,4 +781,64 @@ defmodule RzeczywiscieWeb.AdminLive do
         error
     end
   end
+
+  defp generate_missing_types_csv do
+    Logger.info("Generating CSV export of properties missing types...")
+
+    # Query for active properties missing types
+    properties = from(p in Property,
+      where: p.active == true and (is_nil(p.transaction_type) or is_nil(p.property_type)),
+      order_by: [desc: p.inserted_at],
+      select: %{
+        id: p.id,
+        source: p.source,
+        external_id: p.external_id,
+        title: p.title,
+        url: p.url,
+        transaction_type: p.transaction_type,
+        property_type: p.property_type,
+        city: p.city,
+        price: p.price,
+        inserted_at: p.inserted_at
+      }
+    )
+    |> Repo.all()
+
+    Logger.info("Found #{length(properties)} properties to export")
+
+    # Generate CSV
+    header = "ID,Source,External ID,Transaction Type,Property Type,City,Price,Title,URL,Inserted At\n"
+    
+    rows = Enum.map(properties, fn p ->
+      [
+        p.id,
+        p.source,
+        escape_csv(p.external_id),
+        escape_csv(p.transaction_type || ""),
+        escape_csv(p.property_type || ""),
+        escape_csv(p.city || ""),
+        p.price || "",
+        escape_csv(p.title),
+        escape_csv(p.url),
+        p.inserted_at
+      ]
+      |> Enum.join(",")
+    end)
+    |> Enum.join("\n")
+    
+    Logger.info("✓ CSV generated successfully")
+    header <> rows <> "\n"
+  end
+
+  defp escape_csv(nil), do: ""
+  defp escape_csv(value) when is_binary(value) do
+    # Escape quotes and wrap in quotes if contains comma, quote, or newline
+    if String.contains?(value, [",", "\"", "\n", "\r"]) do
+      escaped = String.replace(value, "\"", "\"\"")
+      "\"#{escaped}\""
+    else
+      value
+    end
+  end
+  defp escape_csv(value), do: to_string(value)
 end
