@@ -47,6 +47,7 @@
   let showMobileStats = false  // Toggle for mobile stats expansion
   let deviceId = ''  // Unique ID for this physical device (fingerprint-based)
   let pendingSpecialPixel = null  // {x, y} for special pixel being placed - locks position
+  let showColorHint = false  // Show hint for first-time mobile users to tap color button
   let claimerName = ''  // Name entered by user
   let unicornDirection = 'right'  // Direction unicorn faces: 'left' or 'right'
   let nameInputElement = null  // Reference to name input for focus
@@ -267,6 +268,11 @@
 
     // Check if user has seen scroll hint before on this device
     hasScrolled = localStorage.getItem(getDeviceKey('has_scrolled')) === 'true'
+    
+    // Check if first-time mobile user (show color picker hint)
+    if (isMobile && !localStorage.getItem(getDeviceKey('seen_color_picker'))) {
+      showColorHint = true
+    }
 
     // Check scrollability after a short delay to let canvas render
     setTimeout(checkScrollability, 500)
@@ -989,6 +995,12 @@
     showPalette = true
     showUI = true
     if (uiTimeout) clearTimeout(uiTimeout)
+    
+    // Hide hint for first-time users and mark as seen
+    if (showColorHint) {
+      showColorHint = false
+      localStorage.setItem(getDeviceKey('seen_color_picker'), 'true')
+    }
   }
 </script>
 
@@ -1082,24 +1094,34 @@
         <!-- Mobile: Compact bottom bar with all pixel modes -->
         {#if isMobile}
           <div class="bg-white rounded-full shadow-lg flex items-center gap-0.5 p-1">
-            <!-- Color button with cooldown -->
-            <button
-              class="w-10 h-10 rounded-full transition-all active:scale-95 relative overflow-hidden flex-shrink-0"
-              style="background-color: {selectedColor};"
-              on:click={openPalette}
-            >
+            <!-- Color button with cooldown and first-time hint -->
+            <div class="relative">
+              {#if showColorHint}
+                <div class="absolute -top-12 left-1/2 -translate-x-1/2 whitespace-nowrap animate-bounce-gentle">
+                  <div class="bg-neutral-900 text-white text-[10px] px-2 py-1 rounded-lg shadow-lg">
+                    Tap to change color
+                  </div>
+                  <div class="w-2 h-2 bg-neutral-900 rotate-45 absolute -bottom-1 left-1/2 -translate-x-1/2"></div>
+                </div>
+              {/if}
+              <button
+                class="w-10 h-10 rounded-full transition-all active:scale-95 relative overflow-hidden flex-shrink-0 {showColorHint ? 'animate-pulse-ring' : ''}"
+                style="background-color: {selectedColor};"
+                on:click={openPalette}
+              >
               <svg class="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 36 36">
                 <circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="3"/>
                 <circle cx="18" cy="18" r="16" fill="none" stroke="white" stroke-width="3"
                   stroke-dasharray="100" stroke-dashoffset={100 - cooldownProgress * 100} stroke-linecap="round"
                   class="transition-all duration-1000 ease-linear"/>
               </svg>
-              {#if !canPlace}
-                <span class="absolute inset-0 flex items-center justify-center text-white text-xs font-bold" style="text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 0 4px #000;">
-                  {secondsRemaining}
-                </span>
-              {/if}
-            </button>
+                {#if !canPlace}
+                  <span class="absolute inset-0 flex items-center justify-center text-white text-xs font-bold" style="text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 0 4px #000;">
+                    {secondsRemaining}
+                  </span>
+                {/if}
+              </button>
+            </div>
 
             <!-- Pixel mode buttons - only show if special pixels available -->
             {#if userStats.mega_pixels_available > 0 || userStats.massive_pixels_available > 0 || Object.values(userStats.special_pixels_available || {}).some(c => c > 0)}
@@ -1504,6 +1526,41 @@
   @keyframes bounceX {
     0%, 100% { transform: translateY(0); }
     50% { transform: translateY(-4px); }
+  }
+
+  /* Gentle bounce for color picker hint */
+  .animate-bounce-gentle {
+    animation: bounceGentle 2s ease-in-out infinite;
+  }
+
+  @keyframes bounceGentle {
+    0%, 100% { transform: translate(-50%, 0); }
+    50% { transform: translate(-50%, -4px); }
+  }
+
+  /* Pulse ring for color button hint */
+  .animate-pulse-ring {
+    position: relative;
+  }
+
+  .animate-pulse-ring::before {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    border: 2px solid rgba(0, 0, 0, 0.3);
+    animation: pulseRing 2s ease-out infinite;
+  }
+
+  @keyframes pulseRing {
+    0% {
+      transform: scale(1);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(1.3);
+      opacity: 0;
+    }
   }
 </style>
 
