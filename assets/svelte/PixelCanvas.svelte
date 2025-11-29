@@ -49,6 +49,7 @@
   let showNameModal = false  // Modal for entering name when placing special pixel
   let pendingSpecialPixel = null  // {x, y, type} for special pixel to be placed
   let claimerName = ''  // Name entered by user
+  let hoveredSpecialPixel = null  // Info about hovered special pixel {name, type, color}
   const CURSOR_THROTTLE_MS = 250
 
   // Generate device fingerprint based on stable hardware characteristics
@@ -446,6 +447,19 @@
     if (x >= 0 && x < width && y >= 0 && y < height) {
       if (!hoveredPixel || hoveredPixel.x !== x || hoveredPixel.y !== y) {
         hoveredPixel = { x, y }
+        
+        // Check if hovering over a special pixel
+        const pixelAtPos = pixels.find(p => p.x === x && p.y === y)
+        if (pixelAtPos && pixelAtPos.is_special) {
+          hoveredSpecialPixel = {
+            name: pixelAtPos.claimer_name,
+            type: pixelAtPos.special_type,
+            color: pixelAtPos.claimer_color
+          }
+        } else {
+          hoveredSpecialPixel = null
+        }
+        
         drawCanvas()
         sendCursorPosition(x, y)
       }
@@ -478,6 +492,7 @@
 
   function handleLeave() {
     hoveredPixel = null
+    hoveredSpecialPixel = null
     isPanning = false
     drawCanvas()
   }
@@ -565,6 +580,19 @@
       if (x >= 0 && x < width && y >= 0 && y < height) {
         if (!hoveredPixel || hoveredPixel.x !== x || hoveredPixel.y !== y) {
           hoveredPixel = { x, y }
+          
+          // Check if hovering over a special pixel
+          const pixelAtPos = pixels.find(p => p.x === x && p.y === y)
+          if (pixelAtPos && pixelAtPos.is_special) {
+            hoveredSpecialPixel = {
+              name: pixelAtPos.claimer_name,
+              type: pixelAtPos.special_type,
+              color: pixelAtPos.claimer_color
+            }
+          } else {
+            hoveredSpecialPixel = null
+          }
+          
           drawCanvas()
           sendCursorPosition(x, y)
         }
@@ -605,6 +633,7 @@
     singleTouchStart = null
     touchMoved = false
     hoveredPixel = null
+    hoveredSpecialPixel = null
     drawCanvas()
   }
 
@@ -1032,8 +1061,23 @@
       </div>
     {/if}
 
-    <!-- Coordinates - only on desktop, below stats -->
-    {#if hoveredPixel && !isMobile}
+    <!-- Special pixel info tooltip -->
+    {#if hoveredSpecialPixel && !isMobile}
+      <div class="fixed top-44 right-6 bg-white border-2 border-neutral-900 px-4 py-2 rounded-lg shadow-lg">
+        <div class="text-sm font-bold text-neutral-900 mb-1">
+          {#if hoveredSpecialPixel.type === 'unicorn'}
+            <span class="bg-gradient-to-r from-purple-600 via-pink-500 to-purple-600 bg-clip-text text-transparent">
+              {hoveredSpecialPixel.type.charAt(0).toUpperCase() + hoveredSpecialPixel.type.slice(1)}
+            </span>
+          {:else}
+            {hoveredSpecialPixel.type.charAt(0).toUpperCase() + hoveredSpecialPixel.type.slice(1)}
+          {/if}
+        </div>
+        <div class="text-xs text-neutral-600">
+          Claimed by: <span class="font-bold" style="color: {hoveredSpecialPixel.color}">{hoveredSpecialPixel.name}</span>
+        </div>
+      </div>
+    {:else if hoveredPixel && !isMobile}
       <div class="fixed top-44 right-6 bg-neutral-900 text-white px-3 py-2 rounded-lg text-xs font-mono shadow-lg">
         {hoveredPixel.x}, {hoveredPixel.y}
       </div>
