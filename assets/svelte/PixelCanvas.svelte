@@ -1047,10 +1047,10 @@
           </div>
         {/if}
 
-        <!-- Mobile: Compact bottom bar -->
+        <!-- Mobile: Compact bottom bar with all pixel modes -->
         {#if isMobile}
-          <div class="bg-white rounded-full shadow-lg flex items-center gap-1 p-1">
-            <!-- Color button -->
+          <div class="bg-white rounded-full shadow-lg flex items-center gap-0.5 p-1">
+            <!-- Color button with cooldown -->
             <button
               class="w-10 h-10 rounded-full transition-all active:scale-95 relative overflow-hidden flex-shrink-0"
               style="background-color: {selectedColor};"
@@ -1069,23 +1069,51 @@
               {/if}
             </button>
 
-            <!-- Mode button - only show if other options exist -->
-            {#if userStats.mega_pixels_available > 0 || userStats.massive_pixels_available > 0 || Object.values(userStats.special_pixels_available || {}).some(c => c > 0)}
-              <div class="w-px h-6 bg-neutral-200"></div>
+            <div class="w-px h-6 bg-neutral-200"></div>
+
+            <!-- Pixel mode buttons - always show 1x1, show others when available -->
+            <button
+              on:click={() => togglePixelMode("normal")}
+              class="w-9 h-9 font-bold text-[9px] transition-all active:scale-95 flex items-center justify-center rounded-full {pixelMode === 'normal' ? 'bg-neutral-900 text-white' : 'text-neutral-600'}"
+            >
+              1x1
+            </button>
+
+            {#if userStats.mega_pixels_available > 0}
               <button
-                on:click={() => togglePixelMode("normal")}
-                class="w-10 h-10 font-bold text-[10px] transition-all active:scale-95 flex items-center justify-center {pixelMode === 'normal' ? 'bg-neutral-900 text-white rounded-full' : 'text-neutral-900'}"
+                on:click={() => togglePixelMode("mega")}
+                class="w-9 h-9 font-bold text-[9px] transition-all active:scale-95 flex items-center justify-center rounded-full {pixelMode === 'mega' ? 'bg-neutral-900 text-white' : 'text-neutral-600'}"
               >
-                1x1
+                3x3
               </button>
             {/if}
 
-            <!-- Divider -->
+            {#if userStats.massive_pixels_available > 0}
+              <button
+                on:click={() => togglePixelMode("massive")}
+                class="w-9 h-9 font-bold text-[9px] transition-all active:scale-95 flex items-center justify-center rounded-full {pixelMode === 'massive' ? 'bg-neutral-900 text-white' : 'text-neutral-600'}"
+              >
+                5x5
+              </button>
+            {/if}
+
+            {#if Object.values(userStats.special_pixels_available || {}).some(c => c > 0)}
+              <button
+                on:click={() => {
+                  const availableType = Object.entries(userStats.special_pixels_available || {}).find(([_, count]) => count > 0)?.[0]
+                  if (availableType) live.pushEvent("select_special_pixel", { special_type: availableType })
+                }}
+                class="w-9 h-9 font-bold text-sm transition-all active:scale-95 flex items-center justify-center rounded-full {pixelMode === 'special' ? 'bg-neutral-900 text-white' : 'text-neutral-600'}"
+              >
+                🦄
+              </button>
+            {/if}
+
             <div class="w-px h-6 bg-neutral-200"></div>
 
             <!-- Zoom controls -->
-            <button class="w-10 h-10 text-neutral-600 active:bg-neutral-100 text-lg font-medium rounded-full" on:click={() => adjustZoom(-0.25)}>−</button>
-            <button class="w-10 h-10 text-neutral-600 active:bg-neutral-100 text-lg font-medium rounded-full" on:click={() => adjustZoom(0.25)}>+</button>
+            <button class="w-9 h-9 text-neutral-600 active:bg-neutral-100 text-lg font-medium rounded-full" on:click={() => adjustZoom(-0.25)}>−</button>
+            <button class="w-9 h-9 text-neutral-600 active:bg-neutral-100 text-lg font-medium rounded-full" on:click={() => adjustZoom(0.25)}>+</button>
           </div>
         {:else}
           <!-- Desktop: Original layout -->
@@ -1195,42 +1223,30 @@
               {/if}
             </div>
 
-            <!-- Available Pixels (only if any) -->
+            <!-- Available Pixels Count (only if any) -->
             {#if userStats.mega_pixels_available > 0 || userStats.massive_pixels_available > 0 || Object.values(userStats.special_pixels_available || {}).some(c => c > 0)}
               <div class="pt-2 border-t border-neutral-200">
-                <div class="grid grid-cols-2 gap-1.5">
+                <div class="text-[10px] text-neutral-600 mb-1">Available to place:</div>
+                <div class="flex flex-wrap gap-2">
                   {#if userStats.mega_pixels_available > 0}
-                    <button
-                      on:click={() => { togglePixelMode("mega"); showMobileStats = false }}
-                      class="text-[10px] font-bold py-1.5 px-2 border-2 transition-all {pixelMode === 'mega' ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-900 border-neutral-900'}"
-                    >
-                      Mega ×{userStats.mega_pixels_available}
-                    </button>
+                    <span class="text-[10px] font-bold text-neutral-900">3x3 ×{userStats.mega_pixels_available}</span>
                   {/if}
                   {#if userStats.massive_pixels_available > 0}
-                    <button
-                      on:click={() => { togglePixelMode("massive"); showMobileStats = false }}
-                      class="text-[10px] font-bold py-1.5 px-2 border-2 transition-all {pixelMode === 'massive' ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-900 border-neutral-900'}"
-                    >
-                      Massive ×{userStats.massive_pixels_available}
-                    </button>
+                    <span class="text-[10px] font-bold text-neutral-900">5x5 ×{userStats.massive_pixels_available}</span>
                   {/if}
                   {#each Object.entries(userStats.special_pixels_available || {}) as [type, count]}
                     {#if count > 0}
-                      <button
-                        on:click={() => { live.pushEvent("select_special_pixel", { special_type: type }); showMobileStats = false }}
-                        class="text-[10px] font-bold py-1.5 px-2 border-2 transition-all {pixelMode === 'special' ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-900 border-neutral-900'}"
-                      >
+                      <span class="text-[10px] font-bold">
                         {#if type === 'unicorn'}
-                          <span class="bg-gradient-to-r from-purple-600 via-pink-500 to-purple-600 bg-clip-text text-transparent">Unicorn</span>
+                          <span class="bg-gradient-to-r from-purple-600 via-pink-500 to-purple-600 bg-clip-text text-transparent">🦄 ×{count}</span>
                         {:else}
-                          {type.charAt(0).toUpperCase() + type.slice(1)}
+                          {type.charAt(0).toUpperCase() + type.slice(1)} ×{count}
                         {/if}
-                        <span class="ml-0.5">×{count}</span>
-                      </button>
+                      </span>
                     {/if}
                   {/each}
                 </div>
+                <div class="text-[9px] text-neutral-400 mt-1">Tap modes in bottom bar</div>
               </div>
             {/if}
           </div>
