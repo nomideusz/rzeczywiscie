@@ -50,6 +50,7 @@
   let pendingSpecialPixel = null  // {x, y, type} for special pixel to be placed
   let claimerName = ''  // Name entered by user
   let hoveredSpecialPixel = null  // Info about hovered special pixel {name, type, color}
+  let mousePosition = { x: 0, y: 0 }  // Track mouse position for tooltip
   const CURSOR_THROTTLE_MS = 250
 
   // Unicorn shape definition - colorful pixel art unicorn
@@ -436,15 +437,23 @@
       if (!pixel.is_special) return
 
       if (pixel.special_type === 'unicorn') {
-        // Draw colorful unicorn shape with subtle glow
-        ctx.shadowBlur = 8
-        ctx.shadowColor = 'rgba(155, 123, 184, 0.6)'
+        // Rainbow glow effect
+        const hue = (Date.now() / 20) % 360
+        ctx.shadowBlur = 15
+        ctx.shadowColor = `hsl(${hue}, 100%, 60%)`
         
         UNICORN_SHAPE.forEach(offset => {
           const px = (pixel.x + offset.dx) * cellSize + 1
           const py = (pixel.y + offset.dy) * cellSize + 1
-          // Use the defined color for each pixel type
-          ctx.fillStyle = UNICORN_COLORS[offset.type] || '#FFFFFF'
+          const color = UNICORN_COLORS[offset.type] || '#FFFFFF'
+          
+          // For white/body pixels, add a subtle outline so they're visible
+          if (offset.type === 'body') {
+            ctx.fillStyle = '#E8E0F0' // Very light lavender tint
+            ctx.fillRect(px - 1, py - 1, cellSize, cellSize)
+          }
+          
+          ctx.fillStyle = color
           ctx.fillRect(px, py, cellSize - 2, cellSize - 2)
         })
       }
@@ -497,15 +506,22 @@
         }
         ctx.shadowBlur = 0
       } else if (pixelMode === "special") {
-        // Draw colorful unicorn shape preview
-        ctx.globalAlpha = 0.7
-        ctx.shadowBlur = 8
-        ctx.shadowColor = 'rgba(155, 123, 184, 0.6)'
+        // Draw colorful unicorn shape preview with rainbow glow
+        ctx.globalAlpha = 0.8
+        const hue = (Date.now() / 20) % 360
+        ctx.shadowBlur = 12
+        ctx.shadowColor = `hsl(${hue}, 100%, 60%)`
         UNICORN_SHAPE.forEach(offset => {
           const px = hoveredPixel.x + offset.dx
           const py = hoveredPixel.y + offset.dy
           if (px >= 0 && px < width && py >= 0 && py < height) {
-            ctx.fillStyle = UNICORN_COLORS[offset.type] || '#FFFFFF'
+            const color = UNICORN_COLORS[offset.type] || '#FFFFFF'
+            // Light outline for body pixels
+            if (offset.type === 'body') {
+              ctx.fillStyle = '#E8E0F0'
+              ctx.fillRect(px * cellSize, py * cellSize, cellSize, cellSize)
+            }
+            ctx.fillStyle = color
             ctx.fillRect(
               px * cellSize + 1,
               py * cellSize + 1,
@@ -597,6 +613,9 @@
   }
 
   function handleMove(event) {
+    // Always track mouse position for tooltip
+    mousePosition = { x: event.clientX, y: event.clientY }
+    
     if (isPanning) {
       doPan(event.clientX, event.clientY)
       return
@@ -1208,25 +1227,20 @@
       </div>
     {/if}
 
-    <!-- Coordinates and special pixel info - top left (below raven icon) -->
-    {#if hoveredSpecialPixel && !isMobile}
-      <div class="fixed top-20 left-6 bg-white border-2 border-neutral-900 px-4 py-2 rounded-lg shadow-lg z-40">
-        <div class="text-sm font-bold text-neutral-900 mb-1">
-          {#if hoveredSpecialPixel.type === 'unicorn'}
-            <span class="bg-gradient-to-r from-purple-600 via-pink-500 to-purple-600 bg-clip-text text-transparent">
-              {hoveredSpecialPixel.type.charAt(0).toUpperCase() + hoveredSpecialPixel.type.slice(1)}
-            </span>
-          {:else}
-            {hoveredSpecialPixel.type.charAt(0).toUpperCase() + hoveredSpecialPixel.type.slice(1)}
-          {/if}
-        </div>
-        <div class="text-xs text-neutral-600">
-          Claimed by: <span class="font-bold" style="color: {hoveredSpecialPixel.color}">{hoveredSpecialPixel.name}</span>
-        </div>
-      </div>
-    {:else if hoveredPixel && !isMobile}
+    <!-- Coordinates - top left (below raven icon) -->
+    {#if hoveredPixel && !isMobile && !hoveredSpecialPixel}
       <div class="fixed top-20 left-6 bg-neutral-900 text-white px-3 py-2 rounded-lg text-xs font-mono shadow-lg z-40">
         {hoveredPixel.x}, {hoveredPixel.y}
+      </div>
+    {/if}
+
+    <!-- Cursor-following tooltip for special pixels -->
+    {#if hoveredSpecialPixel}
+      <div 
+        class="fixed pointer-events-none z-[200] bg-neutral-900 text-white px-2 py-1 rounded text-sm font-medium shadow-lg"
+        style="left: {mousePosition.x + 15}px; top: {mousePosition.y + 15}px;"
+      >
+        {hoveredSpecialPixel.name}
       </div>
     {/if}
 
