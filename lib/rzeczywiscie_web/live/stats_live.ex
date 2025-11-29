@@ -19,7 +19,10 @@ defmodule RzeczywiscieWeb.StatsLive do
       |> assign(:property_types, property_types)
       |> assign(:selected_property_type, "mieszkanie")
       |> assign(:selected_transaction_type, "all")
+      |> assign(:sort_by, "sale_count")
+      |> assign(:sort_dir, :desc)
       |> assign(:filtered_district_prices, calculate_filtered_district_prices("mieszkanie", "all"))
+      |> sort_filtered_prices()
 
     {:ok, socket}
   end
@@ -329,31 +332,33 @@ defmodule RzeczywiscieWeb.StatsLive do
                 <thead class="bg-base-200 border-b border-base-content/30">
                   <%= if @selected_transaction_type == "all" do %>
                     <tr>
-                      <th class="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wide">District</th>
+                      <th class="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wide">
+                        <.sort_header column="district" label="District" sort_by={@sort_by} sort_dir={@sort_dir} />
+                      </th>
                       <th class="px-3 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-info" colspan="5">Sprzedaż</th>
                       <th class="px-3 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-warning" colspan="5">Wynajem</th>
                     </tr>
                     <tr class="bg-base-100">
                       <th class="px-3 py-1"></th>
-                      <th class="px-1 py-1 text-[9px] font-bold uppercase opacity-60">#</th>
-                      <th class="px-1 py-1 text-[9px] font-bold uppercase opacity-60">Avg</th>
-                      <th class="px-1 py-1 text-[9px] font-bold uppercase opacity-60">Min</th>
-                      <th class="px-1 py-1 text-[9px] font-bold uppercase opacity-60">Max</th>
-                      <th class="px-1 py-1 text-[9px] font-bold uppercase opacity-60">/m²</th>
-                      <th class="px-1 py-1 text-[9px] font-bold uppercase opacity-60">#</th>
-                      <th class="px-1 py-1 text-[9px] font-bold uppercase opacity-60">Avg</th>
-                      <th class="px-1 py-1 text-[9px] font-bold uppercase opacity-60">Min</th>
-                      <th class="px-1 py-1 text-[9px] font-bold uppercase opacity-60">Max</th>
-                      <th class="px-1 py-1 text-[9px] font-bold uppercase opacity-60">/m²</th>
+                      <th class="px-1 py-1"><.sort_header column="sale_count" label="#" sort_by={@sort_by} sort_dir={@sort_dir} small={true} /></th>
+                      <th class="px-1 py-1"><.sort_header column="sale_avg" label="Avg" sort_by={@sort_by} sort_dir={@sort_dir} small={true} /></th>
+                      <th class="px-1 py-1"><.sort_header column="sale_min" label="Min" sort_by={@sort_by} sort_dir={@sort_dir} small={true} /></th>
+                      <th class="px-1 py-1"><.sort_header column="sale_max" label="Max" sort_by={@sort_by} sort_dir={@sort_dir} small={true} /></th>
+                      <th class="px-1 py-1"><.sort_header column="sale_sqm" label="/m²" sort_by={@sort_by} sort_dir={@sort_dir} small={true} /></th>
+                      <th class="px-1 py-1"><.sort_header column="rent_count" label="#" sort_by={@sort_by} sort_dir={@sort_dir} small={true} /></th>
+                      <th class="px-1 py-1"><.sort_header column="rent_avg" label="Avg" sort_by={@sort_by} sort_dir={@sort_dir} small={true} /></th>
+                      <th class="px-1 py-1"><.sort_header column="rent_min" label="Min" sort_by={@sort_by} sort_dir={@sort_dir} small={true} /></th>
+                      <th class="px-1 py-1"><.sort_header column="rent_max" label="Max" sort_by={@sort_by} sort_dir={@sort_dir} small={true} /></th>
+                      <th class="px-1 py-1"><.sort_header column="rent_sqm" label="/m²" sort_by={@sort_by} sort_dir={@sort_dir} small={true} /></th>
                     </tr>
                   <% else %>
                     <tr>
-                      <th class="px-4 py-2 text-left text-[10px] font-bold uppercase tracking-wide">District</th>
-                      <th class="px-2 py-2 text-center text-[10px] font-bold uppercase tracking-wide">#</th>
-                      <th class="px-2 py-2 text-center text-[10px] font-bold uppercase tracking-wide">Avg Price</th>
-                      <th class="px-2 py-2 text-center text-[10px] font-bold uppercase tracking-wide">Min</th>
-                      <th class="px-2 py-2 text-center text-[10px] font-bold uppercase tracking-wide">Max</th>
-                      <th class="px-2 py-2 text-center text-[10px] font-bold uppercase tracking-wide">Avg/m²</th>
+                      <th class="px-4 py-2 text-left"><.sort_header column="district" label="District" sort_by={@sort_by} sort_dir={@sort_dir} /></th>
+                      <th class="px-2 py-2 text-center"><.sort_header column="count" label="#" sort_by={@sort_by} sort_dir={@sort_dir} /></th>
+                      <th class="px-2 py-2 text-center"><.sort_header column="avg" label="Avg Price" sort_by={@sort_by} sort_dir={@sort_dir} /></th>
+                      <th class="px-2 py-2 text-center"><.sort_header column="min" label="Min" sort_by={@sort_by} sort_dir={@sort_dir} /></th>
+                      <th class="px-2 py-2 text-center"><.sort_header column="max" label="Max" sort_by={@sort_by} sort_dir={@sort_dir} /></th>
+                      <th class="px-2 py-2 text-center"><.sort_header column="sqm" label="Avg/m²" sort_by={@sort_by} sort_dir={@sort_dir} /></th>
                     </tr>
                   <% end %>
                 </thead>
@@ -631,6 +636,32 @@ defmodule RzeczywiscieWeb.StatsLive do
     """
   end
 
+  attr :column, :string, required: true
+  attr :label, :string, required: true
+  attr :sort_by, :string, required: true
+  attr :sort_dir, :atom, required: true
+  attr :small, :boolean, default: false
+
+  defp sort_header(assigns) do
+    ~H"""
+    <button
+      phx-click="sort_prices"
+      phx-value-column={@column}
+      class={[
+        "flex items-center gap-1 cursor-pointer hover:text-primary transition-colors",
+        if(@small, do: "text-[9px] font-bold uppercase opacity-60", else: "text-[10px] font-bold uppercase tracking-wide")
+      ]}
+    >
+      <%= @label %>
+      <%= if @sort_by == @column do %>
+        <span class="text-primary">
+          <%= if @sort_dir == :desc, do: "↓", else: "↑" %>
+        </span>
+      <% end %>
+    </button>
+    """
+  end
+
   @impl true
   def handle_event("refresh_stats", _params, socket) do
     socket =
@@ -654,6 +685,7 @@ defmodule RzeczywiscieWeb.StatsLive do
       socket
       |> assign(:selected_property_type, type)
       |> assign(:filtered_district_prices, filtered)
+      |> sort_filtered_prices()
 
     {:noreply, socket}
   end
@@ -662,10 +694,33 @@ defmodule RzeczywiscieWeb.StatsLive do
   def handle_event("filter_transaction_type", %{"type" => type}, socket) do
     filtered = calculate_filtered_district_prices(socket.assigns.selected_property_type, type)
     
+    # Reset sort to appropriate default when switching transaction type
+    default_sort = if type == "all", do: "sale_count", else: "count"
+    
     socket =
       socket
       |> assign(:selected_transaction_type, type)
       |> assign(:filtered_district_prices, filtered)
+      |> assign(:sort_by, default_sort)
+      |> sort_filtered_prices()
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("sort_prices", %{"column" => column}, socket) do
+    # Toggle direction if same column, otherwise default to desc
+    new_dir = if socket.assigns.sort_by == column do
+      if socket.assigns.sort_dir == :desc, do: :asc, else: :desc
+    else
+      :desc
+    end
+    
+    socket =
+      socket
+      |> assign(:sort_by, column)
+      |> assign(:sort_dir, new_dir)
+      |> sort_filtered_prices()
 
     {:noreply, socket}
   end
@@ -1104,6 +1159,45 @@ defmodule RzeczywiscieWeb.StatsLive do
       }
     end)
   end
+
+  defp sort_filtered_prices(socket) do
+    prices = socket.assigns.filtered_district_prices
+    sort_by = socket.assigns.sort_by
+    sort_dir = socket.assigns.sort_dir
+    mode = socket.assigns.selected_transaction_type
+    
+    sorted = Enum.sort_by(prices, fn item ->
+      case {mode, sort_by} do
+        # All mode (both sale and rent)
+        {"all", "district"} -> item.district
+        {"all", "sale_count"} -> item.sale.count
+        {"all", "sale_avg"} -> decimal_to_float(item.sale.avg_price)
+        {"all", "sale_min"} -> decimal_to_float(item.sale.min_price)
+        {"all", "sale_max"} -> decimal_to_float(item.sale.max_price)
+        {"all", "sale_sqm"} -> decimal_to_float(item.sale.avg_per_sqm)
+        {"all", "rent_count"} -> item.rent.count
+        {"all", "rent_avg"} -> decimal_to_float(item.rent.avg_price)
+        {"all", "rent_min"} -> decimal_to_float(item.rent.min_price)
+        {"all", "rent_max"} -> decimal_to_float(item.rent.max_price)
+        {"all", "rent_sqm"} -> decimal_to_float(item.rent.avg_per_sqm)
+        
+        # Single mode (sprzedaż or wynajem only)
+        {_, "district"} -> item.district
+        {_, "count"} -> item.stats.count
+        {_, "avg"} -> decimal_to_float(item.stats.avg_price)
+        {_, "min"} -> decimal_to_float(item.stats.min_price)
+        {_, "max"} -> decimal_to_float(item.stats.max_price)
+        {_, "sqm"} -> decimal_to_float(item.stats.avg_per_sqm)
+        
+        _ -> 0
+      end
+    end, if(sort_dir == :desc, do: :desc, else: :asc))
+    
+    assign(socket, :filtered_district_prices, sorted)
+  end
+
+  defp decimal_to_float(nil), do: 0.0
+  defp decimal_to_float(decimal), do: Decimal.to_float(decimal)
 
   defp get_property_types do
     Repo.all(
