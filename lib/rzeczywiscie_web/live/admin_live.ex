@@ -1090,19 +1090,18 @@ defmodule RzeczywiscieWeb.AdminLive do
   end
 
   defp extract_rooms_from_title_text(text_lower) do
-
     cond do
-      # "3-pokojowe", "2 pokojowe"
+      # "3-pokojowe", "2 pokojowe", "czteropokojowe"
       match = Regex.run(~r/(\d+)[\s-]*pokojow/, text_lower) ->
         [_, num] = match
         String.to_integer(num)
       
-      # "3-pok", "2 pok"
+      # "3-pok", "2 pok" (WITHOUT "oj" after - use negative lookahead)
       match = Regex.run(~r/(\d+)[\s-]*pok(?!oj)/, text_lower) ->
         [_, num] = match
         String.to_integer(num)
       
-      # "3 pokoje", "2-pokoje"
+      # "3 pokoje", "2-pokoje", "4 pokoje"
       match = Regex.run(~r/(\d+)[\s-]*pokoje/, text_lower) ->
         [_, num] = match
         String.to_integer(num)
@@ -1113,7 +1112,7 @@ defmodule RzeczywiscieWeb.AdminLive do
         String.to_integer(num)
       
       # "2 osobne pokoje", "3 osobne pokoje"  
-      match = Regex.run(~r/(\d+) osobne pokoje/, text_lower) ->
+      match = Regex.run(~r/(\d+)\s+osobne\s+pokoje/, text_lower) ->
         [_, num] = match
         String.to_integer(num)
 
@@ -1122,8 +1121,8 @@ defmodule RzeczywiscieWeb.AdminLive do
       String.contains?(text_lower, "dwupokojow") -> 2
       String.contains?(text_lower, "trzypokojow") -> 3
       String.contains?(text_lower, "czteropokojow") -> 4
-      String.contains?(text_lower, "pięciopokojow") || String.contains?(text_lower, "pieciop okojow") -> 5
-      String.contains?(text_lower, "sześciopokojow") || String.contains?(text_lower, "szesciop okojow") -> 6
+      String.contains?(text_lower, "pieciopokojow") -> 5
+      String.contains?(text_lower, "szesciopokojow") -> 6
 
       # Single room indicators
       String.contains?(text_lower, "kawalerka") -> 1
@@ -1131,7 +1130,9 @@ defmodule RzeczywiscieWeb.AdminLive do
       String.contains?(text_lower, "garsoniera") -> 1
       String.contains?(text_lower, "jednoosobowy") -> 1
       String.match?(text_lower, ~r/1[\s-]*osobow/) -> 1
-      String.contains?(text_lower, "pokój") && !String.match?(text_lower, ~r/\d/) -> 1
+      
+      # Generic "pokój" without number might be 1 room
+      String.contains?(text_lower, "pokoj") && !String.match?(text_lower, ~r/\d+/) -> 1
 
       true -> nil
     end
