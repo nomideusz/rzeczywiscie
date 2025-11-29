@@ -5,6 +5,7 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
 
   require Logger
   alias Rzeczywiscie.RealEstate
+  alias Rzeczywiscie.Scrapers.ExtractionHelpers
 
   @base_url "https://www.otodom.pl"
   # Search URL for Malopolskie region (both sale and rent)
@@ -680,174 +681,32 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
     result
   end
 
-  defp parse_price(text) do
-    # Use regex to extract price pattern first, before stripping chars
-    # Matches patterns like: "1 200 zł", "1,200.50 PLN", "1200", "1 200,50"
-    regex = ~r/(\d{1,3}(?:[\s,.]\d{3})*(?:[,.]\d{1,2})?)\s*(?:zł|PLN)?/i
-
-    case Regex.run(regex, text) do
-      [_, price_str] ->
-        # Clean up: remove spaces and normalize decimal separator
-        clean_price =
-          price_str
-          |> String.replace(~r/\s+/, "")
-          |> String.replace(",", ".")
-
-        case Decimal.parse(clean_price) do
-          {decimal, _} ->
-            # Validate: price should be reasonable (1 to 99,999,999 PLN)
-            # Database constraint: precision 10, scale 2 = max 99,999,999.99
-            if Decimal.compare(decimal, Decimal.new("1")) != :lt and
-                 Decimal.compare(decimal, Decimal.new("99999999")) != :gt do
-              decimal
-            else
-              Logger.warning("Price out of range: #{clean_price} PLN - ignoring")
-              nil
-            end
-
-          :error ->
-            nil
-        end
-
-      _ ->
-        nil
-    end
-  end
+  defp parse_price(text), do: ExtractionHelpers.parse_price(text)
 
   defp extract_area(card) do
-    # Otodom typically shows area in specific format: "75 m²" or "75m²"
-    # Get all text and look for m² pattern
     text = Floki.text(card)
-
-    # Area units: m², m2, m^2, mkw, m.kw., metrów kw
-    area_unit_pattern = "(?:m[\\^²2]|mkw\\.?|m\\.kw\\.?|metrów\\s*kw)"
-
-    # Look for pattern: number + area unit (with optional space/comma/dot)
-    # Examples: "75 m²", "75.5 m²", "1 200 m²", "5000m2", "1558 m^2", "50 mkw", "30 m.kw."
-    # Use negative lookbehind to avoid matching years (2024, 2025, etc.)
-    # Allow up to 5 digits to match land plots but reject via validation if too large
-    regex = ~r/(?<![0-9-])(\d{1,5}(?:[\s,.]\d{3})*(?:[,.]\d{1,2})?)\s*#{area_unit_pattern}/iu
-
-    case Regex.run(regex, text) do
-      [_, number_str] ->
-        # Clean up the number: remove spaces and replace comma with dot
-        clean_number =
-          number_str
-          |> String.replace(~r/\s+/, "")  # Remove all spaces
-          |> String.replace(",", ".")     # Replace comma with dot
-
-        case Decimal.parse(clean_number) do
-          {decimal, _} ->
-            # Validate: area should be reasonable (5 to 50,000 m²)
-            # Lower minimum to 5 m² for parking spots and small storage
-            # Residential: 20-500 m², Commercial: up to 5,000 m², Land: up to 50,000 m² (5 hectares)
-            if Decimal.compare(decimal, Decimal.new("5")) != :lt and
-                 Decimal.compare(decimal, Decimal.new("50000")) != :gt do
-              decimal
-            else
-              Logger.debug("Area out of range: #{clean_number} m² - ignoring")
-              nil
-            end
-
-          :error ->
-            Logger.debug("Could not parse area: #{clean_number}")
-            nil
-        end
-
-      _ ->
-        # Try alternate pattern with spaced number: "75 m 2"
-        regex_spaced = ~r/(\d{1,4}(?:[,\.]\d{1,2})?)\s+m\s*[\^²2]/iu
-
-        case Regex.run(regex_spaced, text) do
-          [_, number_str] ->
-            clean_number = number_str |> String.replace(~r/\s+/, "") |> String.replace(",", ".")
-
-            case Decimal.parse(clean_number) do
-              {decimal, _} ->
-                if Decimal.compare(decimal, Decimal.new("5")) != :lt and
-                     Decimal.compare(decimal, Decimal.new("50000")) != :gt do
-                  decimal
-                else
-                  nil
-                end
-
-              :error ->
-                nil
-            end
-
-          _ ->
-            nil
-        end
-    end
+    ExtractionHelpers.extract_area_from_text(text)
   end
 
   defp extract_rooms(card) do
     text = Floki.text(card)
 
-    extract_number_with_unit(text, "pokoje")
+    ExtractionHelpers.extract_number_with_unit(text, "pokoje")
     |> case do
       nil ->
         # Try alternative patterns
-        extract_number_with_unit(text, "pokoi") ||
-          extract_number_with_unit(text, "pok\\.") ||
-          extract_number_with_unit(text, "pok") ||
-          extract_rooms_from_text(text)
+        ExtractionHelpers.extract_number_with_unit(text, "pokoi") ||
+          ExtractionHelpers.extract_number_with_unit(text, "pok\\.") ||
+          ExtractionHelpers.extract_number_with_unit(text, "pok") ||
+          ExtractionHelpers.extract_rooms_from_text(text)
 
       decimal ->
-        decimal
+        Decimal.to_integer(decimal)
     end
     |> case do
       nil -> nil
+      num when is_integer(num) -> num
       decimal -> Decimal.to_integer(decimal)
-    end
-  end
-
-  # Extract rooms from common Polish patterns like "3-pokojowe", "dwupokojowe"
-  defp extract_rooms_from_text(text) do
-    text_lower = String.downcase(text)
-
-    cond do
-      # Pattern: "X-pokojowe" or "X pokojowe"
-      match = Regex.run(~r/(\d+)[\s-]*pokojow/, text_lower) ->
-        [_, num] = match
-        case Decimal.parse(num) do
-          {decimal, _} -> decimal
-          :error -> nil
-        end
-
-      # Polish word numbers
-      String.contains?(text_lower, "jednopokojow") -> Decimal.new(1)
-      String.contains?(text_lower, "dwupokojow") -> Decimal.new(2)
-      String.contains?(text_lower, "trzypokojow") -> Decimal.new(3)
-      String.contains?(text_lower, "czteropokojow") -> Decimal.new(4)
-      String.contains?(text_lower, "pięciopokojow") -> Decimal.new(5)
-      String.contains?(text_lower, "sześciopokojow") -> Decimal.new(6)
-
-      # Pattern: "kawalerka" = 1 room
-      String.contains?(text_lower, "kawalerka") -> Decimal.new(1)
-
-      # Pattern: "studio" = 1 room
-      String.contains?(text_lower, "studio") -> Decimal.new(1)
-
-      true -> nil
-    end
-  end
-
-  defp extract_number_with_unit(text, unit) do
-    regex = Regex.compile!("(\\d+[,\\.]?\\d*)\\s*#{Regex.escape(unit)}")
-
-    case Regex.run(regex, text) do
-      [_, number] ->
-        number
-        |> String.replace(",", ".")
-        |> Decimal.parse()
-        |> case do
-          {decimal, _} -> decimal
-          :error -> nil
-        end
-
-      _ ->
-        nil
     end
   end
 

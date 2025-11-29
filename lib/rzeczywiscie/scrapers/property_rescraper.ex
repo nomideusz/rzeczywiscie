@@ -6,6 +6,7 @@ defmodule Rzeczywiscie.Scrapers.PropertyRescraper do
 
   require Logger
   alias Rzeczywiscie.RealEstate
+  alias Rzeczywiscie.Scrapers.ExtractionHelpers
 
   @doc """
   Re-scrape properties missing specific fields.
@@ -150,8 +151,8 @@ defmodule Rzeczywiscie.Scrapers.PropertyRescraper do
     }
   end
 
+  # Price extraction for OLX detail pages using shared helpers
   defp extract_olx_price(document) do
-    # Try multiple selectors for price on detail page
     selectors = [
       "h3[data-testid='ad-price-container']",
       "[data-testid='ad-price']",
@@ -159,34 +160,22 @@ defmodule Rzeczywiscie.Scrapers.PropertyRescraper do
       "div[class*='price'] h3",
       "h3[class*='Price']",
       "[class*='priceContainer']",
-      "h3", # Try all h3 tags
-      "strong" # Try strong tags
+      "h3",
+      "strong"
     ]
 
-    price_text = Enum.find_value(selectors, fn selector ->
-      case Floki.find(document, selector) |> Floki.text() do
-        "" -> nil
-        text -> 
-          # Check if this text contains a price pattern
-          if String.match?(text, ~r/\d+.*(?:zł|PLN)/i) do
-            text
-          else
-            nil
-          end
-      end
-    end)
+    price_text = find_price_text_in_selectors(document, selectors)
 
-    # Parse the price text to Decimal
     if price_text do
-      parse_price_text(price_text)
+      ExtractionHelpers.parse_price(price_text)
     else
-      # If no price found, search entire document
-      extract_price_from_document_text(document)
+      full_text = Floki.text(document)
+      ExtractionHelpers.extract_price_from_full_text(full_text)
     end
   end
 
+  # Price extraction for Otodom detail pages using shared helpers
   defp extract_otodom_price(document) do
-    # Otodom uses structured data - try multiple approaches
     selectors = [
       "strong[data-cy='ad.top-information.price']",
       "[data-cy='ad.top-information.price']",
@@ -196,144 +185,50 @@ defmodule Rzeczywiscie.Scrapers.PropertyRescraper do
       "div[class*='price'] strong",
       "div[class*='Price'] strong",
       "[class*='priceInfo'] strong",
-      "strong", # Try all strong tags as fallback
-      "h3"  # Sometimes price is in h3
+      "strong",
+      "h3"
     ]
 
-    price_text = Enum.find_value(selectors, fn selector ->
-      case Floki.find(document, selector) |> Floki.text() do
-        "" -> nil
-        text -> 
-          # Check if this text contains a price pattern
-          if String.match?(text, ~r/\d+.*(?:zł|PLN)/i) do
-            text
-          else
-            nil
-          end
-      end
-    end)
+    price_text = find_price_text_in_selectors(document, selectors)
 
-    # Parse the price text to Decimal (same as extract_olx_price)
     if price_text do
-      parse_price_text(price_text)
+      ExtractionHelpers.parse_price(price_text)
     else
-      # If no price found, search entire document
-      extract_price_from_document_text(document)
+      full_text = Floki.text(document)
+      ExtractionHelpers.extract_price_from_full_text(full_text)
     end
   end
 
+  defp find_price_text_in_selectors(document, selectors) do
+    Enum.find_value(selectors, fn selector ->
+      case Floki.find(document, selector) |> Floki.text() do
+        "" -> nil
+        text ->
+          if String.match?(text, ~r/\d+.*(?:zł|PLN)/i), do: text, else: nil
+      end
+    end)
+  end
+
+  # Area extraction using shared helpers
   defp extract_olx_area(document) do
-    # Look for area in parameters/details section
     text = Floki.text(document)
-    
-    # Try patterns: "Powierzchnia: 50 m²", "50 m²", "50m2"
-    regex = ~r/(\d+(?:[,\.]\d+)?)\s*(?:m²|m2|mkw)/i
-    
-    case Regex.run(regex, text) do
-      [_, area_str] ->
-        clean = String.replace(area_str, ",", ".")
-        case Decimal.parse(clean) do
-          {decimal, _} -> 
-            # Validate reasonable range (5-2000 m²)
-            if Decimal.compare(decimal, 5) != :lt and Decimal.compare(decimal, 2000) != :gt do
-              decimal
-            else
-              nil
-            end
-          :error -> nil
-        end
-      _ -> nil
-    end
+    ExtractionHelpers.extract_area_from_text(text)
   end
 
   defp extract_otodom_area(document) do
-    # Otodom typically shows area in details
-    extract_olx_area(document)  # Same logic works
+    text = Floki.text(document)
+    ExtractionHelpers.extract_area_from_text(text)
   end
 
+  # Rooms extraction using shared helpers
   defp extract_olx_rooms(document) do
     text = Floki.text(document)
-    extract_rooms_from_text(text)
+    ExtractionHelpers.extract_rooms_from_text(text)
   end
 
   defp extract_otodom_rooms(document) do
     text = Floki.text(document)
-    extract_rooms_from_text(text)
-  end
-
-  defp extract_rooms_from_text(text) do
-    text_lower = String.downcase(text)
-
-    cond do
-      # "Liczba pokoi: 3" or "Pokoi: 3"
-      match = Regex.run(~r/(?:liczba\s+)?pokoi?:\s*(\d+)/, text_lower) ->
-        [_, num] = match
-        String.to_integer(num)
-
-      # "3-pokojowe", "2 pokojowe"
-      match = Regex.run(~r/(\d+)[\s-]*pokojow/, text_lower) ->
-        [_, num] = match
-        String.to_integer(num)
-      
-      # "3 pokoje", "2-pokoje"
-      match = Regex.run(~r/(\d+)[\s-]*pokoje/, text_lower) ->
-        [_, num] = match
-        String.to_integer(num)
-      
-      # "3-pok", "2 pok."
-      match = Regex.run(~r/(\d+)[\s-]*pok\.?(?!oj)/, text_lower) ->
-        [_, num] = match
-        String.to_integer(num)
-
-      # Polish word numbers
-      String.contains?(text_lower, "jednopokojow") -> 1
-      String.contains?(text_lower, "dwupokojow") -> 2
-      String.contains?(text_lower, "trzypokojow") -> 3
-      String.contains?(text_lower, "czteropokojow") -> 4
-
-      # Single room
-      String.contains?(text_lower, "kawalerka") -> 1
-      String.contains?(text_lower, "studio") -> 1
-
-      true -> nil
-    end
-  end
-
-  defp extract_price_from_document_text(document) do
-    # Get all text and look for price patterns
-    full_text = Floki.text(document)
-    
-    # Look for price with zł to be specific
-    regex = ~r/(\d{1,3}(?:[\s,.]\d{3})*(?:[,.]\d{1,2})?)\s*(?:zł|PLN)/i
-    
-    case Regex.run(regex, full_text) do
-      [full_match, _] -> parse_price_text(full_match)
-      _ -> nil
-    end
-  end
-
-  defp parse_price_text(text) do
-    # Remove all whitespace and extract number
-    regex = ~r/(\d+(?:[\s,.]\d{3})*(?:[,.]\d{1,2})?)/
-    
-    case Regex.run(regex, text) do
-      [_, price_str] ->
-        clean = price_str
-          |> String.replace(~r/\s+/, "")
-          |> String.replace(",", ".")
-        
-        case Decimal.parse(clean) do
-          {decimal, _} ->
-            # Validate reasonable price range (100 PLN to 99M PLN)
-            if Decimal.compare(decimal, 100) != :lt and Decimal.compare(decimal, 99999999) != :gt do
-              decimal
-            else
-              nil
-            end
-          :error -> nil
-        end
-      _ -> nil
-    end
+    ExtractionHelpers.extract_rooms_from_text(text)
   end
 
   defp update_property_with_extracted_data(property, extracted) do

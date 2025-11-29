@@ -5,6 +5,7 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
 
   require Logger
   alias Rzeczywiscie.RealEstate
+  alias Rzeczywiscie.Scrapers.ExtractionHelpers
 
   @base_url "https://www.olx.pl"
   @malopolskie_url "#{@base_url}/nieruchomosci/malopolskie/"
@@ -389,31 +390,8 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
   end
 
   defp extract_price_from_card_text(card) do
-    # Get all text from card
     full_text = Floki.text(card)
-    
-    # Look for price with "zł" to be more specific
-    regex = ~r/(\d{1,3}(?:[\s,.]\d{3})*(?:[,.]\d{1,2})?)\s*zł/i
-    
-    case Regex.run(regex, full_text) do
-      [_, price_str] ->
-        clean_price =
-          price_str
-          |> String.replace(~r/\s+/, "")
-          |> String.replace(",", ".")
-
-        case Decimal.parse(clean_price) do
-          {decimal, _} ->
-            if Decimal.compare(decimal, Decimal.new("1")) != :lt and
-                 Decimal.compare(decimal, Decimal.new("99999999")) != :gt do
-              decimal
-            else
-              nil
-            end
-          :error -> nil
-        end
-      _ -> nil
-    end
+    ExtractionHelpers.extract_price_from_full_text(full_text)
   end
 
   # Extract price from title or description text (fallback method)
@@ -425,257 +403,36 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
     end
   end
 
-  defp parse_price(text) do
-    # Use regex to extract price pattern first, before stripping chars
-    # Matches patterns like: "1 200 zł", "1,200.50 PLN", "1200", "1 200,50", "2500 zł"
-    regex = ~r/(\d{1,3}(?:[\s,.]\d{3})*(?:[,.]\d{1,2})?)\s*(?:zł|PLN)?/i
-
-    case Regex.run(regex, text) do
-      [_, price_str] ->
-        # Clean up: remove spaces and normalize decimal separator
-        clean_price =
-          price_str
-          |> String.replace(~r/\s+/, "")
-          |> String.replace(",", ".")
-
-        case Decimal.parse(clean_price) do
-          {decimal, _} ->
-            # Validate: price should be reasonable (1 to 99,999,999 PLN)
-            # Database constraint: precision 10, scale 2 = max 99,999,999.99
-            if Decimal.compare(decimal, Decimal.new("1")) != :lt and
-                 Decimal.compare(decimal, Decimal.new("99999999")) != :gt do
-              decimal
-            else
-              Logger.warning("Price out of range: #{clean_price} PLN - ignoring")
-              nil
-            end
-
-          :error ->
-            nil
-        end
-
-      _ ->
-        nil
-    end
-  end
+  defp parse_price(text), do: ExtractionHelpers.parse_price(text)
 
   defp extract_area(card) do
-    # OLX typically shows area in specific format: "75 m²" or "75m²"
-    # Get all text and look for m² pattern
     text = Floki.text(card)
-
-    # Strategy: Find ALL area mentions and filter intelligently
-    # 1. First try to find building area keywords (powierzchnia, pow., mieszkanie)
-    # 2. Avoid plot area keywords (działka, grunt, teren)
-    # 3. Validate size is reasonable for building (not plot)
-
-    # Try to find building area with specific keywords
-    building_area = extract_building_area(text)
-
-    if building_area do
-      building_area
-    else
-      # Fallback: find any area but validate it's reasonable for a building
-      extract_any_area(text)
-    end
-  end
-
-  defp extract_building_area(text) do
-    # Keywords that indicate building/usable area (not plot)
-    # "powierzchnia: 75 m²", "pow. użytkowa: 75m2", "mieszkanie 75 m²"
-    building_keywords = [
-      "powierzchnia użytkowa",
-      "pow\\. użytkowa",
-      "pow\\.użytkowa",
-      "powierzchnia",
-      "pow\\.",
-      "pow ",
-      "mieszkanie",
-      "dom",
-      "lokal",
-      "garaż",
-      "pokój",
-      "kawalerka"
-    ]
-
-    # Build regex patterns that look for keyword + number + area unit
-    # Example: "powierzchnia: 75 m²" or "pow. 75m2" or "75 mkw"
-    # Area units: m², m2, m^2, mkw, m.kw., metrów kw
-    area_unit_pattern = "(?:m[\\^²2]|mkw\\.?|m\\.kw\\.?|metrów\\s*kw)"
-
-    regex_patterns =
-      Enum.map(building_keywords, fn keyword ->
-        ~r/#{keyword}[:\s]*(\d{1,4}(?:[,\.]\d{1,2})?)\s*#{area_unit_pattern}/iu
-      end)
-
-    # Try each pattern
-    result = Enum.find_value(regex_patterns, fn pattern ->
-      case Regex.run(pattern, text) do
-        [_, number_str] -> parse_area_number(number_str, max_area: 2000, min_area: 5)
-        _ -> nil
-      end
-    end)
-
-    result
-  end
-
-  defp extract_any_area(text) do
-    # Area units: m², m2, m^2, mkw, m.kw., metrów kw
-    area_unit_pattern = "(?:m[\\^²2]|mkw\\.?|m\\.kw\\.?|metrów\\s*kw)"
-
-    # First, try patterns with the number BEFORE the unit (most common)
-    # Match: "75 m²", "45.5m2", "100 mkw"
-    regex_before = ~r/(?<![0-9-])(\d{1,4}(?:[,\.]\d{1,2})?)\s*#{area_unit_pattern}/iu
-
-    case Regex.run(regex_before, text) do
-      [_, number_str] ->
-        # For fallback, use stricter validation
-        parse_area_number(number_str, max_area: 2000, min_area: 5)
-      _ ->
-        # Also try format with number separated: "75 m 2" or with space before
-        regex_spaced = ~r/(\d{1,4}(?:[,\.]\d{1,2})?)\s+m\s*[\^²2]/iu
-
-        case Regex.run(regex_spaced, text) do
-          [_, number_str] -> parse_area_number(number_str, max_area: 2000, min_area: 5)
-          _ -> nil
-        end
-    end
-  end
-
-  defp parse_area_number(number_str, opts) do
-    max_area = Keyword.get(opts, :max_area, 50000)
-    min_area = Keyword.get(opts, :min_area, 5)
-
-    # Clean up the number: remove spaces and replace comma with dot
-    clean_number =
-      number_str
-      |> String.replace(~r/\s+/, "")  # Remove all spaces
-      |> String.replace(",", ".")     # Replace comma with dot
-
-    case Decimal.parse(clean_number) do
-      {decimal, _} ->
-        # Validate: area should be reasonable
-        # Lower minimum to 5 m² for parking spots and small storage units
-        if Decimal.compare(decimal, Decimal.new(min_area)) != :lt and
-             Decimal.compare(decimal, Decimal.new(max_area)) != :gt do
-          decimal
-        else
-          Logger.debug("Area out of range: #{clean_number} m² (min: #{min_area}, max: #{max_area}) - ignoring")
-          nil
-        end
-
-      :error ->
-        Logger.debug("Could not parse area: #{clean_number}")
-        nil
-    end
+    ExtractionHelpers.extract_area_from_text(text)
   end
 
   defp extract_rooms(card) do
     text = Floki.text(card)
 
     # Try multiple patterns for room count
-    extract_number_with_unit(text, "pokoje")
+    ExtractionHelpers.extract_number_with_unit(text, "pokoje")
     |> case do
       nil ->
         # Try alternative patterns
-        extract_number_with_unit(text, "pokoi") ||
-          extract_number_with_unit(text, "pok\\.") ||
-          extract_number_with_unit(text, "pok") ||
-          extract_rooms_from_text(text)
+        ExtractionHelpers.extract_number_with_unit(text, "pokoi") ||
+          ExtractionHelpers.extract_number_with_unit(text, "pok\\.") ||
+          ExtractionHelpers.extract_number_with_unit(text, "pok") ||
+          ExtractionHelpers.extract_rooms_from_text(text)
 
       decimal ->
-        decimal
+        Decimal.to_integer(decimal)
     end
     |> case do
       nil -> nil
+      num when is_integer(num) -> num
       decimal -> Decimal.to_integer(decimal)
     end
   end
 
-  # Extract rooms from common Polish patterns like "3-pokojowe", "dwupokojowe"
-  defp extract_rooms_from_text(text) do
-    text_lower = String.downcase(text)
-
-    cond do
-      # Pattern: "X-pokojowe" or "X pokojowe"
-      match = Regex.run(~r/(\d+)[\s-]*pokojow/, text_lower) ->
-        [_, num] = match
-        case Decimal.parse(num) do
-          {decimal, _} -> decimal
-          :error -> nil
-        end
-      
-      # Pattern: "X-pok" or "X pok" (without period)
-      match = Regex.run(~r/(\d+)[\s-]*pok(?!oj)/, text_lower) ->
-        [_, num] = match
-        case Decimal.parse(num) do
-          {decimal, _} -> decimal
-          :error -> nil
-        end
-      
-      # Pattern: "X pokoje" or "X-pokoje"
-      match = Regex.run(~r/(\d+)[\s-]*pokoje/, text_lower) ->
-        [_, num] = match
-        case Decimal.parse(num) do
-          {decimal, _} -> decimal
-          :error -> nil
-        end
-
-      # Polish word numbers
-      String.contains?(text_lower, "jednopokojow") -> Decimal.new(1)
-      String.contains?(text_lower, "dwupokojow") -> Decimal.new(2)
-      String.contains?(text_lower, "trzypokojow") -> Decimal.new(3)
-      String.contains?(text_lower, "czteropokojow") -> Decimal.new(4)
-      String.contains?(text_lower, "pięciopokojow") -> Decimal.new(5)
-      String.contains?(text_lower, "sześciopokojow") -> Decimal.new(6)
-      
-      # Abbreviated patterns: "2-pok.", "3 pok."
-      match = Regex.run(~r/(\d+)[\s-]*pok\./, text_lower) ->
-        [_, num] = match
-        case Decimal.parse(num) do
-          {decimal, _} -> decimal
-          :error -> nil
-        end
-
-      # Pattern: "kawalerka" = 1 room
-      String.contains?(text_lower, "kawalerka") -> Decimal.new(1)
-
-      # Pattern: "studio" = 1 room
-      String.contains?(text_lower, "studio") -> Decimal.new(1)
-      
-      # Pattern: "jednoosobowy" or "1-osobowy" = 1 room (single person room)
-      String.contains?(text_lower, "jednoosobowy") -> Decimal.new(1)
-      String.match?(text_lower, ~r/1[\s-]*osobow/) -> Decimal.new(1)
-      
-      # Pattern: "dwuosobowy" or "2-osobowy" = typically still 1 room (shared)
-      # But could be 2 separate rooms - default to 2 for "2 osobne pokoje"
-      String.contains?(text_lower, "2 osobne pokoje") -> Decimal.new(2)
-      String.contains?(text_lower, "3 osobne pokoje") -> Decimal.new(3)
-      
-      # Pattern: "garsoniera" = 1 room
-      String.contains?(text_lower, "garsoniera") -> Decimal.new(1)
-
-      true -> nil
-    end
-  end
-
-  defp extract_number_with_unit(text, unit) do
-    regex = Regex.compile!("(\\d+[,\\.]?\\d*)\\s*#{Regex.escape(unit)}")
-
-    case Regex.run(regex, text) do
-      [_, number] ->
-        number
-        |> String.replace(",", ".")
-        |> Decimal.parse()
-        |> case do
-          {decimal, _} -> decimal
-          :error -> nil
-        end
-
-      _ ->
-        nil
-    end
-  end
 
   defp extract_city(card) do
     # Try multiple selectors for location
