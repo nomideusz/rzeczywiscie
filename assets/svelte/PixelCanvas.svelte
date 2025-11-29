@@ -52,6 +52,36 @@
   let hoveredSpecialPixel = null  // Info about hovered special pixel {name, type, color}
   const CURSOR_THROTTLE_MS = 250
 
+  // Unicorn shape definition - relative offsets from anchor point
+  // Creates a small unicorn silhouette facing right (~7 pixels)
+  //       #          <- horn
+  //      ##          <- head  
+  //     ###          <- body
+  //      #           <- front leg
+  const UNICORN_SHAPE = [
+    { dx: 2, dy: -2 },   // horn tip
+    { dx: 1, dy: -1 },   // head top
+    { dx: 2, dy: -1 },   // ear
+    { dx: 0, dy: 0 },    // body left (anchor)
+    { dx: 1, dy: 0 },    // body middle  
+    { dx: 2, dy: 0 },    // body right
+    { dx: 1, dy: 1 },    // front leg
+  ]
+
+  // Check if a position is part of any unicorn shape
+  function getUnicornAtPosition(x, y) {
+    for (const pixel of pixels) {
+      if (pixel.is_special && pixel.special_type === 'unicorn') {
+        for (const offset of UNICORN_SHAPE) {
+          if (pixel.x + offset.dx === x && pixel.y + offset.dy === y) {
+            return pixel
+          }
+        }
+      }
+    }
+    return null
+  }
+
   // Generate device fingerprint based on stable hardware characteristics
   // This creates the same ID across different browsers on the same physical device
   // Using only hardware-level properties that don't change between browsers
@@ -283,14 +313,13 @@
 
     ctx.stroke()
 
-    // Draw pixels - use uniform cell size for consistent appearance
+    // Draw regular pixels first
     pixels.forEach(pixel => {
-      // Add visual effects based on tier and special status
-      if (pixel.is_special) {
-        // Extra bright sparkle effect for special pixels
-        ctx.shadowBlur = 16
-        ctx.shadowColor = `hsl(${(Date.now() / 15) % 360}, 100%, 70%)`
-      } else if (pixel.pixel_tier === "massive") {
+      // Skip special pixels - they'll be drawn as shapes
+      if (pixel.is_special) return
+
+      // Add visual effects based on tier
+      if (pixel.pixel_tier === "massive") {
         // Rainbow glow for massive pixels
         ctx.shadowBlur = 12
         ctx.shadowColor = `hsl(${(Date.now() / 20) % 360}, 100%, 60%)`
@@ -309,6 +338,30 @@
         cellSize - 2,
         cellSize - 2
       )
+    })
+
+    // Reset shadow before drawing special pixels
+    ctx.shadowBlur = 0
+
+    // Draw special pixels as shapes (unicorns, etc.)
+    pixels.forEach(pixel => {
+      if (!pixel.is_special) return
+
+      if (pixel.special_type === 'unicorn') {
+        // Draw unicorn shape with rainbow animation
+        const hue = (Date.now() / 15) % 360
+        ctx.shadowBlur = 20
+        ctx.shadowColor = `hsl(${hue}, 100%, 60%)`
+        
+        // Use claimer's color for the unicorn
+        ctx.fillStyle = pixel.claimer_color || pixel.color
+        
+        UNICORN_SHAPE.forEach(offset => {
+          const px = (pixel.x + offset.dx) * cellSize + 1
+          const py = (pixel.y + offset.dy) * cellSize + 1
+          ctx.fillRect(px, py, cellSize - 2, cellSize - 2)
+        })
+      }
     })
 
     // Reset shadow
@@ -356,6 +409,24 @@
             }
           }
         }
+        ctx.shadowBlur = 0
+      } else if (pixelMode === "special") {
+        // Draw unicorn shape preview with rainbow glow
+        const hue = (Date.now() / 15) % 360
+        ctx.shadowBlur = 12
+        ctx.shadowColor = `hsl(${hue}, 100%, 60%)`
+        UNICORN_SHAPE.forEach(offset => {
+          const px = hoveredPixel.x + offset.dx
+          const py = hoveredPixel.y + offset.dy
+          if (px >= 0 && px < width && py >= 0 && py < height) {
+            ctx.fillRect(
+              px * cellSize + 1,
+              py * cellSize + 1,
+              cellSize - 2,
+              cellSize - 2
+            )
+          }
+        })
         ctx.shadowBlur = 0
       } else {
         // Draw single pixel preview
@@ -448,16 +519,26 @@
       if (!hoveredPixel || hoveredPixel.x !== x || hoveredPixel.y !== y) {
         hoveredPixel = { x, y }
         
-        // Check if hovering over a special pixel
-        const pixelAtPos = pixels.find(p => p.x === x && p.y === y)
-        if (pixelAtPos && pixelAtPos.is_special) {
+        // Check if hovering over a special pixel (including unicorn shape)
+        const unicornPixel = getUnicornAtPosition(x, y)
+        if (unicornPixel) {
           hoveredSpecialPixel = {
-            name: pixelAtPos.claimer_name,
-            type: pixelAtPos.special_type,
-            color: pixelAtPos.claimer_color
+            name: unicornPixel.claimer_name,
+            type: unicornPixel.special_type,
+            color: unicornPixel.claimer_color
           }
         } else {
-          hoveredSpecialPixel = null
+          // Check for other special pixels at exact position
+          const pixelAtPos = pixels.find(p => p.x === x && p.y === y && p.is_special)
+          if (pixelAtPos) {
+            hoveredSpecialPixel = {
+              name: pixelAtPos.claimer_name,
+              type: pixelAtPos.special_type,
+              color: pixelAtPos.claimer_color
+            }
+          } else {
+            hoveredSpecialPixel = null
+          }
         }
         
         drawCanvas()
@@ -852,7 +933,7 @@
       </div>
     </a>
 
-    <!-- Stats & Massive Pixel Progress - top right -->
+    <!-- Stats & Progress - top right -->
     {#if isMobile}
       <!-- Mobile: Compact collapsible stats -->
       <div class="fixed z-50 top-3 right-3">
@@ -861,7 +942,7 @@
           class="bg-white/90 backdrop-blur rounded-full shadow-lg px-3 py-1.5 flex items-center gap-1.5 active:scale-95 transition-all"
         >
           <span class="text-xs font-bold text-neutral-900">
-            {userStats.progress_to_mega}/15
+            {stats.total_pixels}
           </span>
           <svg class="w-3 h-3 transition-transform {showMobileStats ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -869,36 +950,51 @@
         </button>
 
         {#if showMobileStats}
-          <div class="absolute top-12 right-0 bg-white/95 backdrop-blur rounded-xl shadow-2xl p-3 animate-in" style="width: 200px;">
-            <!-- Stats -->
-            <div class="mb-3 pb-3 border-b border-neutral-200">
-              <h1 class="text-xs font-semibold text-neutral-900">Pixels</h1>
-              <p class="text-[10px] text-neutral-500">{stats.total_pixels.toLocaleString()} · {stats.unique_users} artists</p>
+          <div class="absolute top-12 right-0 bg-white/95 backdrop-blur rounded-xl shadow-2xl p-3 animate-in" style="width: 220px;">
+            <!-- Header -->
+            <div class="flex items-center justify-between mb-3 pb-2 border-b border-neutral-200">
+              <span class="text-xs font-bold text-neutral-900">{stats.total_pixels.toLocaleString()} pixels</span>
+              <span class="text-[10px] text-neutral-500">{stats.unique_users} artists</span>
             </div>
 
-            <!-- Global Milestone (if active) -->
-            {#if milestoneProgress.next_milestone}
-              <div class="mb-3 pb-3 border-b border-neutral-200">
-                <div class="text-xs font-semibold text-neutral-900 mb-1">
-                  {#if milestoneProgress.next_milestone.reward === 'unicorn'}
-                    <span class="bg-gradient-to-r from-purple-600 via-pink-500 to-purple-600 bg-clip-text text-transparent font-bold">
+            <!-- Progress bars -->
+            <div class="space-y-2 mb-3">
+              <div>
+                <div class="flex items-center justify-between text-[10px] mb-0.5">
+                  <span class="text-neutral-600">Mega</span>
+                  <span class="text-neutral-500">{userStats.progress_to_mega}/15</span>
+                </div>
+                <div class="relative h-1.5 bg-neutral-200">
+                  <div class="absolute inset-y-0 left-0 bg-neutral-900 transition-all" style="width: {(userStats.progress_to_mega / 15) * 100}%"></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex items-center justify-between text-[10px] mb-0.5">
+                  <span class="text-neutral-600">Massive</span>
+                  <span class="text-neutral-500">{userStats.progress_to_massive_bonus}/100</span>
+                </div>
+                <div class="relative h-1.5 bg-neutral-200">
+                  <div class="absolute inset-y-0 left-0 bg-neutral-900 transition-all" style="width: {(userStats.progress_to_massive_bonus / 100) * 100}%"></div>
+                </div>
+              </div>
+              {#if milestoneProgress.next_milestone}
+                <div>
+                  <div class="flex items-center justify-between text-[10px] mb-0.5">
+                    <span class="{milestoneProgress.next_milestone.reward === 'unicorn' ? 'bg-gradient-to-r from-purple-600 via-pink-500 to-purple-600 bg-clip-text text-transparent font-bold' : 'text-neutral-600'}">
                       {milestoneProgress.next_milestone.name}
                     </span>
-                  {:else}
-                    {milestoneProgress.next_milestone.name}
-                  {/if}
+                    <span class="text-neutral-500">{milestoneProgress.total_pixels}/{milestoneProgress.next_milestone.threshold}</span>
+                  </div>
+                  <div class="relative h-1.5 bg-neutral-200">
+                    <div class="absolute inset-y-0 left-0 bg-neutral-900 transition-all" style="width: {(milestoneProgress.total_pixels / milestoneProgress.next_milestone.threshold) * 100}%"></div>
+                  </div>
                 </div>
-                <div class="relative h-1.5 bg-neutral-200 border border-neutral-300">
-                  <div class="absolute inset-y-0 left-0 bg-neutral-900 transition-all" style="width: {(milestoneProgress.total_pixels / milestoneProgress.next_milestone.threshold) * 100}%"></div>
-                </div>
-                <p class="text-[10px] text-neutral-500 mt-0.5">{milestoneProgress.total_pixels}/{milestoneProgress.next_milestone.threshold}</p>
-              </div>
-            {/if}
+              {/if}
+            </div>
 
             <!-- Available Pixels (only if any) -->
             {#if userStats.mega_pixels_available > 0 || userStats.massive_pixels_available > 0 || Object.values(userStats.special_pixels_available || {}).some(c => c > 0)}
-              <div>
-                <div class="text-xs font-semibold text-neutral-900 mb-2">Available</div>
+              <div class="pt-2 border-t border-neutral-200">
                 <div class="grid grid-cols-2 gap-1.5">
                   {#if userStats.mega_pixels_available > 0}
                     <button
@@ -938,114 +1034,89 @@
         {/if}
       </div>
     {:else}
-      <!-- Desktop: Full stats always visible -->
-      <div class="fixed z-50 top-6 right-6 flex flex-col gap-2">
-        <!-- Stats -->
-        <div class="bg-white/90 backdrop-blur rounded-xl shadow-lg px-4 py-2.5">
-          <h1 class="text-sm font-semibold text-neutral-900">Pixels</h1>
-          <p class="text-xs text-neutral-500">{stats.total_pixels.toLocaleString()} · {stats.unique_users} artists</p>
-        </div>
-
-        <!-- Progress Tracking -->
-        <div class="bg-white/90 backdrop-blur rounded-xl shadow-lg px-4 py-2.5">
-          <div class="text-sm font-semibold text-neutral-900 mb-2">Progress</div>
-          
-          <!-- Mega progress -->
-          <div class="mb-2">
-            <div class="flex items-center justify-between gap-2 mb-1">
-              <span class="text-xs text-neutral-700">Mega</span>
-              {#if userStats.mega_pixels_available > 0}
-                <span class="bg-neutral-900 text-white text-[10px] font-bold px-1.5 py-0.5">
-                  {userStats.mega_pixels_available}
-                </span>
-              {/if}
-            </div>
-            <div class="relative h-2 bg-neutral-200 border border-neutral-300">
-              <div class="absolute inset-y-0 left-0 bg-neutral-900 transition-all duration-300" style="width: {(userStats.progress_to_mega / 15) * 100}%"></div>
-            </div>
-            <p class="text-xs text-neutral-500 mt-1">{userStats.progress_to_mega}/15</p>
+      <!-- Desktop: Single unified card -->
+      <div class="fixed z-50 top-6 right-6">
+        <div class="bg-white/90 backdrop-blur rounded-xl shadow-lg px-4 py-3" style="width: 200px;">
+          <!-- Header -->
+          <div class="flex items-center justify-between mb-3 pb-2 border-b border-neutral-200">
+            <span class="text-sm font-bold text-neutral-900">{stats.total_pixels.toLocaleString()}</span>
+            <span class="text-xs text-neutral-500">{stats.unique_users} artists</span>
           </div>
 
-          <!-- Massive progress -->
-          <div>
-            <div class="flex items-center justify-between gap-2 mb-1">
-              <span class="text-xs text-neutral-700">Massive</span>
-              {#if userStats.massive_pixels_available > 0}
-                <span class="bg-neutral-900 text-white text-[10px] font-bold px-1.5 py-0.5">
-                  {userStats.massive_pixels_available}
-                </span>
-              {/if}
+          <!-- Progress bars - all uniform -->
+          <div class="space-y-2">
+            <div>
+              <div class="flex items-center justify-between text-xs mb-1">
+                <span class="text-neutral-600">Mega</span>
+                <span class="text-neutral-500">{userStats.progress_to_mega}/15</span>
+              </div>
+              <div class="relative h-1.5 bg-neutral-200">
+                <div class="absolute inset-y-0 left-0 bg-neutral-900 transition-all duration-300" style="width: {(userStats.progress_to_mega / 15) * 100}%"></div>
+              </div>
             </div>
-            <div class="relative h-2 bg-neutral-200 border border-neutral-300">
-              <div class="absolute inset-y-0 left-0 bg-neutral-900 transition-all duration-300" style="width: {(userStats.progress_to_massive_bonus / 100) * 100}%"></div>
+            <div>
+              <div class="flex items-center justify-between text-xs mb-1">
+                <span class="text-neutral-600">Massive</span>
+                <span class="text-neutral-500">{userStats.progress_to_massive_bonus}/100</span>
+              </div>
+              <div class="relative h-1.5 bg-neutral-200">
+                <div class="absolute inset-y-0 left-0 bg-neutral-900 transition-all duration-300" style="width: {(userStats.progress_to_massive_bonus / 100) * 100}%"></div>
+              </div>
             </div>
-            <p class="text-xs text-neutral-500 mt-1">{userStats.progress_to_massive_bonus}/100</p>
-          </div>
-        </div>
-
-        <!-- Global Milestone Progress -->
-        {#if milestoneProgress.next_milestone}
-          <div class="bg-white/90 backdrop-blur rounded-xl shadow-lg px-4 py-2.5">
-            <div class="flex items-center justify-between gap-2 mb-1">
-              <span class="text-xs text-neutral-700">
-                {#if milestoneProgress.next_milestone.reward === 'unicorn'}
-                  <span class="bg-gradient-to-r from-purple-600 via-pink-500 to-purple-600 bg-clip-text text-transparent font-bold">
+            {#if milestoneProgress.next_milestone}
+              <div>
+                <div class="flex items-center justify-between text-xs mb-1">
+                  <span class="{milestoneProgress.next_milestone.reward === 'unicorn' ? 'bg-gradient-to-r from-purple-600 via-pink-500 to-purple-600 bg-clip-text text-transparent font-bold' : 'text-neutral-600'}">
                     {milestoneProgress.next_milestone.name}
                   </span>
-                {:else}
-                  {milestoneProgress.next_milestone.name}
-                {/if}
-              </span>
-            </div>
-            <div class="relative h-2 bg-neutral-200 border border-neutral-300">
-              <div class="absolute inset-y-0 left-0 bg-neutral-900 transition-all duration-300" style="width: {(milestoneProgress.total_pixels / milestoneProgress.next_milestone.threshold) * 100}%"></div>
-            </div>
-            <p class="text-xs text-neutral-500 mt-1">{milestoneProgress.total_pixels}/{milestoneProgress.next_milestone.threshold}</p>
-            <p class="text-[10px] text-neutral-400 mt-0.5">Community unlocks for all</p>
+                  <span class="text-neutral-500">{milestoneProgress.total_pixels}/{milestoneProgress.next_milestone.threshold}</span>
+                </div>
+                <div class="relative h-1.5 bg-neutral-200">
+                  <div class="absolute inset-y-0 left-0 bg-neutral-900 transition-all duration-300" style="width: {(milestoneProgress.total_pixels / milestoneProgress.next_milestone.threshold) * 100}%"></div>
+                </div>
+              </div>
+            {/if}
           </div>
-        {/if}
 
-        <!-- Pixel Types - Combined (only show when at least one is available) -->
-        {#if userStats.mega_pixels_available > 0 || userStats.massive_pixels_available > 0 || Object.values(userStats.special_pixels_available || {}).some(c => c > 0)}
-          <div class="bg-white/90 backdrop-blur rounded-xl shadow-lg px-4 py-2.5">
-            <div class="text-sm font-semibold text-neutral-900 mb-2">Available</div>
-            <div class="grid grid-cols-3 gap-2">
-              {#if userStats.mega_pixels_available > 0}
-                <button
-                  on:click={() => togglePixelMode("mega")}
-                  class="font-bold py-2 px-2 border-2 transition-all {pixelMode === 'mega' ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-900 border-neutral-900 hover:bg-neutral-50'}"
-                >
-                  <span class="text-xs block">Mega</span>
-                  <span class="text-[10px]">×{userStats.mega_pixels_available}</span>
-                </button>
-              {/if}
-              {#if userStats.massive_pixels_available > 0}
-                <button
-                  on:click={() => togglePixelMode("massive")}
-                  class="font-bold py-2 px-2 border-2 transition-all {pixelMode === 'massive' ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-900 border-neutral-900 hover:bg-neutral-50'}"
-                >
-                  <span class="text-xs block">Massive</span>
-                  <span class="text-[10px]">×{userStats.massive_pixels_available}</span>
-                </button>
-              {/if}
-              {#each Object.entries(userStats.special_pixels_available || {}) as [type, count]}
-                {#if count > 0}
+          <!-- Available Pixels (only show when at least one is available) -->
+          {#if userStats.mega_pixels_available > 0 || userStats.massive_pixels_available > 0 || Object.values(userStats.special_pixels_available || {}).some(c => c > 0)}
+            <div class="mt-3 pt-2 border-t border-neutral-200">
+              <div class="grid grid-cols-2 gap-1.5">
+                {#if userStats.mega_pixels_available > 0}
                   <button
-                    on:click={() => live.pushEvent("select_special_pixel", { special_type: type })}
-                    class="font-bold py-2 px-2 border-2 transition-all {pixelMode === 'special' ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-900 border-neutral-900 hover:bg-neutral-50'}"
+                    on:click={() => togglePixelMode("mega")}
+                    class="text-xs font-bold py-1.5 px-2 border-2 transition-all {pixelMode === 'mega' ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-900 border-neutral-900 hover:bg-neutral-50'}"
                   >
-                    {#if type === 'unicorn'}
-                      <span class="text-xs block bg-gradient-to-r from-purple-600 via-pink-500 to-purple-600 bg-clip-text text-transparent">Unicorn</span>
-                    {:else}
-                      <span class="text-xs block">{type.charAt(0).toUpperCase() + type.slice(1)}</span>
-                    {/if}
-                    <span class="text-[10px]">×{count}</span>
+                    Mega ×{userStats.mega_pixels_available}
                   </button>
                 {/if}
-              {/each}
+                {#if userStats.massive_pixels_available > 0}
+                  <button
+                    on:click={() => togglePixelMode("massive")}
+                    class="text-xs font-bold py-1.5 px-2 border-2 transition-all {pixelMode === 'massive' ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-900 border-neutral-900 hover:bg-neutral-50'}"
+                  >
+                    Massive ×{userStats.massive_pixels_available}
+                  </button>
+                {/if}
+                {#each Object.entries(userStats.special_pixels_available || {}) as [type, count]}
+                  {#if count > 0}
+                    <button
+                      on:click={() => live.pushEvent("select_special_pixel", { special_type: type })}
+                      class="text-xs font-bold py-1.5 px-2 border-2 transition-all {pixelMode === 'special' ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-900 border-neutral-900 hover:bg-neutral-50'}"
+                    >
+                      {#if type === 'unicorn'}
+                        <span class="bg-gradient-to-r from-purple-600 via-pink-500 to-purple-600 bg-clip-text text-transparent">Unicorn</span>
+                      {:else}
+                        {type.charAt(0).toUpperCase() + type.slice(1)}
+                      {/if}
+                      <span class="ml-0.5">×{count}</span>
+                    </button>
+                  {/if}
+                {/each}
+              </div>
             </div>
-          </div>
-        {/if}
+          {/if}
+        </div>
       </div>
     {/if}
 
@@ -1155,3 +1226,4 @@
     50% { transform: translateY(-4px); }
   }
 </style>
+
