@@ -213,8 +213,13 @@ defmodule Rzeczywiscie.Scrapers.PropertyRescraper do
       end
     end)
 
-    # If no price found in selectors, try searching entire document text
-    price_text || extract_price_from_document_text(document)
+    # Parse the price text to Decimal (same as extract_olx_price)
+    if price_text do
+      parse_price_text(price_text)
+    else
+      # If no price found, search entire document
+      extract_price_from_document_text(document)
+    end
   end
 
   defp extract_olx_area(document) do
