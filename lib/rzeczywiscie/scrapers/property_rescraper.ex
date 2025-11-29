@@ -156,44 +156,60 @@ defmodule Rzeczywiscie.Scrapers.PropertyRescraper do
       "h3[data-testid='ad-price-container']",
       "[data-testid='ad-price']",
       "h3[class*='price']",
-      "div[class*='price'] h3"
+      "div[class*='price'] h3",
+      "h3[class*='Price']",
+      "[class*='priceContainer']",
+      "h3", # Try all h3 tags
+      "strong" # Try strong tags
     ]
 
     price_text = Enum.find_value(selectors, fn selector ->
       case Floki.find(document, selector) |> Floki.text() do
         "" -> nil
-        text -> text
+        text -> 
+          # Check if this text contains a price pattern
+          if String.match?(text, ~r/\d+.*(?:zł|PLN)/i) do
+            text
+          else
+            nil
+          end
       end
     end)
 
-    if price_text do
-      parse_price_text(price_text)
-    else
-      nil
-    end
+    # If no price found, search entire document
+    price_text || extract_price_from_document_text(document)
   end
 
   defp extract_otodom_price(document) do
-    # Otodom uses structured data
+    # Otodom uses structured data - try multiple approaches
     selectors = [
       "strong[data-cy='ad.top-information.price']",
       "[data-cy='ad.top-information.price']",
+      "strong[aria-label*='Cena']",
+      "div[aria-label*='Cena']",
       "strong[class*='Price']",
-      "div[class*='price'] strong"
+      "div[class*='price'] strong",
+      "div[class*='Price'] strong",
+      "[class*='priceInfo'] strong",
+      "strong", # Try all strong tags as fallback
+      "h3"  # Sometimes price is in h3
     ]
 
     price_text = Enum.find_value(selectors, fn selector ->
       case Floki.find(document, selector) |> Floki.text() do
         "" -> nil
-        text -> text
+        text -> 
+          # Check if this text contains a price pattern
+          if String.match?(text, ~r/\d+.*(?:zł|PLN)/i) do
+            text
+          else
+            nil
+          end
       end
     end)
 
-    if price_text do
-      parse_price_text(price_text)
-    else
-      nil
-    end
+    # If no price found in selectors, try searching entire document text
+    price_text || extract_price_from_document_text(document)
   end
 
   defp extract_olx_area(document) do
@@ -273,6 +289,19 @@ defmodule Rzeczywiscie.Scrapers.PropertyRescraper do
     end
   end
 
+  defp extract_price_from_document_text(document) do
+    # Get all text and look for price patterns
+    full_text = Floki.text(document)
+    
+    # Look for price with zł to be specific
+    regex = ~r/(\d{1,3}(?:[\s,.]\d{3})*(?:[,.]\d{1,2})?)\s*(?:zł|PLN)/i
+    
+    case Regex.run(regex, full_text) do
+      [_, price_str] -> parse_price_text(price_str <> " zł")
+      _ -> nil
+    end
+  end
+
   defp parse_price_text(text) do
     # Remove all whitespace and extract number
     regex = ~r/(\d+(?:[\s,.]\d{3})*(?:[,.]\d{1,2})?)/
@@ -285,8 +314,8 @@ defmodule Rzeczywiscie.Scrapers.PropertyRescraper do
         
         case Decimal.parse(clean) do
           {decimal, _} ->
-            # Validate reasonable price range
-            if Decimal.compare(decimal, 1) != :lt and Decimal.compare(decimal, 99999999) != :gt do
+            # Validate reasonable price range (100 PLN to 99M PLN)
+            if Decimal.compare(decimal, 100) != :lt and Decimal.compare(decimal, 99999999) != :gt do
               decimal
             else
               nil
