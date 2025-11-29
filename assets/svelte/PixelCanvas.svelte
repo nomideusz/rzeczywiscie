@@ -46,10 +46,10 @@
   let hasScrolled = false
   let showMobileStats = false  // Toggle for mobile stats expansion
   let deviceId = ''  // Unique ID for this physical device (fingerprint-based)
-  let showNameModal = false  // Modal for entering name when placing special pixel
-  let pendingSpecialPixel = null  // {x, y, type} for special pixel to be placed
+  let pendingSpecialPixel = null  // {x, y} for special pixel being placed - locks position
   let claimerName = ''  // Name entered by user
   let unicornDirection = 'right'  // Direction unicorn faces: 'left' or 'right'
+  let nameInputElement = null  // Reference to name input for focus
   let hoveredSpecialPixel = null  // Info about hovered special pixel {name, type, color}
   let mousePosition = { x: 0, y: 0 }  // Track mouse position for tooltip
   const CURSOR_THROTTLE_MS = 250
@@ -285,8 +285,19 @@
 
     // No cross-tab syncing - each tab maintains its own state independently
 
+    // Global keyboard handler for unicorn placement
+    const globalKeyHandler = (e) => {
+      if (pendingSpecialPixel && e.target.tagName !== 'INPUT') {
+        if (e.key === 'Escape') cancelSpecialPixel()
+        else if (e.key === 'ArrowLeft') { unicornDirection = 'left'; drawCanvas() }
+        else if (e.key === 'ArrowRight') { unicornDirection = 'right'; drawCanvas() }
+      }
+    }
+    window.addEventListener('keydown', globalKeyHandler)
+
     return () => {
       if (animationId) cancelAnimationFrame(animationId)
+      window.removeEventListener('keydown', globalKeyHandler)
     }
   })
 
@@ -527,9 +538,9 @@
           }
         }
         ctx.shadowBlur = 0
-      } else if (pixelMode === "special") {
-        // Draw colorful unicorn shape preview with rainbow glow
-        ctx.globalAlpha = 0.8
+      } else if (pixelMode === "special" && !pendingSpecialPixel) {
+        // Draw colorful unicorn shape preview following cursor
+        ctx.globalAlpha = 0.6
         const hue = (Date.now() / 20) % 360
         ctx.shadowBlur = 12
         ctx.shadowColor = `hsl(${hue}, 100%, 60%)`
@@ -539,18 +550,12 @@
           const py = hoveredPixel.y + offset.dy
           if (px >= 0 && px < width && py >= 0 && py < height) {
             const color = UNICORN_COLORS[offset.type] || '#FFFFFF'
-            // Light outline for body pixels
             if (offset.type === 'body') {
               ctx.fillStyle = '#E8E0F0'
               ctx.fillRect(px * cellSize, py * cellSize, cellSize, cellSize)
             }
             ctx.fillStyle = color
-            ctx.fillRect(
-              px * cellSize + 1,
-              py * cellSize + 1,
-              cellSize - 2,
-              cellSize - 2
-            )
+            ctx.fillRect(px * cellSize + 1, py * cellSize + 1, cellSize - 2, cellSize - 2)
           }
         })
         ctx.shadowBlur = 0
@@ -565,6 +570,31 @@
         )
       }
 
+      ctx.globalAlpha = 1.0
+    }
+
+    // Draw locked pending unicorn position (when placing)
+    if (pendingSpecialPixel) {
+      const hue = (Date.now() / 20) % 360
+      ctx.shadowBlur = 15
+      ctx.shadowColor = `hsl(${hue}, 100%, 60%)`
+      ctx.globalAlpha = unicornPositionValid ? 0.9 : 0.4
+      
+      const previewShape = getUnicornShape(unicornDirection)
+      previewShape.forEach(offset => {
+        const px = pendingSpecialPixel.x + offset.dx
+        const py = pendingSpecialPixel.y + offset.dy
+        if (px >= 0 && px < width && py >= 0 && py < height) {
+          const color = UNICORN_COLORS[offset.type] || '#FFFFFF'
+          if (offset.type === 'body') {
+            ctx.fillStyle = unicornPositionValid ? '#E8E0F0' : '#FFE0E0'
+            ctx.fillRect(px * cellSize, py * cellSize, cellSize, cellSize)
+          }
+          ctx.fillStyle = unicornPositionValid ? color : '#FF6666'
+          ctx.fillRect(px * cellSize + 1, py * cellSize + 1, cellSize - 2, cellSize - 2)
+        }
+      })
+      ctx.shadowBlur = 0
       ctx.globalAlpha = 1.0
     }
   }
@@ -596,9 +626,17 @@
     const { x, y } = getCoords(event.clientX, event.clientY)
     if (x >= 0 && x < width && y >= 0 && y < height) {
       if (pixelMode === "special") {
-        // Show modal to enter name for special pixel
-        pendingSpecialPixel = { x, y }
-        showNameModal = true
+        // Lock position for special pixel placement
+        if (pendingSpecialPixel) {
+          // Already have a pending position - clicking elsewhere cancels and sets new position
+          pendingSpecialPixel = { x, y }
+          claimerName = ''
+        } else {
+          pendingSpecialPixel = { x, y }
+        }
+        // Focus name input after a tick
+        setTimeout(() => nameInputElement?.focus(), 50)
+        drawCanvas()
       } else if (pixelMode === "massive" && userStats.massive_pixels_available > 0) {
         // Place massive pixel (5x5 grid)
         live.pushEvent("place_massive_pixel", { x, y })
@@ -631,10 +669,15 @@
     return true
   }
 
-  // Reactive check for position validity
+  // Reactive check for position validity - also triggers redraw
   $: unicornPositionValid = pendingSpecialPixel 
     ? isUnicornPositionValid(pendingSpecialPixel.x, pendingSpecialPixel.y, unicornDirection)
     : true
+  
+  // Redraw canvas when pending position or validity changes
+  $: if (ctx && pendingSpecialPixel !== undefined) {
+    drawCanvas()
+  }
 
   function confirmSpecialPixel() {
     if (pendingSpecialPixel && claimerName.trim() && unicornPositionValid) {
@@ -644,21 +687,15 @@
         name: claimerName.trim(),
         direction: unicornDirection
       })
-      showNameModal = false
       pendingSpecialPixel = null
       claimerName = ''
     }
   }
 
   function cancelSpecialPixel() {
-    showNameModal = false
     pendingSpecialPixel = null
     claimerName = ''
-  }
-
-  function toggleUnicornDirection() {
-    unicornDirection = unicornDirection === 'right' ? 'left' : 'right'
-    if (ctx) drawCanvas()
+    drawCanvas()
   }
 
   function togglePixelMode(mode) {
@@ -853,9 +890,15 @@
 
       if (x >= 0 && x < width && y >= 0 && y < height) {
         if (pixelMode === "special") {
-          // Show modal for special pixel
-          pendingSpecialPixel = { x, y }
-          showNameModal = true
+          // Lock position for special pixel - same as click handler
+          if (pendingSpecialPixel) {
+            pendingSpecialPixel = { x, y }
+            claimerName = ''
+          } else {
+            pendingSpecialPixel = { x, y }
+          }
+          setTimeout(() => nameInputElement?.focus(), 50)
+          drawCanvas()
         } else if (pixelMode === "massive" && userStats.massive_pixels_available > 0) {
           // Place massive pixel (5x5 grid)
           live.pushEvent("place_massive_pixel", { x, y })
@@ -1297,65 +1340,68 @@
       </div>
     {/if}
 
-    <!-- Name entry modal for special pixels - positioned to side so canvas is visible -->
-    {#if showNameModal}
-      <div class="fixed {isMobile ? 'inset-x-4 bottom-4' : 'top-6 left-6'} z-[100] max-w-xs">
-        <div class="bg-white rounded-xl shadow-2xl p-5 animate-in border-2 border-neutral-200">
-          <h3 class="text-base font-bold text-neutral-900 mb-2">
-            Claim your <span class="bg-gradient-to-r from-purple-600 via-pink-500 to-purple-600 bg-clip-text text-transparent">Unicorn</span>
-          </h3>
-          
-          <input
-            type="text"
-            bind:value={claimerName}
-            placeholder="Your name"
-            maxlength="20"
-            class="w-full px-3 py-2 border-2 border-neutral-300 focus:border-neutral-900 focus:outline-none mb-3 text-sm"
-            on:keydown={(e) => e.key === 'Enter' && unicornPositionValid && confirmSpecialPixel()}
-            autofocus
-          />
-
-          <!-- Direction choice -->
-          <div class="mb-3">
-            <label class="text-xs text-neutral-500 mb-1.5 block">Direction:</label>
-            <div class="flex gap-2">
-              <button
-                on:click={() => { unicornDirection = 'left'; drawCanvas() }}
-                class="flex-1 py-1.5 px-2 border-2 transition-all text-xs font-medium cursor-pointer {unicornDirection === 'left' ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-300 hover:border-neutral-400'}"
-              >
-                ← Left
-              </button>
-              <button
-                on:click={() => { unicornDirection = 'right'; drawCanvas() }}
-                class="flex-1 py-1.5 px-2 border-2 transition-all text-xs font-medium cursor-pointer {unicornDirection === 'right' ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-300 hover:border-neutral-400'}"
-              >
-                Right →
-              </button>
-            </div>
+    <!-- Inline unicorn placement controls - appears when position is selected -->
+    {#if pendingSpecialPixel}
+      <div 
+        class="fixed z-[100] {isMobile ? 'bottom-20 left-1/2 -translate-x-1/2' : 'top-20 left-6'}"
+      >
+        <div class="bg-white rounded-xl shadow-2xl p-3 animate-in border-2 {unicornPositionValid ? 'border-purple-300' : 'border-red-300'}" style="width: 220px;">
+          <!-- Compact header with direction toggle -->
+          <div class="flex items-center gap-2 mb-2">
+            <button
+              on:click={() => { unicornDirection = 'left'; drawCanvas() }}
+              class="w-8 h-8 flex items-center justify-center border-2 transition-all text-sm cursor-pointer {unicornDirection === 'left' ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-300 hover:border-neutral-400'}"
+              title="Face left (←)"
+            >
+              ←
+            </button>
+            <input
+              type="text"
+              bind:this={nameInputElement}
+              bind:value={claimerName}
+              placeholder="Your name"
+              maxlength="16"
+              class="flex-1 px-2 py-1.5 border-2 border-neutral-300 focus:border-purple-500 focus:outline-none text-sm text-center"
+              on:keydown={(e) => {
+                if (e.key === 'Enter' && unicornPositionValid && claimerName.trim()) confirmSpecialPixel()
+                else if (e.key === 'Escape') cancelSpecialPixel()
+                else if (e.key === 'ArrowLeft') { unicornDirection = 'left'; drawCanvas() }
+                else if (e.key === 'ArrowRight') { unicornDirection = 'right'; drawCanvas() }
+              }}
+            />
+            <button
+              on:click={() => { unicornDirection = 'right'; drawCanvas() }}
+              class="w-8 h-8 flex items-center justify-center border-2 transition-all text-sm cursor-pointer {unicornDirection === 'right' ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-300 hover:border-neutral-400'}"
+              title="Face right (→)"
+            >
+              →
+            </button>
           </div>
 
-          <!-- Position validity warning -->
+          <!-- Status and actions -->
           {#if !unicornPositionValid}
-            <div class="mb-3 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
-              ⚠️ Position blocked! Try rotating or pick a different spot.
+            <div class="mb-2 py-1 px-2 bg-red-50 border border-red-200 rounded text-[10px] text-red-600 text-center">
+              Position blocked - click elsewhere or rotate
             </div>
           {/if}
           
-          <div class="flex gap-2">
+          <div class="flex gap-1.5">
             <button
               on:click={cancelSpecialPixel}
-              class="flex-1 px-3 py-2 border-2 border-neutral-300 text-neutral-700 hover:bg-neutral-50 transition-colors text-sm font-medium cursor-pointer"
+              class="flex-1 px-2 py-1.5 border border-neutral-300 text-neutral-600 hover:bg-neutral-50 text-xs cursor-pointer"
             >
               Cancel
             </button>
             <button
               on:click={confirmSpecialPixel}
               disabled={!claimerName.trim() || !unicornPositionValid}
-              class="flex-1 px-3 py-2 bg-neutral-900 text-white hover:bg-neutral-800 transition-colors text-sm font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              class="flex-1 px-2 py-1.5 bg-gradient-to-r from-purple-600 to-pink-500 text-white text-xs font-bold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              Claim 🦄
+              Place 🦄
             </button>
           </div>
+          
+          <p class="text-[9px] text-neutral-400 mt-1.5 text-center">Click canvas to reposition · Esc to cancel</p>
         </div>
       </div>
     {/if}
