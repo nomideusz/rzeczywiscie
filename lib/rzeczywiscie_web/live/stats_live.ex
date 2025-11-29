@@ -257,24 +257,28 @@ defmodule RzeczywiscieWeb.StatsLive do
           <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
             <h2 class="text-sm font-bold uppercase tracking-wide">🛏️ Room Distribution</h2>
           </div>
-          <div class="p-4">
-            <div class="flex items-end gap-1 h-32">
-              <%= for {rooms, count} <- @stats.room_distribution do %>
-                <% max_count = @stats.room_distribution |> Enum.map(fn {_, c} -> c end) |> Enum.max(fn -> 1 end) %>
-                <% height_pct = count / max_count * 100 %>
-                <div class="flex-1 flex flex-col items-center">
-                  <div class="text-xs font-bold mb-1"><%= count %></div>
-                  <div 
-                    class="w-full bg-primary/80 hover:bg-primary transition-colors rounded-t"
-                    style={"height: #{height_pct}%"}
-                    title={"#{rooms} rooms: #{count} properties"}
-                  ></div>
-                  <div class="text-xs font-bold mt-2 opacity-60"><%= rooms %></div>
-                </div>
-              <% end %>
+          <%= if length(@stats.room_distribution) > 0 do %>
+            <div class="p-4">
+              <div class="flex items-end gap-2" style="height: 120px;">
+                <%= for {rooms, count} <- @stats.room_distribution do %>
+                  <div class="flex-1 flex flex-col items-center h-full">
+                    <div class="text-xs font-bold mb-1"><%= count %></div>
+                    <div class="flex-1 w-full flex flex-col justify-end">
+                      <div 
+                        class="w-full bg-primary/80 hover:bg-primary transition-colors rounded-t min-h-[4px]"
+                        style={"height: #{calc_bar_height(@stats.room_distribution, count)}px"}
+                        title={"#{rooms} rooms: #{count} properties"}
+                      ></div>
+                    </div>
+                    <div class="text-xs font-bold mt-2 opacity-60"><%= rooms %></div>
+                  </div>
+                <% end %>
+              </div>
+              <div class="text-center text-xs opacity-50 mt-2">Number of rooms</div>
             </div>
-            <div class="text-center text-xs opacity-50 mt-2">Number of rooms</div>
-          </div>
+          <% else %>
+            <div class="p-4 text-center opacity-50">No room data available</div>
+          <% end %>
         </div>
 
         <!-- Data Quality -->
@@ -689,6 +693,19 @@ defmodule RzeczywiscieWeb.StatsLive do
         "#{Float.round(value / 1_000, 0)}k zł"
       true ->
         "#{trunc(value)} zł"
+    end
+  end
+
+  defp calc_bar_height(distribution, count) do
+    max_count = distribution |> Enum.map(fn {_, c} -> c end) |> Enum.max(fn -> 1 end)
+    max_height = 80  # pixels
+    min_height = 4   # minimum visible bar
+    
+    if max_count > 0 do
+      height = count / max_count * max_height
+      max(height, min_height) |> Float.round(0) |> trunc()
+    else
+      min_height
     end
   end
 end
