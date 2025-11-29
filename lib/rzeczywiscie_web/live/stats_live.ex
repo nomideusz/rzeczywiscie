@@ -763,12 +763,36 @@ defmodule RzeczywiscieWeb.StatsLive do
   end
 
   defp calculate_prices_by_property_type do
-    # Get property types with the most listings
-    property_types = ["mieszkanie", "dom", "pokój", "kawalerka", "działka", "garaż"]
+    # Get all property types that actually exist in the database
+    property_types = Repo.all(
+      from p in Property,
+        where: p.active == true and not is_nil(p.property_type),
+        group_by: p.property_type,
+        select: p.property_type,
+        order_by: [desc: count(p.id)]
+    )
     
     Enum.map(property_types, fn prop_type ->
-      # Sale stats
-      sale_stats = Repo.one(
+      # Sale stats - count all with price, avg_per_sqm only for those with area
+      sale_count = Repo.aggregate(
+        from(p in Property,
+          where: p.active == true and 
+                 p.property_type == ^prop_type and
+                 p.transaction_type == "sprzedaż" and
+                 not is_nil(p.price)),
+        :count, :id
+      )
+      
+      sale_avg_price = Repo.aggregate(
+        from(p in Property,
+          where: p.active == true and 
+                 p.property_type == ^prop_type and
+                 p.transaction_type == "sprzedaż" and
+                 not is_nil(p.price)),
+        :avg, :price
+      )
+
+      sale_avg_per_sqm = Repo.one(
         from p in Property,
           where: p.active == true and 
                  p.property_type == ^prop_type and
@@ -776,15 +800,29 @@ defmodule RzeczywiscieWeb.StatsLive do
                  not is_nil(p.price) and 
                  not is_nil(p.area_sqm) and
                  p.area_sqm > 0,
-          select: %{
-            count: count(p.id),
-            avg_price: avg(p.price),
-            avg_per_sqm: avg(p.price / p.area_sqm)
-          }
+          select: avg(p.price / p.area_sqm)
       )
 
       # Rent stats
-      rent_stats = Repo.one(
+      rent_count = Repo.aggregate(
+        from(p in Property,
+          where: p.active == true and 
+                 p.property_type == ^prop_type and
+                 p.transaction_type == "wynajem" and
+                 not is_nil(p.price)),
+        :count, :id
+      )
+      
+      rent_avg_price = Repo.aggregate(
+        from(p in Property,
+          where: p.active == true and 
+                 p.property_type == ^prop_type and
+                 p.transaction_type == "wynajem" and
+                 not is_nil(p.price)),
+        :avg, :price
+      )
+
+      rent_avg_per_sqm = Repo.one(
         from p in Property,
           where: p.active == true and 
                  p.property_type == ^prop_type and
@@ -792,24 +830,20 @@ defmodule RzeczywiscieWeb.StatsLive do
                  not is_nil(p.price) and 
                  not is_nil(p.area_sqm) and
                  p.area_sqm > 0,
-          select: %{
-            count: count(p.id),
-            avg_price: avg(p.price),
-            avg_per_sqm: avg(p.price / p.area_sqm)
-          }
+          select: avg(p.price / p.area_sqm)
       )
 
       %{
         type: prop_type,
         sale: %{
-          count: sale_stats.count || 0,
-          avg_price: sale_stats.avg_price && Decimal.round(sale_stats.avg_price, 0),
-          avg_per_sqm: sale_stats.avg_per_sqm && Decimal.round(sale_stats.avg_per_sqm, 0)
+          count: sale_count || 0,
+          avg_price: sale_avg_price && Decimal.round(sale_avg_price, 0),
+          avg_per_sqm: sale_avg_per_sqm && Decimal.round(sale_avg_per_sqm, 0)
         },
         rent: %{
-          count: rent_stats.count || 0,
-          avg_price: rent_stats.avg_price && Decimal.round(rent_stats.avg_price, 0),
-          avg_per_sqm: rent_stats.avg_per_sqm && Decimal.round(rent_stats.avg_per_sqm, 0)
+          count: rent_count || 0,
+          avg_price: rent_avg_price && Decimal.round(rent_avg_price, 0),
+          avg_per_sqm: rent_avg_per_sqm && Decimal.round(rent_avg_per_sqm, 0)
         }
       }
     end)
@@ -828,8 +862,26 @@ defmodule RzeczywiscieWeb.StatsLive do
     )
 
     Enum.map(top_districts, fn district ->
-      # Sale stats for this district
-      sale_stats = Repo.one(
+      # Sale stats - count all with price, avg_per_sqm only for those with area
+      sale_count = Repo.aggregate(
+        from(p in Property,
+          where: p.active == true and 
+                 p.district == ^district and
+                 p.transaction_type == "sprzedaż" and
+                 not is_nil(p.price)),
+        :count, :id
+      )
+      
+      sale_avg_price = Repo.aggregate(
+        from(p in Property,
+          where: p.active == true and 
+                 p.district == ^district and
+                 p.transaction_type == "sprzedaż" and
+                 not is_nil(p.price)),
+        :avg, :price
+      )
+
+      sale_avg_per_sqm = Repo.one(
         from p in Property,
           where: p.active == true and 
                  p.district == ^district and
@@ -837,15 +889,29 @@ defmodule RzeczywiscieWeb.StatsLive do
                  not is_nil(p.price) and 
                  not is_nil(p.area_sqm) and
                  p.area_sqm > 0,
-          select: %{
-            count: count(p.id),
-            avg_price: avg(p.price),
-            avg_per_sqm: avg(p.price / p.area_sqm)
-          }
+          select: avg(p.price / p.area_sqm)
       )
 
-      # Rent stats for this district
-      rent_stats = Repo.one(
+      # Rent stats
+      rent_count = Repo.aggregate(
+        from(p in Property,
+          where: p.active == true and 
+                 p.district == ^district and
+                 p.transaction_type == "wynajem" and
+                 not is_nil(p.price)),
+        :count, :id
+      )
+      
+      rent_avg_price = Repo.aggregate(
+        from(p in Property,
+          where: p.active == true and 
+                 p.district == ^district and
+                 p.transaction_type == "wynajem" and
+                 not is_nil(p.price)),
+        :avg, :price
+      )
+
+      rent_avg_per_sqm = Repo.one(
         from p in Property,
           where: p.active == true and 
                  p.district == ^district and
@@ -853,24 +919,20 @@ defmodule RzeczywiscieWeb.StatsLive do
                  not is_nil(p.price) and 
                  not is_nil(p.area_sqm) and
                  p.area_sqm > 0,
-          select: %{
-            count: count(p.id),
-            avg_price: avg(p.price),
-            avg_per_sqm: avg(p.price / p.area_sqm)
-          }
+          select: avg(p.price / p.area_sqm)
       )
 
       %{
         district: district,
         sale: %{
-          count: sale_stats.count || 0,
-          avg_price: sale_stats.avg_price && Decimal.round(sale_stats.avg_price, 0),
-          avg_per_sqm: sale_stats.avg_per_sqm && Decimal.round(sale_stats.avg_per_sqm, 0)
+          count: sale_count || 0,
+          avg_price: sale_avg_price && Decimal.round(sale_avg_price, 0),
+          avg_per_sqm: sale_avg_per_sqm && Decimal.round(sale_avg_per_sqm, 0)
         },
         rent: %{
-          count: rent_stats.count || 0,
-          avg_price: rent_stats.avg_price && Decimal.round(rent_stats.avg_price, 0),
-          avg_per_sqm: rent_stats.avg_per_sqm && Decimal.round(rent_stats.avg_per_sqm, 0)
+          count: rent_count || 0,
+          avg_price: rent_avg_price && Decimal.round(rent_avg_price, 0),
+          avg_per_sqm: rent_avg_per_sqm && Decimal.round(rent_avg_per_sqm, 0)
         }
       }
     end)
