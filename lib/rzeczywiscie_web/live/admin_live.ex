@@ -304,6 +304,64 @@ defmodule RzeczywiscieWeb.AdminLive do
           </div>
         </div>
 
+        <!-- Data Quality Exports -->
+        <div class="bg-base-100 border-2 border-base-content mb-6">
+          <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
+            <h2 class="text-sm font-bold uppercase tracking-wide">📊 Data Quality Exports</h2>
+          </div>
+          <div class="p-4">
+            <p class="text-xs opacity-60 mb-4">
+              Download CSV reports for properties with missing or incomplete data.
+            </p>
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+              <button
+                phx-click="export_data_quality"
+                phx-value-type="missing_price"
+                disabled={@export_running}
+                class={"px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @export_running, do: "border-base-content/30 opacity-50", else: "border-warning text-warning hover:bg-warning hover:text-warning-content"}"}
+              >
+                💰 Missing Price
+              </button>
+              
+              <button
+                phx-click="export_data_quality"
+                phx-value-type="missing_area"
+                disabled={@export_running}
+                class={"px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @export_running, do: "border-base-content/30 opacity-50", else: "border-warning text-warning hover:bg-warning hover:text-warning-content"}"}
+              >
+                📐 Missing Area
+              </button>
+              
+              <button
+                phx-click="export_data_quality"
+                phx-value-type="missing_rooms"
+                disabled={@export_running}
+                class={"px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @export_running, do: "border-base-content/30 opacity-50", else: "border-warning text-warning hover:bg-warning hover:text-warning-content"}"}
+              >
+                🛏️ Missing Rooms
+              </button>
+              
+              <button
+                phx-click="export_data_quality"
+                phx-value-type="missing_coords"
+                disabled={@export_running}
+                class={"px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @export_running, do: "border-base-content/30 opacity-50", else: "border-info text-info hover:bg-info hover:text-info-content"}"}
+              >
+                📍 No Coordinates
+              </button>
+              
+              <button
+                phx-click="export_data_quality"
+                phx-value-type="all"
+                disabled={@export_running}
+                class={"px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @export_running, do: "border-base-content/30 opacity-50", else: "border-error text-error hover:bg-error hover:text-error-content"}"}
+              >
+                ⚠️ All Issues
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- Quick Links -->
         <div class="bg-base-100 border-2 border-base-content">
           <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
@@ -438,7 +496,22 @@ defmodule RzeczywiscieWeb.AdminLive do
     parent = self()
     Task.start(fn ->
       csv_data = generate_missing_types_csv()
-      send(parent, {:export_complete, csv_data})
+      send(parent, {:export_complete, {csv_data, "missing_types"}})
+    end)
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("export_data_quality", %{"type" => type}, socket) do
+    Logger.info("Generating data quality CSV export: #{type}")
+
+    socket = assign(socket, :export_running, true)
+
+    parent = self()
+    Task.start(fn ->
+      csv_data = generate_data_quality_csv(type)
+      send(parent, {:export_complete, {csv_data, type}})
     end)
 
     {:noreply, socket}
@@ -511,13 +584,15 @@ defmodule RzeczywiscieWeb.AdminLive do
   end
 
   @impl true
-  def handle_info({:export_complete, csv_data}, socket) do
+  def handle_info({:export_complete, {csv_data, export_type}}, socket) do
     # Trigger file download via JavaScript
+    filename = "#{export_type}_#{DateTime.utc_now() |> DateTime.to_unix()}.csv"
+    
     socket =
       socket
       |> assign(:export_running, false)
       |> push_event("download_csv", %{
-        filename: "missing_types_#{DateTime.utc_now() |> DateTime.to_unix()}.csv",
+        filename: filename,
         data: csv_data
       })
 
@@ -859,6 +934,89 @@ defmodule RzeczywiscieWeb.AdminLive do
         escape_csv(p.property_type || ""),
         escape_csv(p.city || ""),
         p.price || "",
+        escape_csv(p.title),
+        escape_csv(p.url),
+        p.inserted_at
+      ]
+      |> Enum.join(",")
+    end)
+    |> Enum.join("\n")
+    
+    Logger.info("✓ CSV generated successfully")
+    header <> rows <> "\n"
+  end
+
+  defp generate_data_quality_csv(type) do
+    Logger.info("Generating #{type} CSV export...")
+
+    properties = case type do
+      "missing_price" ->
+        from(p in Property,
+          where: p.active == true and is_nil(p.price),
+          order_by: [desc: p.inserted_at]
+        ) |> Repo.all()
+      
+      "missing_area" ->
+        from(p in Property,
+          where: p.active == true and is_nil(p.area_sqm),
+          order_by: [desc: p.inserted_at]
+        ) |> Repo.all()
+      
+      "missing_rooms" ->
+        from(p in Property,
+          where: p.active == true and is_nil(p.rooms),
+          order_by: [desc: p.inserted_at]
+        ) |> Repo.all()
+      
+      "missing_coords" ->
+        from(p in Property,
+          where: p.active == true and (is_nil(p.latitude) or is_nil(p.longitude)),
+          order_by: [desc: p.inserted_at]
+        ) |> Repo.all()
+      
+      "all" ->
+        from(p in Property,
+          where: p.active == true and (
+            is_nil(p.price) or 
+            is_nil(p.area_sqm) or 
+            is_nil(p.rooms) or 
+            is_nil(p.latitude) or 
+            is_nil(p.longitude) or
+            is_nil(p.transaction_type) or
+            is_nil(p.property_type)
+          ),
+          order_by: [desc: p.inserted_at]
+        ) |> Repo.all()
+      
+      _ -> []
+    end
+
+    Logger.info("Found #{length(properties)} properties with #{type}")
+
+    # Generate CSV
+    header = "ID,Source,External ID,Price,Price/m²,Area (m²),Rooms,City,Coords,Transaction Type,Property Type,Title,URL,Inserted At\n"
+    
+    rows = Enum.map(properties, fn p ->
+      price_per_sqm = if p.price && p.area_sqm && Decimal.compare(p.area_sqm, 0) == :gt do
+        Decimal.div(p.price, p.area_sqm) |> Decimal.round(2) |> Decimal.to_string()
+      else
+        ""
+      end
+      
+      coords = if p.latitude && p.longitude, do: "✓", else: "✗"
+      
+      [
+        p.id,
+        p.source,
+        escape_csv(p.external_id),
+        p.price || "",
+        price_per_sqm,
+        p.area_sqm || "",
+        p.rooms || "",
+        escape_csv(p.city || ""),
+        coords,
+        escape_csv(p.transaction_type || ""),
+        escape_csv(p.property_type || ""),
         escape_csv(p.title),
         escape_csv(p.url),
         p.inserted_at
