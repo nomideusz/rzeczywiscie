@@ -367,7 +367,7 @@ defmodule RzeczywiscieWeb.HotDealsLive do
                   </div>
                   <div class="flex justify-between">
                     <span>⚡ Urgency keywords</span>
-                    <span class="font-bold">0-15 pts</span>
+                    <span class="font-bold">0-10 pts</span>
                   </div>
                   <div class="flex justify-between">
                     <span>📅 Long time listed</span>
@@ -375,7 +375,7 @@ defmodule RzeczywiscieWeb.HotDealsLive do
                   </div>
                   <div class="border-t border-base-content/20 pt-2 mt-2 flex justify-between font-bold">
                     <span>Max possible</span>
-                    <span>105 pts</span>
+                    <span>100 pts</span>
                   </div>
                 </div>
               </div>
