@@ -4,6 +4,9 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
 
   @topic "pixel_canvas"
 
+  # User-specific topic for syncing state across tabs/browsers
+  defp user_topic(user_id), do: "pixel_canvas:user:#{user_id}"
+
   def mount(_params, _session, socket) do
     # Initially use IP-based user_id, client will send browser-specific ID after mount
     user_id = get_or_create_user_id(socket)
@@ -113,6 +116,19 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
             {:pixel_placed, x, y, color, user_id, :normal, stats, milestone_progress, socket.assigns.session_id}
           )
 
+          # Broadcast cooldown and stats to same user's other tabs
+          cooldown_seconds = PixelCanvas.cooldown_seconds()
+          Phoenix.PubSub.broadcast(
+            Rzeczywiscie.PubSub,
+            user_topic(user_id),
+            {:user_cooldown_started, cooldown_seconds, socket.assigns.session_id}
+          )
+          Phoenix.PubSub.broadcast(
+            Rzeczywiscie.PubSub,
+            user_topic(user_id),
+            {:user_stats_updated, user_stats, socket.assigns.session_id}
+          )
+
           # Schedule cooldown update
           Process.send_after(self(), :update_cooldown, 1000)
 
@@ -120,7 +136,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
            |> assign(:pixels, pixels)
            |> assign(:pixels_version, socket.assigns.pixels_version + 1)
            |> assign(:can_place, false)
-           |> assign(:seconds_remaining, PixelCanvas.cooldown_seconds())
+           |> assign(:seconds_remaining, cooldown_seconds)
            |> assign(:stats, stats)
            |> assign(:user_stats, user_stats)
            |> assign(:milestone_progress, milestone_progress)
@@ -158,6 +174,18 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
           Rzeczywiscie.PubSub,
           @topic,
           {:mega_pixel_placed, x, y, color, user_id, stats, milestone_progress, socket.assigns.session_id}
+        )
+
+        # Broadcast cooldown and stats to same user's other tabs
+        Phoenix.PubSub.broadcast(
+          Rzeczywiscie.PubSub,
+          user_topic(user_id),
+          {:user_cooldown_started, 45, socket.assigns.session_id}
+        )
+        Phoenix.PubSub.broadcast(
+          Rzeczywiscie.PubSub,
+          user_topic(user_id),
+          {:user_stats_updated, user_stats, socket.assigns.session_id}
         )
 
         # Schedule cooldown update (mega pixel has 45s cooldown)
@@ -207,6 +235,18 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
           Rzeczywiscie.PubSub,
           @topic,
           {:massive_pixel_placed, x, y, color, user_id, stats, milestone_progress, socket.assigns.session_id}
+        )
+
+        # Broadcast cooldown and stats to same user's other tabs
+        Phoenix.PubSub.broadcast(
+          Rzeczywiscie.PubSub,
+          user_topic(user_id),
+          {:user_cooldown_started, 120, socket.assigns.session_id}
+        )
+        Phoenix.PubSub.broadcast(
+          Rzeczywiscie.PubSub,
+          user_topic(user_id),
+          {:user_stats_updated, user_stats, socket.assigns.session_id}
         )
 
         # Schedule cooldown update (massive pixel has 120s cooldown)
@@ -284,6 +324,19 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
           {:special_pixel_placed, x, y, color, user_id, full_special_type, name, color, stats, milestone_progress, socket.assigns.session_id}
         )
 
+        # Broadcast cooldown and stats to same user's other tabs
+        cooldown_seconds = PixelCanvas.cooldown_seconds()
+        Phoenix.PubSub.broadcast(
+          Rzeczywiscie.PubSub,
+          user_topic(user_id),
+          {:user_cooldown_started, cooldown_seconds, socket.assigns.session_id}
+        )
+        Phoenix.PubSub.broadcast(
+          Rzeczywiscie.PubSub,
+          user_topic(user_id),
+          {:user_stats_updated, user_stats, socket.assigns.session_id}
+        )
+
         # Schedule cooldown update
         Process.send_after(self(), :update_cooldown, 1000)
 
@@ -292,7 +345,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
          |> assign(:pixels, pixels)
          |> assign(:pixels_version, socket.assigns.pixels_version + 1)
          |> assign(:can_place, false)
-         |> assign(:seconds_remaining, PixelCanvas.cooldown_seconds())
+         |> assign(:seconds_remaining, cooldown_seconds)
          |> assign(:stats, stats)
          |> assign(:user_stats, user_stats)
          |> assign(:milestone_progress, milestone_progress)
@@ -316,11 +369,31 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
   end
 
   def handle_event("select_color", %{"color" => color}, socket) do
+    user_id = socket.assigns.user_id
+    session_id = socket.assigns.session_id
+    
+    # Broadcast color change to other tabs/browsers of the same user
+    Phoenix.PubSub.broadcast(
+      Rzeczywiscie.PubSub,
+      user_topic(user_id),
+      {:user_color_changed, color, session_id}
+    )
+    
     {:noreply, assign(socket, selected_color: color)}
   end
 
   def handle_event("set_user_id", %{"user_id" => client_user_id}, socket) do
-    # Client sends device-specific user_id from localStorage
+    # Client sends device-specific user_id (fingerprint)
+    old_user_id = socket.assigns.user_id
+    
+    # Unsubscribe from old user topic if it exists
+    if old_user_id && old_user_id != client_user_id do
+      Phoenix.PubSub.unsubscribe(Rzeczywiscie.PubSub, user_topic(old_user_id))
+    end
+    
+    # Subscribe to user-specific topic for syncing across tabs
+    Phoenix.PubSub.subscribe(Rzeczywiscie.PubSub, user_topic(client_user_id))
+    
     # Reload user stats and milestone progress with the correct device fingerprint user_id
     user_stats = PixelCanvas.get_user_stats(client_user_id)
     cooldown = PixelCanvas.check_cooldown(client_user_id)
@@ -372,6 +445,38 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
     end
 
     {:noreply, socket}
+  end
+
+  # Handle color change from same user in different tab/browser
+  def handle_info({:user_color_changed, color, from_session_id}, socket) do
+    if from_session_id != socket.assigns.session_id do
+      {:noreply, assign(socket, selected_color: color)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  # Handle cooldown sync from same user in different tab/browser
+  def handle_info({:user_cooldown_started, seconds, from_session_id}, socket) do
+    if from_session_id != socket.assigns.session_id do
+      # Start cooldown timer in this tab too
+      Process.send_after(self(), :update_cooldown, 1000)
+      {:noreply, 
+       socket
+       |> assign(:can_place, false)
+       |> assign(:seconds_remaining, seconds)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  # Handle stats update from same user in different tab/browser  
+  def handle_info({:user_stats_updated, user_stats, from_session_id}, socket) do
+    if from_session_id != socket.assigns.session_id do
+      {:noreply, assign(socket, user_stats: user_stats)}
+    else
+      {:noreply, socket}
+    end
   end
 
   # Handle pixel placed by other sessions (including same user on different devices)
