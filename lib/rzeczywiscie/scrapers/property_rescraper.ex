@@ -329,11 +329,19 @@ defmodule Rzeczywiscie.Scrapers.PropertyRescraper do
   defp update_property_with_extracted_data(property, extracted) do
     # Only update fields that are currently nil
     updates = %{}
+    
+    # DEBUG: Log what we extracted
+    if extracted.price do
+      Logger.info("  DEBUG: Extracted price = #{inspect(extracted.price)} (type: #{inspect(extracted.price.__struct__)})")
+    end
+    
     updates = if is_nil(property.price) and extracted.price, do: Map.put(updates, :price, extracted.price), else: updates
     updates = if is_nil(property.area_sqm) and extracted.area_sqm, do: Map.put(updates, :area_sqm, extracted.area_sqm), else: updates
     updates = if is_nil(property.rooms) and extracted.rooms, do: Map.put(updates, :rooms, extracted.rooms), else: updates
 
     if map_size(updates) > 0 do
+      Logger.info("  Attempting update with: #{inspect(updates)}")
+      
       case RealEstate.update_property(
         RealEstate.get_property(property.id),
         updates
@@ -342,7 +350,8 @@ defmodule Rzeczywiscie.Scrapers.PropertyRescraper do
           Logger.info("✓ Updated property ##{property.id}: #{inspect(updates)}")
           {:ok, updated_property}
         {:error, changeset} ->
-          Logger.error("✗ Failed to update: #{inspect(changeset.errors)}")
+          Logger.error("✗ Failed to update property ##{property.id}: #{inspect(changeset.errors)}")
+          Logger.error("  Updates that failed: #{inspect(updates)}")
           {:error, changeset}
       end
     else
