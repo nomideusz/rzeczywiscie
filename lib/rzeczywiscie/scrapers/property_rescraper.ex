@@ -176,8 +176,13 @@ defmodule Rzeczywiscie.Scrapers.PropertyRescraper do
       end
     end)
 
-    # If no price found, search entire document
-    price_text || extract_price_from_document_text(document)
+    # Parse the price text to Decimal
+    if price_text do
+      parse_price_text(price_text)
+    else
+      # If no price found, search entire document
+      extract_price_from_document_text(document)
+    end
   end
 
   defp extract_otodom_price(document) do
@@ -297,7 +302,7 @@ defmodule Rzeczywiscie.Scrapers.PropertyRescraper do
     regex = ~r/(\d{1,3}(?:[\s,.]\d{3})*(?:[,.]\d{1,2})?)\s*(?:zł|PLN)/i
     
     case Regex.run(regex, full_text) do
-      [_, price_str] -> parse_price_text(price_str <> " zł")
+      [full_match, _] -> parse_price_text(full_match)
       _ -> nil
     end
   end
@@ -332,7 +337,8 @@ defmodule Rzeczywiscie.Scrapers.PropertyRescraper do
     
     # DEBUG: Log what we extracted
     if extracted.price do
-      Logger.info("  DEBUG: Extracted price = #{inspect(extracted.price)} (type: #{inspect(extracted.price.__struct__)})")
+      price_type = if is_struct(extracted.price, Decimal), do: "Decimal", else: inspect(extracted.price)
+      Logger.info("  DEBUG: Extracted price = #{inspect(extracted.price)} (type: #{price_type})")
     end
     
     updates = if is_nil(property.price) and extracted.price, do: Map.put(updates, :price, extracted.price), else: updates
