@@ -280,6 +280,9 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
     # Validate transaction type based on price
     validated_transaction_type = validate_transaction_type_by_price(transaction_type, price)
 
+    # Try to extract district from address or URL
+    district = extract_district_from_address(address) || extract_district_from_url(url)
+
     %{
       source: "otodom",
       external_id: external_id || generate_id_from_url(url),
@@ -292,6 +295,7 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
       transaction_type: validated_transaction_type,
       property_type: extract_property_type_from_text(title <> " " <> url),
       city: address["addressLocality"],
+      district: district,
       voivodeship: address["addressRegion"] || "małopolskie",
       image_url: get_first_image(listing["image"]),
       raw_data: %{
@@ -319,6 +323,9 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
     # Validate transaction type based on price
     validated_transaction_type = validate_transaction_type_by_price(transaction_type, price)
 
+    # Try to extract district from address or URL
+    district = extract_district_from_address(address) || extract_district_from_url(url)
+
     %{
       source: "otodom",
       external_id: external_id || generate_id_from_url(url),
@@ -331,6 +338,7 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
       transaction_type: validated_transaction_type,
       property_type: extract_property_type_from_text(title <> " " <> url),
       city: address["addressLocality"],
+      district: district,
       voivodeship: address["addressRegion"] || "małopolskie",
       image_url: offer["image"],
       raw_data: %{
@@ -531,6 +539,9 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
       # Validate based on price (catches misclassified listings)
       validated_transaction_type = validate_transaction_type_by_price(initial_transaction_type, price)
 
+      # Extract district from URL or card
+      district = extract_district_from_url(full_url) || extract_district_from_card(card)
+
       %{
         source: "otodom",
         external_id: external_id || generate_id_from_url(url),
@@ -543,6 +554,7 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
         transaction_type: validated_transaction_type,
         property_type: property_type,
         city: extract_city(card),
+        district: district,
         voivodeship: "małopolskie",
         image_url: extract_image(card),
         raw_data: %{
@@ -742,6 +754,105 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
       end)
 
     result
+  end
+
+  # Extract district from JSON-LD address data
+  defp extract_district_from_address(nil), do: nil
+  defp extract_district_from_address(address) when is_map(address) do
+    # Try various address fields that might contain district
+    district = address["addressSubLocality"] || 
+               address["neighborhood"] ||
+               address["subLocality"]
+    
+    case district do
+      nil -> nil
+      "" -> nil
+      d when is_binary(d) -> String.trim(d)
+      _ -> nil
+    end
+  end
+  defp extract_district_from_address(_), do: nil
+
+  # Extract district from Otodom URL
+  # URL format: /pl/oferta/mieszkanie-sprzedaz-krakow-krowodrza-azory-ul-stefana-batorego-ID...
+  # or: /pl/oferta/mieszkanie-sprzedaz-krakow-podgorze-ID...
+  defp extract_district_from_url(nil), do: nil
+  defp extract_district_from_url(url) when is_binary(url) do
+    # Krakow districts - ordered by specificity (longer names first)
+    krakow_districts = [
+      "wzgorza-krzeslawickie", "podgorze-duchackie", "pradnik-czerwony", "pradnik-bialy",
+      "stare-miasto", "nowa-huta", "lagiewniki", "borek-falecki",
+      "krowodrza", "zwierzyniec", "bronowice", "debniki", "podgorze", 
+      "grzegorzki", "czyzyny", "mistrzejowice", "bienczyce", "swoszowice",
+      "biezanow", "prokocim"
+    ]
+    
+    url_lower = String.downcase(url)
+    
+    # Try to find a district in the URL
+    district = Enum.find(krakow_districts, fn d ->
+      String.contains?(url_lower, d)
+    end)
+    
+    case district do
+      nil -> nil
+      d -> 
+        # Convert URL format to display format (e.g., "pradnik-bialy" -> "Prądnik Biały")
+        format_district_name(d)
+    end
+  end
+  defp extract_district_from_url(_), do: nil
+
+  # Extract district from listing card (HTML)
+  defp extract_district_from_card(card) do
+    # Try to find location text and extract district
+    selectors = [
+      "p[data-cy='listing-item-location']",
+      "span[class*='location']",
+      "p[class*='location']"
+    ]
+
+    Enum.reduce_while(selectors, nil, fn selector, _acc ->
+      text = Floki.find(card, selector) |> Floki.text()
+      
+      # Location format: "Kraków, Krowodrza" or "Kraków, Prądnik Biały, ul.Example"
+      parts = String.split(text, ",") |> Enum.map(&String.trim/1)
+      
+      case parts do
+        [_city, district | _rest] when district != "" -> 
+          {:halt, district}
+        _ -> 
+          {:cont, nil}
+      end
+    end)
+  end
+
+  # Convert URL-formatted district name to display format
+  defp format_district_name(url_district) do
+    district_map = %{
+      "wzgorza-krzeslawickie" => "Wzgórza Krzesławickie",
+      "podgorze-duchackie" => "Podgórze Duchackie",
+      "pradnik-czerwony" => "Prądnik Czerwony",
+      "pradnik-bialy" => "Prądnik Biały",
+      "stare-miasto" => "Stare Miasto",
+      "nowa-huta" => "Nowa Huta",
+      "lagiewniki" => "Łagiewniki",
+      "borek-falecki" => "Borek Fałęcki",
+      "krowodrza" => "Krowodrza",
+      "zwierzyniec" => "Zwierzyniec",
+      "bronowice" => "Bronowice",
+      "debniki" => "Dębniki",
+      "podgorze" => "Podgórze",
+      "grzegorzki" => "Grzegórzki",
+      "czyzyny" => "Czyżyny",
+      "mistrzejowice" => "Mistrzejowice",
+      "bienczyce" => "Bieńczyce",
+      "swoszowice" => "Swoszowice",
+      "biezanow" => "Bieżanów",
+      "prokocim" => "Prokocim"
+    }
+    
+    Map.get(district_map, url_district, String.capitalize(url_district))
   end
 
   defp extract_image(card) do

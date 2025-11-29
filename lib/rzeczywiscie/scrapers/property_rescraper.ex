@@ -14,7 +14,7 @@ defmodule Rzeczywiscie.Scrapers.PropertyRescraper do
   Options:
     * `:limit` - Maximum properties to re-scrape (default: 50)
     * `:delay` - Delay between requests in ms (default: 2000)
-    * `:missing` - Which field to target: :price, :area, :rooms, :all (default: :price)
+    * `:missing` - Which field to target: :price, :area, :rooms, :district, :all (default: :price)
   """
   def rescrape_missing(opts \\ []) do
     limit = Keyword.get(opts, :limit, 50)
@@ -70,7 +70,8 @@ defmodule Rzeczywiscie.Scrapers.PropertyRescraper do
         external_id: p.external_id,
         price: p.price,
         area_sqm: p.area_sqm,
-        rooms: p.rooms
+        rooms: p.rooms,
+        district: p.district
       }
     )
 
@@ -78,6 +79,7 @@ defmodule Rzeczywiscie.Scrapers.PropertyRescraper do
       :price -> where(query, [p], is_nil(p.price))
       :area -> where(query, [p], is_nil(p.area_sqm))
       :rooms -> where(query, [p], is_nil(p.rooms))
+      :district -> where(query, [p], is_nil(p.district) or p.district == "")
       :all -> where(query, [p], is_nil(p.price) or is_nil(p.area_sqm) or is_nil(p.rooms))
     end
 
@@ -137,7 +139,8 @@ defmodule Rzeczywiscie.Scrapers.PropertyRescraper do
     %{
       price: extract_olx_price(document),
       area_sqm: extract_olx_area(document),
-      rooms: extract_olx_rooms(document)
+      rooms: extract_olx_rooms(document),
+      district: extract_olx_district(document)
     }
   end
 
@@ -147,7 +150,8 @@ defmodule Rzeczywiscie.Scrapers.PropertyRescraper do
     %{
       price: extract_otodom_price(document),
       area_sqm: extract_otodom_area(document),
-      rooms: extract_otodom_rooms(document)
+      rooms: extract_otodom_rooms(document),
+      district: extract_otodom_district(document)
     }
   end
 
@@ -244,6 +248,7 @@ defmodule Rzeczywiscie.Scrapers.PropertyRescraper do
     updates = if is_nil(property.price) and extracted.price, do: Map.put(updates, :price, extracted.price), else: updates
     updates = if is_nil(property.area_sqm) and extracted.area_sqm, do: Map.put(updates, :area_sqm, extracted.area_sqm), else: updates
     updates = if is_nil(property.rooms) and extracted.rooms, do: Map.put(updates, :rooms, extracted.rooms), else: updates
+    updates = if (is_nil(property[:district]) or property[:district] == "") and extracted[:district], do: Map.put(updates, :district, extracted.district), else: updates
 
     if map_size(updates) > 0 do
       Logger.info("  Attempting update with: #{inspect(updates)}")
@@ -264,6 +269,114 @@ defmodule Rzeczywiscie.Scrapers.PropertyRescraper do
       Logger.info("- No new data found for property ##{property.id}")
       {:ok, :no_changes}
     end
+  end
+
+  # District extraction for OLX detail pages
+  defp extract_olx_district(document) do
+    # Try location breadcrumbs or location section
+    selectors = [
+      "[data-testid='location-link']",
+      "[class*='locationBreadcrumb']",
+      "[class*='location']",
+      "nav[aria-label*='breadcrumb']",
+      "a[href*='/krakow/']"
+    ]
+    
+    result = Enum.reduce_while(selectors, nil, fn selector, _acc ->
+      texts = document
+              |> Floki.find(selector)
+              |> Enum.map(&Floki.text/1)
+              |> Enum.filter(&(&1 != "" and String.length(&1) > 1))
+      
+      # Look for Krakow district names in the texts
+      district = Enum.find_value(texts, fn text ->
+        extract_krakow_district_from_text(text)
+      end)
+      
+      case district do
+        nil -> {:cont, nil}
+        d -> {:halt, d}
+      end
+    end)
+    
+    result
+  end
+
+  # District extraction for Otodom detail pages
+  defp extract_otodom_district(document) do
+    # Try address breadcrumbs and location sections
+    selectors = [
+      "[data-testid='ad.breadcrumbs'] a",
+      "[class*='breadcrumb'] a",
+      "[class*='location']",
+      "[aria-label*='breadcrumb']",
+      "a[href*='/krakow/']"
+    ]
+    
+    result = Enum.reduce_while(selectors, nil, fn selector, _acc ->
+      texts = document
+              |> Floki.find(selector)
+              |> Enum.map(&Floki.text/1)
+              |> Enum.filter(&(&1 != "" and String.length(&1) > 1))
+      
+      # Look for Krakow district names in the texts
+      district = Enum.find_value(texts, fn text ->
+        extract_krakow_district_from_text(text)
+      end)
+      
+      case district do
+        nil -> {:cont, nil}
+        d -> {:halt, d}
+      end
+    end)
+    
+    result
+  end
+
+  # Extract Krakow district from text
+  defp extract_krakow_district_from_text(text) do
+    # Krakow districts with their normalized names
+    districts = %{
+      "wzgórza krzesławickie" => "Wzgórza Krzesławickie",
+      "wzgorza krzeslawickie" => "Wzgórza Krzesławickie",
+      "podgórze duchackie" => "Podgórze Duchackie",
+      "podgorze duchackie" => "Podgórze Duchackie",
+      "prądnik czerwony" => "Prądnik Czerwony",
+      "pradnik czerwony" => "Prądnik Czerwony",
+      "prądnik biały" => "Prądnik Biały",
+      "pradnik bialy" => "Prądnik Biały",
+      "stare miasto" => "Stare Miasto",
+      "nowa huta" => "Nowa Huta",
+      "borek fałęcki" => "Borek Fałęcki",
+      "borek falecki" => "Borek Fałęcki",
+      "łagiewniki" => "Łagiewniki",
+      "lagiewniki" => "Łagiewniki",
+      "krowodrza" => "Krowodrza",
+      "zwierzyniec" => "Zwierzyniec",
+      "bronowice" => "Bronowice",
+      "dębniki" => "Dębniki",
+      "debniki" => "Dębniki",
+      "podgórze" => "Podgórze",
+      "podgorze" => "Podgórze",
+      "grzegórzki" => "Grzegórzki",
+      "grzegorzki" => "Grzegórzki",
+      "czyżyny" => "Czyżyny",
+      "czyzyny" => "Czyżyny",
+      "mistrzejowice" => "Mistrzejowice",
+      "bieńczyce" => "Bieńczyce",
+      "bienczyce" => "Bieńczyce",
+      "swoszowice" => "Swoszowice",
+      "bieżanów" => "Bieżanów",
+      "biezanow" => "Bieżanów",
+      "prokocim" => "Prokocim"
+    }
+    
+    text_lower = String.downcase(text)
+    
+    # Find matching district
+    Enum.find_value(districts, fn {pattern, name} ->
+      if String.contains?(text_lower, pattern), do: name, else: nil
+    end)
   end
 end
 

@@ -474,21 +474,44 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
       Enum.reduce_while(selectors, nil, fn selector, _acc ->
         text = Floki.find(card, selector) |> Floki.text()
 
-        case String.split(text, ",") |> Enum.at(1) do
-          nil ->
-            {:cont, nil}
-
-          district ->
-            cleaned = String.trim(district) |> String.split("-") |> List.first() |> String.trim()
-
+        # Location format can be: "Kraków, Krowodrza - date" or "Kraków, Krowodrza, Azory - date"
+        # Split by " - " first to remove date part
+        location_part = text |> String.split(" - ") |> List.first() |> String.trim()
+        
+        # Split by comma and get district (second part)
+        case String.split(location_part, ",") |> Enum.map(&String.trim/1) do
+          [_city, district | _rest] when district != "" ->
+            # Clean the district name (remove additional location details after dash)
+            cleaned = district |> String.split("-") |> List.first() |> String.trim()
+            
             case cleaned do
               "" -> {:cont, nil}
-              d -> {:halt, d}
+              d -> {:halt, normalize_district_name(d)}
             end
+            
+          _ ->
+            {:cont, nil}
         end
       end)
 
     result
+  end
+  
+  # Normalize district name to consistent format
+  defp normalize_district_name(district) do
+    # Map common variations to standard names
+    district_map = %{
+      "pradnik bialy" => "Prądnik Biały",
+      "pradnik czerwony" => "Prądnik Czerwony",
+      "stare miasto" => "Stare Miasto",
+      "nowa huta" => "Nowa Huta",
+      "podgorze duchackie" => "Podgórze Duchackie",
+      "wzgorza krzeslawickie" => "Wzgórza Krzesławickie",
+      "borek falecki" => "Borek Fałęcki"
+    }
+    
+    normalized = String.downcase(district) |> String.trim()
+    Map.get(district_map, normalized, district)
   end
 
   defp extract_image(card) do
