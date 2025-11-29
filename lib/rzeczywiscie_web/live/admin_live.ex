@@ -9,33 +9,24 @@ defmodule RzeczywiscieWeb.AdminLive do
 
   @impl true
   def mount(_params, _session, socket) do
+    db_stats = get_db_stats()
+    
     socket =
       socket
-      |> assign(:backfill_running, false)
-      |> assign(:backfill_result, nil)
-      |> assign(:olx_scrape_running, false)
-      |> assign(:olx_scrape_result, nil)
-      |> assign(:otodom_scrape_running, false)
-      |> assign(:otodom_scrape_result, nil)
-      |> assign(:geocode_running, false)
-      |> assign(:geocode_result, nil)
-      |> assign(:cleanup_running, false)
+      # Scrapers
+      |> assign(:scrape_running, nil)  # :olx, :otodom, or nil
+      |> assign(:scrape_result, nil)
+      # Data Enrichment
+      |> assign(:enrichment_running, nil)  # :geocode, :rescrape, :backfill_types, :backfill_rooms, or nil
+      |> assign(:enrichment_result, nil)
+      |> assign(:rescrape_target, :district)
+      |> assign(:rescrape_missing_count, get_missing_count(:district))
+      # Data Cleanup
+      |> assign(:cleanup_running, nil)  # :stale, :duplicates, :misclassified, or nil
       |> assign(:cleanup_result, nil)
-      |> assign(:fix_misclassified_running, false)
-      |> assign(:fix_misclassified_result, nil)
       |> assign(:misclassified_preview, RealEstate.preview_misclassified_transaction_types())
-      |> assign(:dedup_running, false)
-      |> assign(:dedup_result, nil)
-      |> assign(:export_running, false)
-      |> assign(:backfill_rooms_running, false)
-      |> assign(:backfill_rooms_result, nil)
-      |> assign(:rescrape_running, false)
-      |> assign(:rescrape_result, nil)
-      |> assign(:rescrape_target, :price)
-      |> assign(:rescrape_missing_count, get_missing_count(:price))
-      |> assign(:olx_pages, 2)
-      |> assign(:otodom_pages, 2)
-      |> assign(:db_stats, get_db_stats())
+      # Stats
+      |> assign(:db_stats, db_stats)
 
     {:ok, socket}
   end
@@ -48,477 +39,159 @@ defmodule RzeczywiscieWeb.AdminLive do
       <!-- Header -->
       <div class="bg-base-100 border-b-4 border-base-content">
         <div class="container mx-auto px-4 py-6">
-          <!-- Navigation -->
           <nav class="flex gap-1 mb-4">
-            <a href="/real-estate" class="px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">
-              Properties
-            </a>
-            <a href="/favorites" class="px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">
-              Favorites
-            </a>
-            <a href="/stats" class="px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">
-              Stats
-            </a>
-            <a href="/admin" class="px-3 py-2 text-xs font-bold uppercase tracking-wide bg-base-content text-base-100">
-              Admin
-            </a>
+            <a href="/real-estate" class="px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">Properties</a>
+            <a href="/favorites" class="px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">Favorites</a>
+            <a href="/stats" class="px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">Stats</a>
+            <a href="/admin" class="px-3 py-2 text-xs font-bold uppercase tracking-wide bg-base-content text-base-100">Admin</a>
           </nav>
-
           <h1 class="text-2xl md:text-3xl font-black uppercase tracking-tight">Admin Panel</h1>
-          <p class="text-sm font-bold uppercase tracking-wide opacity-60">Scrapers & Maintenance</p>
         </div>
       </div>
 
       <!-- Quick Stats -->
       <div class="bg-base-100 border-b-2 border-base-content">
         <div class="container mx-auto">
-          <div class="grid grid-cols-2 md:grid-cols-7 divide-x-2 divide-base-content">
+          <div class="grid grid-cols-3 md:grid-cols-6 divide-x divide-base-content/30">
             <div class="p-3 text-center">
-              <div class="text-xl font-black text-primary"><%= @db_stats.total %></div>
-              <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">Total</div>
-            </div>
-            <div class="p-3 text-center">
-              <div class="text-xl font-black text-success"><%= @db_stats.active %></div>
+              <div class="text-2xl font-black text-primary"><%= @db_stats.active %></div>
               <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">Active</div>
             </div>
             <div class="p-3 text-center">
-              <div class={"text-xl font-black #{if @db_stats.stale > 0, do: "text-warning", else: "text-success"}"}><%= @db_stats.stale %></div>
-              <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">Stale (48h+)</div>
+              <div class="text-2xl font-black"><%= @db_stats.olx_count %></div>
+              <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">OLX</div>
             </div>
             <div class="p-3 text-center">
-              <div class="text-xl font-black text-secondary"><%= @db_stats.geocoded %></div>
+              <div class="text-2xl font-black"><%= @db_stats.otodom_count %></div>
+              <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">Otodom</div>
+            </div>
+            <div class="p-3 text-center">
+              <div class="text-2xl font-black text-secondary"><%= @db_stats.geocoded %></div>
               <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">Geocoded</div>
             </div>
             <div class="p-3 text-center">
-              <div class="text-xl font-black text-warning"><%= @db_stats.missing_type %></div>
-              <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">No Type</div>
+              <div class={"text-2xl font-black #{if @db_stats.stale > 0, do: "text-warning", else: "text-success"}"}><%= @db_stats.stale %></div>
+              <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">Stale</div>
             </div>
             <div class="p-3 text-center">
-              <div class={"text-xl font-black #{if @db_stats.duplicates > 0, do: "text-error", else: "text-success"}"}><%= @db_stats.duplicates %></div>
-              <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">Duplicates</div>
-            </div>
-            <div class="p-3 text-center">
-              <div class="text-xl font-black text-error"><%= @db_stats.inactive %></div>
-              <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">Inactive</div>
+              <div class={"text-2xl font-black #{if @db_stats.duplicates > 0, do: "text-error", else: "text-success"}"}><%= @db_stats.duplicates %></div>
+              <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">Dupes</div>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Stale Properties Breakdown -->
-      <%= if @db_stats.stale > 0 do %>
-        <div class="bg-warning/10 border-b-2 border-warning">
-          <div class="container mx-auto px-4 py-3">
-            <div class="flex flex-wrap items-center gap-4">
-              <span class="text-xs font-bold uppercase tracking-wide">⚠️ Stale Properties (not seen in 48h+):</span>
-              <%= for {source, count} <- @db_stats.stale_by_source do %>
-                <span class="px-2 py-1 text-xs font-bold bg-warning/20 border border-warning">
-                  <%= String.upcase(source) %>: <%= count %>
-                </span>
-              <% end %>
-              <span class="text-xs opacity-60">These will become inactive on next cleanup run</span>
-            </div>
-          </div>
-        </div>
-      <% end %>
-
       <div class="container mx-auto px-4 py-6">
-        <!-- Scrapers Section -->
+        <!-- Scrapers -->
         <div class="bg-base-100 border-2 border-base-content mb-6">
           <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
-            <h2 class="text-sm font-bold uppercase tracking-wide">Manual Scrapers</h2>
+            <h2 class="text-sm font-bold uppercase tracking-wide">🌐 Scrapers</h2>
           </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-base-content">
-            <!-- OLX Scraper -->
+          <div class="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-base-content/30">
             <div class="p-4">
               <div class="flex items-center justify-between mb-3">
-                <div>
-                  <h3 class="font-bold text-lg">OLX</h3>
-                  <p class="text-xs opacity-60">Scrape real estate listings from OLX.pl</p>
-                </div>
+                <h3 class="font-bold">OLX.pl</h3>
                 <span class="px-2 py-1 text-[10px] font-bold uppercase bg-primary/20 text-primary">Małopolskie</span>
               </div>
-
-              <div class="flex items-center gap-3 mb-4">
-                <label class="text-xs font-bold uppercase tracking-wide opacity-60">Pages:</label>
-                <div class="flex border-2 border-base-content">
-                  <%= for pages <- [1, 2, 3, 5, 10] do %>
-                    <button
-                      phx-click="set_olx_pages"
-                      phx-value-pages={pages}
-                      class={"px-3 py-1 text-xs font-bold transition-colors cursor-pointer #{if @olx_pages == pages, do: "bg-base-content text-base-100", else: "hover:bg-base-200"} #{if pages > 1, do: "border-l border-base-content/30"}"}
-                    >
-                      <%= pages %>
-                    </button>
-                  <% end %>
-                </div>
-              </div>
-
-              <%= if @olx_scrape_result do %>
-                <div class="mb-3 px-3 py-2 text-xs font-bold bg-success/20 text-success border border-success">
-                  ✓ <%= @olx_scrape_result %>
-                </div>
+              <%= if @scrape_result && @scrape_running == nil do %>
+                <div class="mb-3 px-3 py-2 text-xs font-bold bg-success/20 text-success border border-success">✓ <%= @scrape_result %></div>
               <% end %>
-
-              <button
-                phx-click="run_olx_scrape"
-                disabled={@olx_scrape_running}
-                class={"w-full px-4 py-3 text-sm font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @olx_scrape_running, do: "border-base-content/30 opacity-50", else: "border-base-content hover:bg-base-content hover:text-base-100"}"}
-              >
-                <%= if @olx_scrape_running do %>
-                  <span class="inline-block animate-pulse">⏳ Scraping OLX...</span>
-                <% else %>
-                  Run OLX Scraper (<%= @olx_pages %> pages)
-                <% end %>
+              <button phx-click="run_scrape" phx-value-source="olx" disabled={@scrape_running != nil}
+                class={"w-full px-4 py-3 text-sm font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @scrape_running != nil, do: "border-base-content/30 opacity-50", else: "border-base-content hover:bg-base-content hover:text-base-100"}"}>
+                <%= if @scrape_running == :olx, do: "⏳ Scraping...", else: "Scrape OLX (3 pages)" %>
               </button>
             </div>
-
-            <!-- Otodom Scraper -->
             <div class="p-4">
               <div class="flex items-center justify-between mb-3">
-                <div>
-                  <h3 class="font-bold text-lg">Otodom</h3>
-                  <p class="text-xs opacity-60">Scrape real estate listings from Otodom.pl</p>
-                </div>
+                <h3 class="font-bold">Otodom.pl</h3>
                 <span class="px-2 py-1 text-[10px] font-bold uppercase bg-secondary/20 text-secondary">Małopolskie</span>
               </div>
-
-              <div class="flex items-center gap-3 mb-4">
-                <label class="text-xs font-bold uppercase tracking-wide opacity-60">Pages:</label>
-                <div class="flex border-2 border-base-content">
-                  <%= for pages <- [1, 2, 3, 5, 10] do %>
-                    <button
-                      phx-click="set_otodom_pages"
-                      phx-value-pages={pages}
-                      class={"px-3 py-1 text-xs font-bold transition-colors cursor-pointer #{if @otodom_pages == pages, do: "bg-base-content text-base-100", else: "hover:bg-base-200"} #{if pages > 1, do: "border-l border-base-content/30"}"}
-                    >
-                      <%= pages %>
-                    </button>
-                  <% end %>
-                </div>
-              </div>
-
-              <%= if @otodom_scrape_result do %>
-                <div class="mb-3 px-3 py-2 text-xs font-bold bg-success/20 text-success border border-success">
-                  ✓ <%= @otodom_scrape_result %>
-                </div>
-              <% end %>
-
-              <button
-                phx-click="run_otodom_scrape"
-                disabled={@otodom_scrape_running}
-                class={"w-full px-4 py-3 text-sm font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @otodom_scrape_running, do: "border-base-content/30 opacity-50", else: "border-base-content hover:bg-base-content hover:text-base-100"}"}
-              >
-                <%= if @otodom_scrape_running do %>
-                  <span class="inline-block animate-pulse">⏳ Scraping Otodom...</span>
-                <% else %>
-                  Run Otodom Scraper (<%= @otodom_pages %> pages)
-                <% end %>
+              <button phx-click="run_scrape" phx-value-source="otodom" disabled={@scrape_running != nil}
+                class={"w-full px-4 py-3 text-sm font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @scrape_running != nil, do: "border-base-content/30 opacity-50", else: "border-base-content hover:bg-base-content hover:text-base-100"}"}>
+                <%= if @scrape_running == :otodom, do: "⏳ Scraping...", else: "Scrape Otodom (3 pages)" %>
               </button>
             </div>
           </div>
         </div>
 
-        <!-- Maintenance Tasks -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 mb-6">
-          <!-- Geocoding -->
-          <div class="bg-base-100 border-2 border-base-content">
-            <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
-              <h3 class="text-sm font-bold uppercase tracking-wide">📍 Geocoding</h3>
-            </div>
-            <div class="p-4">
-              <p class="text-xs opacity-60 mb-4">
-                Add coordinates to properties without location data. Uses Google Geocoding API.
-              </p>
-
-              <%= if @geocode_result do %>
-                <div class="mb-3 px-3 py-2 text-xs font-bold bg-success/20 text-success border border-success">
-                  ✓ <%= @geocode_result %>
-                </div>
-              <% end %>
-
-              <button
-                phx-click="run_geocode"
-                disabled={@geocode_running}
-                class={"w-full px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @geocode_running, do: "border-base-content/30 opacity-50", else: "border-base-content hover:bg-base-content hover:text-base-100"}"}
-              >
-                <%= if @geocode_running, do: "⏳ Running...", else: "Geocode 50 Properties" %>
-              </button>
-            </div>
-          </div>
-
-          <!-- Backfill Types -->
-          <div class="bg-base-100 border-2 border-base-content">
-            <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
-              <h3 class="text-sm font-bold uppercase tracking-wide">🏷️ Backfill Types</h3>
-            </div>
-            <div class="p-4">
-              <p class="text-xs opacity-60 mb-4">
-                Infer missing transaction and property types from URLs, titles, and descriptions.
-              </p>
-
-              <%= if @backfill_result do %>
-                <div class="mb-3 px-3 py-2 text-xs font-bold bg-success/20 text-success border border-success">
-                  ✓ <%= @backfill_result %>
-                </div>
-              <% end %>
-
-              <button
-                phx-click="run_backfill"
-                disabled={@backfill_running}
-                class={"w-full px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer mb-2 #{if @backfill_running, do: "border-base-content/30 opacity-50", else: "border-base-content hover:bg-base-content hover:text-base-100"}"}
-              >
-                <%= if @backfill_running, do: "⏳ Running...", else: "Run Backfill" %>
-              </button>
-
-              <button
-                phx-click="export_missing_types"
-                disabled={@export_running}
-                class={"w-full px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @export_running, do: "border-base-content/30 opacity-50", else: "border-info text-info hover:bg-info hover:text-info-content"}"}
-              >
-                <%= if @export_running, do: "⏳ Generating...", else: "📥 Download Missing Types CSV" %>
-              </button>
-            </div>
-          </div>
-
-          <!-- Backfill Rooms -->
-          <div class="bg-base-100 border-2 border-base-content">
-            <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
-              <h3 class="text-sm font-bold uppercase tracking-wide">🛏️ Backfill Rooms</h3>
-            </div>
-            <div class="p-4">
-              <p class="text-xs opacity-60 mb-4">
-                Extract room counts from titles for properties missing this data.
-              </p>
-
-              <%= if @backfill_rooms_result do %>
-                <div class="mb-3 px-3 py-2 text-xs font-bold bg-success/20 text-success border border-success">
-                  ✓ <%= @backfill_rooms_result %>
-                </div>
-              <% end %>
-
-              <button
-                phx-click="run_backfill_rooms"
-                disabled={@backfill_rooms_running}
-                class={"w-full px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @backfill_rooms_running, do: "border-base-content/30 opacity-50", else: "border-base-content hover:bg-base-content hover:text-base-100"}"}
-              >
-                <%= if @backfill_rooms_running, do: "⏳ Running...", else: "Run Room Backfill" %>
-              </button>
-            </div>
-          </div>
-
-          <!-- Re-scrape Missing Data -->
-          <div class="bg-base-100 border-2 border-base-content">
-            <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
-              <h3 class="text-sm font-bold uppercase tracking-wide">🔄 Re-scrape Missing Data</h3>
-            </div>
-            <div class="p-4">
-              <p class="text-xs opacity-60 mb-3">
-                Re-fetch property pages to extract missing data (50 at a time).
-              </p>
-
-              <!-- Target Selection -->
-              <div class="mb-3">
-                <span class="text-xs font-bold uppercase tracking-wide opacity-60">Target:</span>
-                <div class="flex gap-1 mt-1">
-                  <button
-                    phx-click="set_rescrape_target"
-                    phx-value-target="price"
-                    class={"px-2 py-1 text-xs font-bold border transition-colors cursor-pointer #{if @rescrape_target == :price, do: "bg-accent text-accent-content border-accent", else: "border-base-content/30 hover:bg-base-200"}"}
-                  >
-                    Price
-                  </button>
-                  <button
-                    phx-click="set_rescrape_target"
-                    phx-value-target="area"
-                    class={"px-2 py-1 text-xs font-bold border transition-colors cursor-pointer #{if @rescrape_target == :area, do: "bg-accent text-accent-content border-accent", else: "border-base-content/30 hover:bg-base-200"}"}
-                  >
-                    Area
-                  </button>
-                  <button
-                    phx-click="set_rescrape_target"
-                    phx-value-target="rooms"
-                    class={"px-2 py-1 text-xs font-bold border transition-colors cursor-pointer #{if @rescrape_target == :rooms, do: "bg-accent text-accent-content border-accent", else: "border-base-content/30 hover:bg-base-200"}"}
-                  >
-                    Rooms
-                  </button>
-                  <button
-                    phx-click="set_rescrape_target"
-                    phx-value-target="district"
-                    class={"px-2 py-1 text-xs font-bold border transition-colors cursor-pointer #{if @rescrape_target == :district, do: "bg-accent text-accent-content border-accent", else: "border-base-content/30 hover:bg-base-200"}"}
-                  >
-                    District
-                  </button>
-                </div>
-              </div>
-
-              <!-- Missing Count -->
-              <div class="mb-3 px-2 py-1 bg-warning/10 border border-warning/30 text-xs">
-                <span class="font-bold text-warning"><%= @rescrape_missing_count %></span>
-                <span class="opacity-60">properties missing <%= @rescrape_target %></span>
-              </div>
-
-              <%= if @rescrape_result do %>
-                <div class="mb-3 px-3 py-2 text-xs font-bold bg-success/20 text-success border border-success">
-                  ✓ <%= @rescrape_result %>
-                </div>
-              <% end %>
-
-              <button
-                phx-click="run_rescrape"
-                disabled={@rescrape_running || @rescrape_missing_count == 0}
-                class={"w-full px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @rescrape_running || @rescrape_missing_count == 0, do: "border-base-content/30 opacity-50", else: "border-accent text-accent hover:bg-accent hover:text-accent-content"}"}
-              >
-                <%= if @rescrape_running, do: "⏳ Re-scraping...", else: "Re-scrape (50)" %>
-              </button>
-            </div>
-          </div>
-
-          <!-- Remove Duplicates -->
-          <div class="bg-base-100 border-2 border-base-content">
-            <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
-              <h3 class="text-sm font-bold uppercase tracking-wide">🔄 Deduplication</h3>
-            </div>
-            <div class="p-4">
-              <p class="text-xs opacity-60 mb-4">
-                Remove duplicate properties with the same URL. Keeps oldest entry.
-              </p>
-
-              <%= if @dedup_result do %>
-                <div class="mb-3 px-3 py-2 text-xs font-bold bg-success/20 text-success border border-success">
-                  ✓ <%= @dedup_result %>
-                </div>
-              <% end %>
-
-              <button
-                phx-click="run_dedup"
-                disabled={@dedup_running}
-                class={"w-full px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @dedup_running, do: "border-base-content/30 opacity-50", else: "border-warning text-warning hover:bg-warning hover:text-warning-content"}"}
-              >
-                <%= if @dedup_running, do: "⏳ Running...", else: "Remove Duplicates" %>
-              </button>
-            </div>
-          </div>
-
-          <!-- Cleanup -->
-          <div class="bg-base-100 border-2 border-base-content">
-            <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
-              <h3 class="text-sm font-bold uppercase tracking-wide">🧹 Cleanup</h3>
-            </div>
-            <div class="p-4">
-              <p class="text-xs opacity-60 mb-4">
-                Mark properties as inactive if not seen for 48+ hours (listing removed).
-              </p>
-
-              <%= if @cleanup_result do %>
-                <div class="mb-3 px-3 py-2 text-xs font-bold bg-success/20 text-success border border-success">
-                  ✓ <%= @cleanup_result %>
-                </div>
-              <% end %>
-
-              <button
-                phx-click="run_cleanup"
-                disabled={@cleanup_running}
-                class={"w-full px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @cleanup_running, do: "border-base-content/30 opacity-50", else: "border-error text-error hover:bg-error hover:text-error-content"}"}
-              >
-                <%= if @cleanup_running, do: "⏳ Running...", else: "Mark Stale Inactive" %>
-              </button>
-            </div>
-          </div>
-
-          <!-- Fix Misclassified -->
-          <div class="bg-base-100 border-2 border-base-content">
-            <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
-              <h3 class="text-sm font-bold uppercase tracking-wide">🔄 Fix Misclassified</h3>
-            </div>
-            <div class="p-4">
-              <p class="text-xs opacity-60 mb-3">
-                Fix transaction types based on price: Sale &lt;30k → Rent, Rent &gt;100k → Sale
-              </p>
-
-              <div class="mb-3 grid grid-cols-2 gap-2 text-xs">
-                <div class="px-2 py-1 bg-info/10 border border-info/30">
-                  <span class="font-bold text-info"><%= @misclassified_preview.sales_to_rent %></span>
-                  <span class="opacity-60">sales → rent</span>
-                </div>
-                <div class="px-2 py-1 bg-warning/10 border border-warning/30">
-                  <span class="font-bold text-warning"><%= @misclassified_preview.rent_to_sales %></span>
-                  <span class="opacity-60">rent → sales</span>
-                </div>
-              </div>
-
-              <%= if @fix_misclassified_result do %>
-                <div class="mb-3 px-3 py-2 text-xs font-bold bg-success/20 text-success border border-success">
-                  ✓ <%= @fix_misclassified_result %>
-                </div>
-              <% end %>
-
-              <button
-                phx-click="fix_misclassified"
-                disabled={@fix_misclassified_running || (@misclassified_preview.sales_to_rent == 0 and @misclassified_preview.rent_to_sales == 0)}
-                class={"w-full px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @fix_misclassified_running || (@misclassified_preview.sales_to_rent == 0 and @misclassified_preview.rent_to_sales == 0), do: "border-base-content/30 opacity-50", else: "border-primary text-primary hover:bg-primary hover:text-primary-content"}"}
-              >
-                <%= if @fix_misclassified_running, do: "⏳ Running...", else: "Fix Transaction Types" %>
-              </button>
-            </div>
-          </div>
-
-        </div>
-
-        <!-- Data Quality Exports -->
+        <!-- Data Enrichment -->
         <div class="bg-base-100 border-2 border-base-content mb-6">
           <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
-            <h2 class="text-sm font-bold uppercase tracking-wide">📊 Data Quality Exports</h2>
+            <h2 class="text-sm font-bold uppercase tracking-wide">✨ Data Enrichment</h2>
           </div>
           <div class="p-4">
-            <p class="text-xs opacity-60 mb-4">
-              Download CSV reports for properties with missing or incomplete data.
-            </p>
-            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-              <button
-                phx-click="export_data_quality"
-                phx-value-type="missing_price"
-                disabled={@export_running}
-                class={"px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @export_running, do: "border-base-content/30 opacity-50", else: "border-warning text-warning hover:bg-warning hover:text-warning-content"}"}
-              >
-                💰 Missing Price
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+              <!-- Re-scrape Target Selection -->
+              <div class="col-span-2 md:col-span-4 flex flex-wrap items-center gap-2 pb-3 border-b border-base-content/10">
+                <span class="text-xs font-bold uppercase tracking-wide opacity-60">Re-scrape target:</span>
+                <%= for target <- [:price, :area, :rooms, :district] do %>
+                  <button phx-click="set_rescrape_target" phx-value-target={target}
+                    class={"px-3 py-1 text-xs font-bold border transition-colors cursor-pointer #{if @rescrape_target == target, do: "bg-accent text-accent-content border-accent", else: "border-base-content/30 hover:bg-base-200"}"}>
+                    <%= target %> (<%= get_missing_count(target) %>)
+                  </button>
+                <% end %>
+              </div>
+            </div>
+            
+            <%= if @enrichment_result do %>
+              <div class="mb-3 px-3 py-2 text-xs font-bold bg-success/20 text-success border border-success">✓ <%= @enrichment_result %></div>
+            <% end %>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <button phx-click="run_enrichment" phx-value-type="rescrape" disabled={@enrichment_running != nil || @rescrape_missing_count == 0}
+                class={"px-4 py-3 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @enrichment_running != nil || @rescrape_missing_count == 0, do: "border-base-content/30 opacity-50", else: "border-accent text-accent hover:bg-accent hover:text-accent-content"}"}>
+                <%= if @enrichment_running == :rescrape, do: "⏳ Running...", else: "🔄 Re-scrape (50)" %>
               </button>
-              
-              <button
-                phx-click="export_data_quality"
-                phx-value-type="missing_area"
-                disabled={@export_running}
-                class={"px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @export_running, do: "border-base-content/30 opacity-50", else: "border-warning text-warning hover:bg-warning hover:text-warning-content"}"}
-              >
-                📐 Missing Area
+              <button phx-click="run_enrichment" phx-value-type="geocode" disabled={@enrichment_running != nil}
+                class={"px-4 py-3 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @enrichment_running != nil, do: "border-base-content/30 opacity-50", else: "border-base-content hover:bg-base-content hover:text-base-100"}"}>
+                <%= if @enrichment_running == :geocode, do: "⏳ Running...", else: "📍 Geocode (50)" %>
               </button>
-              
-              <button
-                phx-click="export_data_quality"
-                phx-value-type="missing_rooms"
-                disabled={@export_running}
-                class={"px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @export_running, do: "border-base-content/30 opacity-50", else: "border-warning text-warning hover:bg-warning hover:text-warning-content"}"}
-              >
-                🛏️ Missing Rooms
+              <button phx-click="run_enrichment" phx-value-type="backfill_types" disabled={@enrichment_running != nil}
+                class={"px-4 py-3 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @enrichment_running != nil, do: "border-base-content/30 opacity-50", else: "border-base-content hover:bg-base-content hover:text-base-100"}"}>
+                <%= if @enrichment_running == :backfill_types, do: "⏳ Running...", else: "🏷️ Backfill Types" %>
               </button>
-              
-              <button
-                phx-click="export_data_quality"
-                phx-value-type="missing_coords"
-                disabled={@export_running}
-                class={"px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @export_running, do: "border-base-content/30 opacity-50", else: "border-info text-info hover:bg-info hover:text-info-content"}"}
-              >
-                📍 No Coordinates
+              <button phx-click="run_enrichment" phx-value-type="backfill_rooms" disabled={@enrichment_running != nil}
+                class={"px-4 py-3 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @enrichment_running != nil, do: "border-base-content/30 opacity-50", else: "border-base-content hover:bg-base-content hover:text-base-100"}"}>
+                <%= if @enrichment_running == :backfill_rooms, do: "⏳ Running...", else: "🛏️ Backfill Rooms" %>
               </button>
-              
-              <button
-                phx-click="export_data_quality"
-                phx-value-type="all"
-                disabled={@export_running}
-                class={"px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @export_running, do: "border-base-content/30 opacity-50", else: "border-error text-error hover:bg-error hover:text-error-content"}"}
-              >
-                ⚠️ All Issues
+            </div>
+          </div>
+        </div>
+
+        <!-- Data Cleanup -->
+        <div class="bg-base-100 border-2 border-base-content mb-6">
+          <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
+            <h2 class="text-sm font-bold uppercase tracking-wide">🧹 Data Cleanup</h2>
+          </div>
+          <div class="p-4">
+            <!-- Misclassified preview -->
+            <%= if @misclassified_preview.sales_to_rent > 0 or @misclassified_preview.rent_to_sales > 0 do %>
+              <div class="mb-3 flex gap-2 text-xs">
+                <span class="px-2 py-1 bg-info/10 border border-info/30">
+                  <span class="font-bold text-info"><%= @misclassified_preview.sales_to_rent %></span> sales→rent
+                </span>
+                <span class="px-2 py-1 bg-warning/10 border border-warning/30">
+                  <span class="font-bold text-warning"><%= @misclassified_preview.rent_to_sales %></span> rent→sales
+                </span>
+              </div>
+            <% end %>
+
+            <%= if @cleanup_result do %>
+              <div class="mb-3 px-3 py-2 text-xs font-bold bg-success/20 text-success border border-success">✓ <%= @cleanup_result %></div>
+            <% end %>
+
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <button phx-click="run_cleanup_task" phx-value-type="stale" disabled={@cleanup_running != nil}
+                class={"px-4 py-3 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @cleanup_running != nil, do: "border-base-content/30 opacity-50", else: "border-error text-error hover:bg-error hover:text-error-content"}"}>
+                <%= if @cleanup_running == :stale, do: "⏳ Running...", else: "🗑️ Mark Stale Inactive" %>
+              </button>
+              <button phx-click="run_cleanup_task" phx-value-type="duplicates" disabled={@cleanup_running != nil || @db_stats.duplicates == 0}
+                class={"px-4 py-3 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @cleanup_running != nil || @db_stats.duplicates == 0, do: "border-base-content/30 opacity-50", else: "border-warning text-warning hover:bg-warning hover:text-warning-content"}"}>
+                <%= if @cleanup_running == :duplicates, do: "⏳ Running...", else: "🔄 Remove Duplicates" %>
+              </button>
+              <button phx-click="run_cleanup_task" phx-value-type="misclassified" disabled={@cleanup_running != nil || (@misclassified_preview.sales_to_rent == 0 and @misclassified_preview.rent_to_sales == 0)}
+                class={"px-4 py-3 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @cleanup_running != nil || (@misclassified_preview.sales_to_rent == 0 and @misclassified_preview.rent_to_sales == 0), do: "border-base-content/30 opacity-50", else: "border-primary text-primary hover:bg-primary hover:text-primary-content"}"}>
+                <%= if @cleanup_running == :misclassified, do: "⏳ Running...", else: "🔧 Fix Misclassified" %>
               </button>
             </div>
           </div>
@@ -527,18 +200,11 @@ defmodule RzeczywiscieWeb.AdminLive do
         <!-- Quick Links -->
         <div class="bg-base-100 border-2 border-base-content">
           <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
-            <h2 class="text-sm font-bold uppercase tracking-wide">Quick Links</h2>
+            <h2 class="text-sm font-bold uppercase tracking-wide">🔗 Quick Links</h2>
           </div>
           <div class="p-4 flex flex-wrap gap-3">
-            <a href="/url-inspector" class="px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">
-              🔍 URL Inspector
-            </a>
-            <a href="/dev/dashboard" target="_blank" class="px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">
-              📊 Phoenix Dashboard
-            </a>
-            <a href="/dev/mailbox" target="_blank" class="px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">
-              📧 Mailbox
-            </a>
+            <a href="/url-inspector" class="px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">🔍 URL Inspector</a>
+            <a href="/dev/dashboard" target="_blank" class="px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">📊 Phoenix Dashboard</a>
           </div>
         </div>
       </div>
@@ -548,104 +214,51 @@ defmodule RzeczywiscieWeb.AdminLive do
   end
 
   @impl true
-  def handle_event("set_olx_pages", %{"pages" => pages}, socket) do
-    {:noreply, assign(socket, :olx_pages, String.to_integer(pages))}
-  end
-
-  @impl true
-  def handle_event("set_otodom_pages", %{"pages" => pages}, socket) do
-    {:noreply, assign(socket, :otodom_pages, String.to_integer(pages))}
-  end
-
-  @impl true
-  def handle_event("run_backfill", _params, socket) do
-    Logger.info("Starting backfill from admin panel")
-
-    socket = assign(socket, :backfill_running, true)
-
+  def handle_event("run_scrape", %{"source" => source}, socket) do
+    source_atom = String.to_existing_atom(source)
+    Logger.info("Starting #{source} scrape from admin panel")
+    
+    socket = assign(socket, :scrape_running, source_atom)
+    
     parent = self()
     Task.start(fn ->
-      result = run_backfill_task()
-      send(parent, {:backfill_complete, result})
+      result = run_scraper(source_atom)
+      send(parent, {:scrape_complete, result})
     end)
-
+    
     {:noreply, socket}
   end
 
   @impl true
-  def handle_event("run_olx_scrape", _params, socket) do
-    pages = socket.assigns.olx_pages
-    Logger.info("Starting OLX scrape from admin panel (#{pages} pages)")
-
-    socket = assign(socket, :olx_scrape_running, true)
-
+  def handle_event("run_enrichment", %{"type" => type}, socket) do
+    type_atom = String.to_existing_atom(type)
+    Logger.info("Starting #{type} enrichment from admin panel")
+    
+    socket = assign(socket, :enrichment_running, type_atom)
+    
     parent = self()
+    target = socket.assigns.rescrape_target
     Task.start(fn ->
-      result = run_olx_scraper(pages)
-      send(parent, {:olx_scrape_complete, result})
+      result = run_enrichment_task(type_atom, target)
+      send(parent, {:enrichment_complete, result})
     end)
-
+    
     {:noreply, socket}
   end
 
   @impl true
-  def handle_event("run_otodom_scrape", _params, socket) do
-    pages = socket.assigns.otodom_pages
-    Logger.info("Starting Otodom scrape from admin panel (#{pages} pages)")
-
-    socket = assign(socket, :otodom_scrape_running, true)
-
+  def handle_event("run_cleanup_task", %{"type" => type}, socket) do
+    type_atom = String.to_existing_atom(type)
+    Logger.info("Starting #{type} cleanup from admin panel")
+    
+    socket = assign(socket, :cleanup_running, type_atom)
+    
     parent = self()
     Task.start(fn ->
-      result = run_otodom_scraper(pages)
-      send(parent, {:otodom_scrape_complete, result})
-    end)
-
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_event("run_geocode", _params, socket) do
-    Logger.info("Starting geocoding from admin panel")
-
-    socket = assign(socket, :geocode_running, true)
-
-    parent = self()
-    Task.start(fn ->
-      result = run_geocoding()
-      send(parent, {:geocode_complete, result})
-    end)
-
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_event("run_cleanup", _params, socket) do
-    Logger.info("Starting cleanup from admin panel")
-
-    socket = assign(socket, :cleanup_running, true)
-
-    parent = self()
-    Task.start(fn ->
-      result = run_cleanup()
+      result = run_cleanup_task(type_atom)
       send(parent, {:cleanup_complete, result})
     end)
-
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_event("fix_misclassified", _params, socket) do
-    Logger.info("Fixing misclassified transaction types from admin panel")
-
-    socket = assign(socket, :fix_misclassified_running, true)
-
-    parent = self()
-    Task.start(fn ->
-      {:ok, result} = RealEstate.fix_misclassified_transaction_types()
-      send(parent, {:fix_misclassified_complete, result})
-    end)
-
+    
     {:noreply, socket}
   end
 
@@ -657,126 +270,28 @@ defmodule RzeczywiscieWeb.AdminLive do
       socket
       |> assign(:rescrape_target, target_atom)
       |> assign(:rescrape_missing_count, get_missing_count(target_atom))
-      |> assign(:rescrape_result, nil)
 
     {:noreply, socket}
   end
 
   @impl true
-  def handle_event("run_dedup", _params, socket) do
-    Logger.info("Starting deduplication from admin panel")
-
-    socket = assign(socket, :dedup_running, true)
-
-    parent = self()
-    Task.start(fn ->
-      result = run_deduplication()
-      send(parent, {:dedup_complete, result})
-    end)
-
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_event("export_missing_types", _params, socket) do
-    Logger.info("Generating missing types CSV export")
-
-    socket = assign(socket, :export_running, true)
-
-    parent = self()
-    Task.start(fn ->
-      csv_data = generate_missing_types_csv()
-      send(parent, {:export_complete, {csv_data, "missing_types"}})
-    end)
-
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_event("export_data_quality", %{"type" => type}, socket) do
-    Logger.info("Generating data quality CSV export: #{type}")
-
-    socket = assign(socket, :export_running, true)
-
-    parent = self()
-    Task.start(fn ->
-      csv_data = generate_data_quality_csv(type)
-      send(parent, {:export_complete, {csv_data, type}})
-    end)
-
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_event("run_backfill_rooms", _params, socket) do
-    Logger.info("Starting room count backfill from admin panel")
-
-    socket = assign(socket, :backfill_rooms_running, true)
-
-    parent = self()
-    Task.start(fn ->
-      result = run_backfill_rooms()
-      send(parent, {:backfill_rooms_complete, result})
-    end)
-
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_event("run_rescrape", _params, socket) do
-    target = socket.assigns.rescrape_target
-    Logger.info("Starting re-scrape for #{target} from admin panel")
-
-    socket = assign(socket, :rescrape_running, true)
-
-    parent = self()
-    Task.start(fn ->
-      result = run_rescrape(target)
-      send(parent, {:rescrape_complete, result})
-    end)
-
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_info({:backfill_complete, result}, socket) do
+  def handle_info({:scrape_complete, result}, socket) do
     socket =
       socket
-      |> assign(:backfill_running, false)
-      |> assign(:backfill_result, result)
+      |> assign(:scrape_running, nil)
+      |> assign(:scrape_result, result)
       |> assign(:db_stats, get_db_stats())
 
     {:noreply, socket}
   end
 
   @impl true
-  def handle_info({:olx_scrape_complete, result}, socket) do
+  def handle_info({:enrichment_complete, result}, socket) do
     socket =
       socket
-      |> assign(:olx_scrape_running, false)
-      |> assign(:olx_scrape_result, result)
-      |> assign(:db_stats, get_db_stats())
-
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_info({:otodom_scrape_complete, result}, socket) do
-    socket =
-      socket
-      |> assign(:otodom_scrape_running, false)
-      |> assign(:otodom_scrape_result, result)
-      |> assign(:db_stats, get_db_stats())
-
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_info({:geocode_complete, result}, socket) do
-    socket =
-      socket
-      |> assign(:geocode_running, false)
-      |> assign(:geocode_result, result)
+      |> assign(:enrichment_running, nil)
+      |> assign(:enrichment_result, result)
+      |> assign(:rescrape_missing_count, get_missing_count(socket.assigns.rescrape_target))
       |> assign(:db_stats, get_db_stats())
 
     {:noreply, socket}
@@ -786,100 +301,30 @@ defmodule RzeczywiscieWeb.AdminLive do
   def handle_info({:cleanup_complete, result}, socket) do
     socket =
       socket
-      |> assign(:cleanup_running, false)
+      |> assign(:cleanup_running, nil)
       |> assign(:cleanup_result, result)
-      |> assign(:db_stats, get_db_stats())
-
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_info({:fix_misclassified_complete, result}, socket) do
-    msg = "Fixed #{result.sales_to_rent} sales→rent, #{result.rent_to_sales} rent→sales"
-    
-    socket =
-      socket
-      |> assign(:fix_misclassified_running, false)
-      |> assign(:fix_misclassified_result, msg)
       |> assign(:misclassified_preview, RealEstate.preview_misclassified_transaction_types())
       |> assign(:db_stats, get_db_stats())
 
     {:noreply, socket}
   end
 
-
-  @impl true
-  def handle_info({:dedup_complete, result}, socket) do
-    socket =
-      socket
-      |> assign(:dedup_running, false)
-      |> assign(:dedup_result, result)
-      |> assign(:db_stats, get_db_stats())
-
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_info({:export_complete, {csv_data, export_type}}, socket) do
-    # Trigger file download via JavaScript
-    filename = "#{export_type}_#{DateTime.utc_now() |> DateTime.to_unix()}.csv"
-    
-    socket =
-      socket
-      |> assign(:export_running, false)
-      |> push_event("download_csv", %{
-        filename: filename,
-        data: csv_data
-      })
-
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_info({:backfill_rooms_complete, result}, socket) do
-    socket =
-      socket
-      |> assign(:backfill_rooms_running, false)
-      |> assign(:backfill_rooms_result, result)
-      |> assign(:db_stats, get_db_stats())
-
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_info({:rescrape_complete, result}, socket) do
-    socket =
-      socket
-      |> assign(:rescrape_running, false)
-      |> assign(:rescrape_result, result)
-      |> assign(:rescrape_missing_count, get_missing_count(socket.assigns.rescrape_target))
-      |> assign(:db_stats, get_db_stats())
-
-    {:noreply, socket}
-  end
-
   defp get_db_stats do
-    total = Repo.aggregate(Property, :count, :id)
     active = Repo.aggregate(from(p in Property, where: p.active == true), :count, :id)
-    inactive = total - active
+
+    # Source breakdown
+    olx_count = Repo.aggregate(from(p in Property, where: p.active == true and p.source == "olx"), :count, :id)
+    otodom_count = Repo.aggregate(from(p in Property, where: p.active == true and p.source == "otodom"), :count, :id)
 
     geocoded = Repo.aggregate(
       from(p in Property, where: p.active == true and not is_nil(p.latitude)),
       :count, :id
     )
 
-    missing_type = Repo.aggregate(
-      from(p in Property, where: p.active == true and (is_nil(p.transaction_type) or is_nil(p.property_type))),
-      :count, :id
-    )
-
     # Count duplicate URLs
     duplicate_query = """
     SELECT COUNT(*) FROM (
-      SELECT url FROM properties
-      WHERE url IS NOT NULL
-      GROUP BY url
-      HAVING COUNT(*) > 1
+      SELECT url FROM properties WHERE url IS NOT NULL GROUP BY url HAVING COUNT(*) > 1
     ) as dupes
     """
 
@@ -888,32 +333,20 @@ defmodule RzeczywiscieWeb.AdminLive do
       _ -> 0
     end
 
-    # Count stale properties (active but not seen in 48+ hours - will become inactive)
+    # Count stale properties (active but not seen in 48+ hours)
     cutoff = DateTime.utc_now() |> DateTime.add(-48 * 3600, :second)
-    
     stale = Repo.aggregate(
       from(p in Property, where: p.active == true and p.last_seen_at < ^cutoff),
       :count, :id
     )
 
-    # Stale breakdown by source
-    stale_by_source = from(p in Property,
-      where: p.active == true and p.last_seen_at < ^cutoff,
-      group_by: p.source,
-      select: {p.source, count(p.id)}
-    )
-    |> Repo.all()
-    |> Enum.into(%{})
-
     %{
-      total: total,
       active: active,
-      inactive: inactive,
+      olx_count: olx_count,
+      otodom_count: otodom_count,
       geocoded: geocoded,
-      missing_type: missing_type,
       duplicates: duplicates,
-      stale: stale,
-      stale_by_source: stale_by_source
+      stale: stale
     }
   end
 
@@ -943,6 +376,83 @@ defmodule RzeczywiscieWeb.AdminLive do
       from(p in Property, where: p.active == true and (is_nil(p.district) or p.district == "")),
       :count, :id
     )
+  end
+
+  # Scraper helpers
+  defp run_scraper(:olx) do
+    alias Rzeczywiscie.Scrapers.OlxScraper
+    Logger.info("Running OLX scraper (3 pages)...")
+    result = OlxScraper.scrape(pages: 3)
+    "OLX: #{inspect(result)}"
+  end
+
+  defp run_scraper(:otodom) do
+    alias Rzeczywiscie.Scrapers.OtodomScraper
+    Logger.info("Running Otodom scraper (3 pages)...")
+    result = OtodomScraper.scrape(pages: 3)
+    "Otodom: #{inspect(result)}"
+  end
+
+  # Enrichment helpers
+  defp run_enrichment_task(:rescrape, target) do
+    alias Rzeczywiscie.Scrapers.PropertyRescraper
+    Logger.info("Running rescrape for #{target}...")
+    {:ok, stats} = PropertyRescraper.rescrape_missing(target)
+    "Re-scraped: #{stats.updated} updated, #{stats.failed} failed"
+  end
+
+  defp run_enrichment_task(:geocode, _target) do
+    run_geocode_task()
+  end
+
+  defp run_enrichment_task(:backfill_types, _target) do
+    run_backfill_task()
+  end
+
+  defp run_enrichment_task(:backfill_rooms, _target) do
+    run_backfill_rooms()
+  end
+
+  # Cleanup helpers
+  defp run_cleanup_task(:stale) do
+    case RealEstate.mark_stale_properties_inactive(48) do
+      {:ok, count} -> "Marked #{count} stale properties as inactive"
+      {:error, reason} -> "Error: #{reason}"
+    end
+  end
+
+  defp run_cleanup_task(:duplicates) do
+    run_dedup_task()
+  end
+
+  defp run_cleanup_task(:misclassified) do
+    {:ok, %{sales_to_rent: str, rent_to_sales: rts}} = RealEstate.fix_misclassified_transaction_types()
+    "Fixed #{str} sales→rent, #{rts} rent→sales"
+  end
+
+  defp run_geocode_task do
+    alias Rzeczywiscie.Workers.GeocodingWorker
+    Logger.info("Running geocoding task...")
+    :ok = GeocodingWorker.perform(%Oban.Job{})
+    "Geocoding complete"
+  end
+
+  defp run_dedup_task do
+    Logger.info("Starting deduplication...")
+
+    # Find and remove duplicates
+    duplicate_query = """
+    WITH duplicates AS (
+      SELECT id, ROW_NUMBER() OVER (PARTITION BY url ORDER BY inserted_at) as rn
+      FROM properties WHERE url IS NOT NULL
+    )
+    DELETE FROM properties WHERE id IN (SELECT id FROM duplicates WHERE rn > 1)
+    """
+
+    case Ecto.Adapters.SQL.query(Repo, duplicate_query, []) do
+      {:ok, %{num_rows: count}} -> "Removed #{count} duplicates"
+      {:error, reason} -> "Error: #{inspect(reason)}"
+    end
   end
 
   defp run_backfill_task do
@@ -1210,97 +720,6 @@ defmodule RzeczywiscieWeb.AdminLive do
     end
   end
 
-  defp run_olx_scraper(pages) do
-    alias Rzeczywiscie.Scrapers.OlxScraper
-
-    Logger.info("Running manual OLX scrape (#{pages} pages)...")
-
-    case OlxScraper.scrape(pages: pages, delay: 2000) do
-      {:ok, %{total: total, saved: saved}} ->
-        "Found #{total} listings, saved #{saved}"
-
-      {:error, reason} ->
-        "Failed: #{inspect(reason)}"
-    end
-  end
-
-  defp run_otodom_scraper(pages) do
-    alias Rzeczywiscie.Scrapers.OtodomScraper
-
-    Logger.info("Running manual Otodom scrape (#{pages} pages)...")
-
-    case OtodomScraper.scrape(pages: pages, delay: 3000) do
-      {:ok, %{total: total, saved: saved}} ->
-        "Found #{total} listings, saved #{saved}"
-
-      {:error, reason} ->
-        "Failed: #{inspect(reason)}"
-    end
-  end
-
-  defp run_geocoding do
-    alias Rzeczywiscie.Workers.GeocodingWorker
-
-    Logger.info("Running manual geocoding...")
-
-    case GeocodingWorker.trigger(batch_size: 50, delay_ms: 500) do
-      {:ok, _job} ->
-        "Geocoding job started for up to 50 properties"
-
-      {:error, reason} ->
-        "Failed: #{inspect(reason)}"
-    end
-  end
-
-  defp run_cleanup do
-    alias Rzeczywiscie.RealEstate
-
-    Logger.info("Running cleanup (marking stale properties inactive)...")
-
-    {count, _} = RealEstate.mark_stale_properties_inactive(48)
-    "Marked #{count} properties as inactive"
-  end
-
-  defp run_rescrape(target) do
-    alias Rzeczywiscie.Scrapers.PropertyRescraper
-
-    Logger.info("Running property re-scrape for #{target}...")
-
-    case PropertyRescraper.rescrape_missing(limit: 50, delay: 2000, missing: target) do
-      {:ok, %{total: total, updated: updated, failed: failed}} ->
-        result = "#{target}: #{total} processed, #{updated} updated, #{failed} failed"
-        Logger.info("✓ Re-scrape completed: #{result}")
-        result
-
-      {:error, reason} ->
-        error = "Failed: #{inspect(reason)}"
-        Logger.error("✗ Re-scrape failed: #{error}")
-        error
-    end
-  end
-
-  defp run_deduplication do
-    alias Rzeczywiscie.RealEstate
-
-    Logger.info("Running deduplication...")
-
-    case RealEstate.remove_duplicate_properties() do
-      {:ok, count} ->
-        result = if count == 0 do
-          "No duplicates found"
-        else
-          "Removed #{count} duplicate #{if count == 1, do: "property", else: "properties"}"
-        end
-        Logger.info("✓ Deduplication completed: #{result}")
-        result
-
-      {:error, reason} ->
-        error = "Failed: #{inspect(reason)}"
-        Logger.error("✗ Deduplication failed: #{error}")
-        error
-    end
-  end
-
   defp run_backfill_rooms do
     alias Rzeczywiscie.RealEstate
 
@@ -1408,146 +827,4 @@ defmodule RzeczywiscieWeb.AdminLive do
     end
   end
 
-  defp generate_missing_types_csv do
-    Logger.info("Generating CSV export of properties missing types...")
-
-    # Query for active properties missing types
-    properties = from(p in Property,
-      where: p.active == true and (is_nil(p.transaction_type) or is_nil(p.property_type)),
-      order_by: [desc: p.inserted_at],
-      select: %{
-        id: p.id,
-        source: p.source,
-        external_id: p.external_id,
-        title: p.title,
-        url: p.url,
-        transaction_type: p.transaction_type,
-        property_type: p.property_type,
-        city: p.city,
-        price: p.price,
-        inserted_at: p.inserted_at
-      }
-    )
-    |> Repo.all()
-
-    Logger.info("Found #{length(properties)} properties to export")
-
-    # Generate CSV
-    header = "ID,Source,External ID,Transaction Type,Property Type,City,Price,Title,URL,Inserted At\n"
-    
-    rows = Enum.map(properties, fn p ->
-      [
-        p.id,
-        p.source,
-        escape_csv(p.external_id),
-        escape_csv(p.transaction_type || ""),
-        escape_csv(p.property_type || ""),
-        escape_csv(p.city || ""),
-        p.price || "",
-        escape_csv(p.title),
-        escape_csv(p.url),
-        p.inserted_at
-      ]
-      |> Enum.join(",")
-    end)
-    |> Enum.join("\n")
-    
-    Logger.info("✓ CSV generated successfully")
-    header <> rows <> "\n"
-  end
-
-  defp generate_data_quality_csv(type) do
-    Logger.info("Generating #{type} CSV export...")
-
-    properties = case type do
-      "missing_price" ->
-        from(p in Property,
-          where: p.active == true and is_nil(p.price),
-          order_by: [desc: p.inserted_at]
-        ) |> Repo.all()
-      
-      "missing_area" ->
-        from(p in Property,
-          where: p.active == true and is_nil(p.area_sqm),
-          order_by: [desc: p.inserted_at]
-        ) |> Repo.all()
-      
-      "missing_rooms" ->
-        from(p in Property,
-          where: p.active == true and is_nil(p.rooms),
-          order_by: [desc: p.inserted_at]
-        ) |> Repo.all()
-      
-      "missing_coords" ->
-        from(p in Property,
-          where: p.active == true and (is_nil(p.latitude) or is_nil(p.longitude)),
-          order_by: [desc: p.inserted_at]
-        ) |> Repo.all()
-      
-      "all" ->
-        from(p in Property,
-          where: p.active == true and (
-            is_nil(p.price) or 
-            is_nil(p.area_sqm) or 
-            is_nil(p.rooms) or 
-            is_nil(p.latitude) or 
-            is_nil(p.longitude) or
-            is_nil(p.transaction_type) or
-            is_nil(p.property_type)
-          ),
-          order_by: [desc: p.inserted_at]
-        ) |> Repo.all()
-      
-      _ -> []
-    end
-
-    Logger.info("Found #{length(properties)} properties with #{type}")
-
-    # Generate CSV
-    header = "ID,Source,External ID,Price,Price/m²,Area (m²),Rooms,City,Coords,Transaction Type,Property Type,Title,URL,Inserted At\n"
-    
-    rows = Enum.map(properties, fn p ->
-      price_per_sqm = if p.price && p.area_sqm && Decimal.compare(p.area_sqm, 0) == :gt do
-        Decimal.div(p.price, p.area_sqm) |> Decimal.round(2) |> Decimal.to_string()
-      else
-        ""
-      end
-      
-      coords = if p.latitude && p.longitude, do: "✓", else: "✗"
-      
-      [
-        p.id,
-        p.source,
-        escape_csv(p.external_id),
-        p.price || "",
-        price_per_sqm,
-        p.area_sqm || "",
-        p.rooms || "",
-        escape_csv(p.city || ""),
-        coords,
-        escape_csv(p.transaction_type || ""),
-        escape_csv(p.property_type || ""),
-        escape_csv(p.title),
-        escape_csv(p.url),
-        p.inserted_at
-      ]
-      |> Enum.join(",")
-    end)
-    |> Enum.join("\n")
-    
-    Logger.info("✓ CSV generated successfully")
-    header <> rows <> "\n"
-  end
-
-  defp escape_csv(nil), do: ""
-  defp escape_csv(value) when is_binary(value) do
-    # Escape quotes and wrap in quotes if contains comma, quote, or newline
-    if String.contains?(value, [",", "\"", "\n", "\r"]) do
-      escaped = String.replace(value, "\"", "\"\"")
-      "\"#{escaped}\""
-    else
-      value
-    end
-  end
-  defp escape_csv(value), do: to_string(value)
 end
