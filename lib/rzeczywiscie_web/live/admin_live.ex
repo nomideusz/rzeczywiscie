@@ -1051,6 +1051,13 @@ defmodule RzeczywiscieWeb.AdminLive do
       updated = Enum.reduce(properties, 0, fn property, count ->
         rooms = extract_rooms_from_title(property.title)
 
+        # DEBUG: Log first few
+        if count < 5 do
+          Logger.info("DEBUG Room Extract Property #{property.id}:")
+          Logger.info("  Title: #{property.title}")
+          Logger.info("  Extracted rooms: #{inspect(rooms)}")
+        end
+
         if rooms do
           case RealEstate.update_property(
             Repo.get(Property, property.id),
