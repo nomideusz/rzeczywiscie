@@ -770,6 +770,15 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
         not String.contains?(text_lower, "wynaj") and
         not String.contains?(text_lower, "najem") ->
         "sprzedaż"
+      
+      # PRIORITY 9: Ultra-aggressive fallback - ANY olx.pl URL without clear rent indicators
+      # Statistics show ~85% of OLX properties are for sale
+      String.contains?(text_lower, "olx.pl") and
+        not String.contains?(text_lower, "wynaj") and
+        not String.contains?(text_lower, "najem") and
+        not String.contains?(text_lower, "/mies") and
+        not String.contains?(text_lower, " mc") ->
+        "sprzedaż"
 
       true -> nil
     end
@@ -929,6 +938,17 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
       String.contains?(text_lower, "pow. biurowa") -> "lokal użytkowy"
       String.contains?(text_lower, "gabinet") -> "lokal użytkowy"
       String.contains?(text_lower, "kancelaria") -> "lokal użytkowy"
+      
+      # ULTRA-AGGRESSIVE FALLBACK: If we still don't know and it's OLX nieruchomosci
+      # Default to mieszkanie (apartment) - most common property type (~70% of OLX)
+      # This catches generic URLs/titles that have no clear indicators
+      String.contains?(text_lower, "olx.pl") and
+        (String.contains?(text_lower, "nieruchomosci") or String.contains?(text_lower, "/oferta/")) and
+        not String.contains?(text_lower, "dom") and
+        not String.contains?(text_lower, "dzialka") and
+        not String.contains?(text_lower, "garaz") and
+        not String.contains?(text_lower, "parking") ->
+        "mieszkanie"
 
       true -> nil
     end

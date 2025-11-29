@@ -736,8 +736,15 @@ defmodule RzeczywiscieWeb.AdminLive do
       String.contains?(text_lower, "budowlana") -> "działka"
       String.contains?(text_lower, "land") -> "działka"
 
-      # If we still can't determine and it looks like OLX apartment listing
-      String.contains?(text_lower, "olx.pl") && String.match?(text_lower, ~r/\d+/) && !String.contains?(text_lower, "dom") -> "mieszkanie"
+      # ULTRA-AGGRESSIVE FALLBACK: If we still don't know and it's OLX/Otodom
+      # Default to mieszkanie (apartment) - most common property type
+      (String.contains?(text_lower, "olx.pl") or String.contains?(text_lower, "otodom.pl")) and
+        (String.contains?(text_lower, "nieruchomosci") or String.contains?(text_lower, "/oferta/") or String.contains?(text_lower, "/pl/oferta/")) and
+        not String.contains?(text_lower, "dom") and
+        not String.contains?(text_lower, "dzialka") and
+        not String.contains?(text_lower, "garaz") and
+        not String.contains?(text_lower, "parking") ->
+        "mieszkanie"
 
       true -> nil
     end

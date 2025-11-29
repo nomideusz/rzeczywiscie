@@ -964,6 +964,14 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
       String.match?(url_lower, ~r/\bbiuro\b/) -> "lokal użytkowy"
       String.match?(url_lower, ~r/\bsklep\b/) -> "lokal użytkowy"
       String.match?(url_lower, ~r/\bmagazyn\b/) -> "lokal użytkowy"
+      
+      # AGGRESSIVE FALLBACK: Otodom URLs without clear type indicators
+      # Default to mieszkanie (apartment) - most common (~65% of Otodom)
+      String.contains?(url_lower, "otodom.pl") and
+        not String.contains?(url_lower, "dom") and
+        not String.contains?(url_lower, "dzialka") and
+        not String.contains?(url_lower, "garaz") ->
+        "mieszkanie"
 
       true -> nil
     end
@@ -1113,6 +1121,13 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
       String.contains?(text_lower, "powierzchnia biurowa") -> "lokal użytkowy"
       String.contains?(text_lower, "powierzchnia handlowa") -> "lokal użytkowy"
       String.contains?(text_lower, "powierzchnia magazynowa") -> "lokal użytkowy"
+      
+      # AGGRESSIVE FALLBACK: If still no match and it's Otodom
+      # Default to mieszkanie - most common property type
+      String.contains?(text_lower, "otodom.pl") and
+        not String.contains?(text_lower, "dom") and
+        not String.contains?(text_lower, "dzialka") ->
+        "mieszkanie"
 
       true -> nil
     end
