@@ -980,6 +980,12 @@
     localStorage.setItem(getDeviceKey('selected_color'), color)
     live.pushEvent("select_color", { color })
     showPalette = false
+    
+    // Hide hint for first-time users and mark as seen
+    if (showColorHint) {
+      showColorHint = false
+      localStorage.setItem(getDeviceKey('seen_color_picker'), 'true')
+    }
   }
 
   function adjustZoom(delta) {
@@ -1008,7 +1014,7 @@
   }
 
   function openPalette() {
-    showPalette = true
+    showPalette = !showPalette  // Toggle instead of always opening
     showUI = true
     if (uiTimeout) clearTimeout(uiTimeout)
     
@@ -1089,7 +1095,7 @@
             <div class="flex flex-wrap gap-2 justify-center" style="width: 200px;">
               {#each colors as color, i}
                 <button
-                  class="group relative w-9 h-9 rounded-lg transition-all active:scale-95 {selectedColor === color ? 'ring-2 ring-neutral-900 ring-offset-2' : ''}"
+                  class="group relative w-9 h-9 rounded-full transition-all active:scale-95 cursor-pointer {selectedColor === color ? 'ring-2 ring-neutral-900 ring-offset-2' : ''}"
                   style="background-color: {color};"
                   on:click={() => selectColor(color)}
                 >
@@ -1435,47 +1441,50 @@
         class="fixed z-[100] {isMobile ? 'bottom-20 left-1/2 -translate-x-1/2' : ''}"
         style={isMobile ? '' : (panelPosition ? `left: ${panelPosition.left}; top: ${panelPosition.top};` : 'left: 50%; top: 50%; transform: translate(-50%, -50%);')}
       >
-        <div class="bg-white rounded-xl shadow-2xl p-3 animate-in border-2 {unicornPositionValid ? 'border-purple-300' : 'border-red-300'}" style="width: 220px;">
-          <!-- Compact header with direction toggle -->
-          <div class="flex items-center gap-2 mb-2">
+        <div class="bg-white rounded-lg shadow-2xl p-2.5 animate-in border-2 border-neutral-900" style="width: 200px;">
+          <!-- Direction toggle -->
+          <div class="flex items-center gap-1 mb-2">
             <button
               on:click={() => { unicornDirection = 'left'; drawCanvas() }}
-              class="w-8 h-8 flex items-center justify-center border-2 transition-all text-sm cursor-pointer {unicornDirection === 'left' ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-300 hover:border-neutral-400'}"
-              title="Face left (←)"
+              class="w-7 h-7 flex items-center justify-center border transition-all text-xs cursor-pointer {unicornDirection === 'left' ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-300 hover:border-neutral-400'}"
+              title="Face left"
             >
               ←
             </button>
-            <input
-              type="text"
-              bind:this={nameInputElement}
-              bind:value={claimerName}
-              placeholder="Your name"
-              maxlength="16"
-              class="flex-1 px-2 py-1.5 border-2 border-neutral-300 focus:border-purple-500 focus:outline-none text-sm text-center"
-              on:keydown={(e) => {
-                if (e.key === 'Enter' && unicornPositionValid && claimerName.trim()) confirmSpecialPixel()
-                else if (e.key === 'Escape') cancelSpecialPixel()
-                else if (e.key === 'ArrowLeft') { unicornDirection = 'left'; drawCanvas() }
-                else if (e.key === 'ArrowRight') { unicornDirection = 'right'; drawCanvas() }
-              }}
-            />
             <button
               on:click={() => { unicornDirection = 'right'; drawCanvas() }}
-              class="w-8 h-8 flex items-center justify-center border-2 transition-all text-sm cursor-pointer {unicornDirection === 'right' ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-300 hover:border-neutral-400'}"
-              title="Face right (→)"
+              class="w-7 h-7 flex items-center justify-center border transition-all text-xs cursor-pointer {unicornDirection === 'right' ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-300 hover:border-neutral-400'}"
+              title="Face right"
             >
               →
             </button>
           </div>
 
-          <!-- Status and actions -->
+          <!-- Name input -->
+          <input
+            type="text"
+            bind:this={nameInputElement}
+            bind:value={claimerName}
+            placeholder="Your name"
+            maxlength="16"
+            class="w-full px-2 py-1.5 border border-neutral-300 focus:border-neutral-900 focus:outline-none text-xs text-center mb-2"
+            on:keydown={(e) => {
+              if (e.key === 'Enter' && unicornPositionValid && claimerName.trim()) confirmSpecialPixel()
+              else if (e.key === 'Escape') cancelSpecialPixel()
+              else if (e.key === 'ArrowLeft') { unicornDirection = 'left'; drawCanvas() }
+              else if (e.key === 'ArrowRight') { unicornDirection = 'right'; drawCanvas() }
+            }}
+          />
+
+          <!-- Status message -->
           {#if !unicornPositionValid}
-            <div class="mb-2 py-1 px-2 bg-red-50 border border-red-200 rounded text-[10px] text-red-600 text-center">
-              Position blocked - click elsewhere or rotate
+            <div class="mb-2 py-1 px-2 bg-neutral-100 border border-neutral-300 text-[10px] text-neutral-600 text-center">
+              Position blocked
             </div>
           {/if}
           
-          <div class="flex gap-1.5">
+          <!-- Actions -->
+          <div class="flex gap-1">
             <button
               on:click={cancelSpecialPixel}
               class="flex-1 px-2 py-1.5 border border-neutral-300 text-neutral-600 hover:bg-neutral-50 text-xs cursor-pointer"
@@ -1485,7 +1494,7 @@
             <button
               on:click={confirmSpecialPixel}
               disabled={!claimerName.trim() || !unicornPositionValid}
-              class="flex-1 px-2 py-1.5 bg-gradient-to-r from-purple-600 to-pink-500 text-white text-xs font-bold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              class="flex-1 px-2 py-1.5 bg-neutral-900 text-white text-xs font-bold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed hover:bg-neutral-800"
             >
               Place 🦄
             </button>
