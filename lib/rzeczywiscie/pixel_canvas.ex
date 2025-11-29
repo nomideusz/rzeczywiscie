@@ -485,13 +485,13 @@ defmodule Rzeczywiscie.PixelCanvas do
     |> where([p], p.is_special == false or is_nil(p.is_special))
     |> Repo.aggregate(:count)
     
-    # Define milestones: every 1000 pixels unlocks a special pixel
+    # Define milestones: every 1000 pixels unlocks a Unicorn
     milestones = [
       %{threshold: 1000, reward: "unicorn", name: "Unicorn"},
-      %{threshold: 2000, reward: "star", name: "Star"},
-      %{threshold: 3000, reward: "diamond", name: "Diamond"},
-      %{threshold: 5000, reward: "rainbow", name: "Rainbow"},
-      %{threshold: 10000, reward: "crown", name: "Crown"}
+      %{threshold: 2000, reward: "unicorn", name: "Unicorn"},
+      %{threshold: 3000, reward: "unicorn", name: "Unicorn"},
+      %{threshold: 5000, reward: "unicorn", name: "Unicorn"},
+      %{threshold: 10000, reward: "unicorn", name: "Unicorn"}
     ]
 
     # Find next milestone and current progress
