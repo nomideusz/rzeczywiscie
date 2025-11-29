@@ -689,11 +689,11 @@
     : true
   
   // Calculate screen position for the inline control panel
-  $: panelPosition = pendingSpecialPixel && canvas ? (() => {
+  $: panelPosition = pendingSpecialPixel && canvasElement ? (() => {
     const pixelSizeZoomed = Math.round(pixelSize * zoom)
     
     // Get canvas position on screen
-    const rect = canvas.getBoundingClientRect()
+    const rect = canvasElement.getBoundingClientRect()
     
     // Calculate pixel position relative to canvas, then add canvas position on screen
     const pixelXOnCanvas = pendingSpecialPixel.x * pixelSizeZoomed
