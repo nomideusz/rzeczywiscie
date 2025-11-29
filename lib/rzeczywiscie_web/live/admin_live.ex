@@ -728,6 +728,16 @@ defmodule RzeczywiscieWeb.AdminLive do
           transaction_type = extract_transaction_type(text_to_check)
           property_type = extract_property_type(text_to_check)
 
+          # DEBUG: Log what we extracted for first few
+          if count < 3 do
+            Logger.info("DEBUG Property #{property.id}:")
+            Logger.info("  Text: #{String.slice(text_to_check, 0, 100)}...")
+            Logger.info("  Extracted transaction: #{inspect(transaction_type)}")
+            Logger.info("  Extracted property: #{inspect(property_type)}")
+            Logger.info("  Current transaction: #{inspect(property.transaction_type)}")
+            Logger.info("  Current property: #{inspect(property.property_type)}")
+          end
+
           changes = %{}
           changes = if transaction_type && is_nil(property.transaction_type),
             do: Map.put(changes, :transaction_type, transaction_type), else: changes
@@ -745,9 +755,9 @@ defmodule RzeczywiscieWeb.AdminLive do
                 count
             end
           else
-            # Log why no changes were made (debugging)
-            if rem(count, 50) == 0 do
-              Logger.info("- No type info found for property #{property.id} (URL: #{String.slice(property.url || "N/A", 0, 60)}...)")
+            # Log why no changes were made
+            if count < 5 do
+              Logger.info("- No changes for property #{property.id}: extracted (#{inspect(transaction_type)}/#{inspect(property_type)}), current (#{inspect(property.transaction_type)}/#{inspect(property.property_type)})")
             end
             count
           end
