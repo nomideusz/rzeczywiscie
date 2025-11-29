@@ -50,6 +50,9 @@ defmodule RzeczywiscieWeb.StatsLive do
             <a href="/stats" class="px-3 py-2 text-xs font-bold uppercase tracking-wide bg-base-content text-base-100">
               Stats
             </a>
+            <a href="/hot-deals" class="px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 border-warning text-warning hover:bg-warning hover:text-warning-content transition-colors">
+              🔥 Hot Deals
+            </a>
             <a href="/admin" class="px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">
               Admin
             </a>

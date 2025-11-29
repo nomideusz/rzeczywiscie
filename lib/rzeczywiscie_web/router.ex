@@ -29,6 +29,7 @@ defmodule RzeczywiscieWeb.Router do
       live "/favorites", FavoritesLive
       live "/admin", AdminLive
       live "/stats", StatsLive
+      live "/hot-deals", HotDealsLive
       live "/url-inspector", UrlInspectorLive
 
       # Life Planning Routes (old)

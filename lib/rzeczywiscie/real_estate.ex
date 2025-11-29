@@ -250,6 +250,10 @@ defmodule Rzeczywiscie.RealEstate do
   Update a property and broadcast if changed.
   """
   def update_property(%Property{} = property, attrs) do
+    # Track price change before update
+    new_price = attrs[:price] || attrs["price"]
+    if new_price, do: track_price_change(property, new_price)
+    
     property
     |> Property.changeset(attrs)
     |> Repo.update()
