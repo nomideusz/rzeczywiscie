@@ -88,16 +88,25 @@ defmodule Rzeczywiscie.RealEstate.DealScorer do
 
   @doc """
   Get properties with recent price drops.
+  Filters out:
+  - Properties with nil current price
+  - Price history entries with price < 100 PLN (extraction errors)
+  - Price drops > 90% (likely data errors, not real drops)
   """
   def get_price_drops(days \\ 7, limit \\ 20) do
     cutoff = DateTime.utc_now() |> DateTime.add(-days * 24 * 3600, :second)
+    min_valid_price = Decimal.new("100")
     
     from(ph in PriceHistory,
       join: p in Property,
       on: ph.property_id == p.id,
       where: p.active == true and 
+             not is_nil(p.price) and
+             p.price >= ^min_valid_price and
+             ph.price >= ^min_valid_price and
              ph.detected_at >= ^cutoff and 
-             ph.change_percentage < 0,
+             ph.change_percentage < 0 and
+             ph.change_percentage > -90,  # Filter out extreme drops (data errors)
       order_by: [asc: ph.change_percentage],
       limit: ^limit,
       select: {p, ph}
@@ -281,23 +290,29 @@ defmodule Rzeczywiscie.RealEstate.DealScorer do
   Get summary stats for hot deals dashboard.
   """
   def get_hot_deals_summary do
-    # Count properties with significant price drops
+    # Count properties with significant price drops (excluding data errors)
     cutoff = DateTime.utc_now() |> DateTime.add(-7 * 24 * 3600, :second)
+    min_valid_price = Decimal.new("100")
     
     price_drops = from(ph in PriceHistory,
       join: p in Property,
       on: ph.property_id == p.id,
       where: p.active == true and 
+             not is_nil(p.price) and
+             p.price >= ^min_valid_price and
+             ph.price >= ^min_valid_price and
              ph.detected_at >= ^cutoff and 
-             ph.change_percentage < -5,
+             ph.change_percentage < -5 and
+             ph.change_percentage > -90,  # Exclude extreme drops (errors)
       select: count(fragment("DISTINCT ?", p.id))
     )
     |> Repo.one()
     
-    # Count properties significantly below market
-    # (This is expensive, so we estimate)
+    # Count properties with valid prices
     below_market = from(p in Property,
-      where: p.active == true and not is_nil(p.price),
+      where: p.active == true and 
+             not is_nil(p.price) and
+             p.price >= ^min_valid_price,
       select: count(p.id)
     )
     |> Repo.one()
