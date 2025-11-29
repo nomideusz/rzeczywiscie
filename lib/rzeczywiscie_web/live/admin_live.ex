@@ -20,6 +20,8 @@ defmodule RzeczywiscieWeb.AdminLive do
       |> assign(:geocode_result, nil)
       |> assign(:cleanup_running, false)
       |> assign(:cleanup_result, nil)
+      |> assign(:dedup_running, false)
+      |> assign(:dedup_result, nil)
       |> assign(:olx_pages, 2)
       |> assign(:otodom_pages, 2)
       |> assign(:db_stats, get_db_stats())
@@ -59,7 +61,7 @@ defmodule RzeczywiscieWeb.AdminLive do
       <!-- Quick Stats -->
       <div class="bg-base-100 border-b-2 border-base-content">
         <div class="container mx-auto">
-          <div class="grid grid-cols-2 md:grid-cols-5 divide-x-2 divide-base-content">
+          <div class="grid grid-cols-2 md:grid-cols-6 divide-x-2 divide-base-content">
             <div class="p-3 text-center">
               <div class="text-xl font-black text-primary"><%= @db_stats.total %></div>
               <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">Total</div>
@@ -75,6 +77,10 @@ defmodule RzeczywiscieWeb.AdminLive do
             <div class="p-3 text-center">
               <div class="text-xl font-black text-warning"><%= @db_stats.missing_type %></div>
               <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">No Type</div>
+            </div>
+            <div class="p-3 text-center">
+              <div class={"text-xl font-black #{if @db_stats.duplicates > 0, do: "text-error", else: "text-success"}"}><%= @db_stats.duplicates %></div>
+              <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">Duplicates</div>
             </div>
             <div class="p-3 text-center">
               <div class="text-xl font-black text-error"><%= @db_stats.inactive %></div>
@@ -183,7 +189,7 @@ defmodule RzeczywiscieWeb.AdminLive do
         </div>
 
         <!-- Maintenance Tasks -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
           <!-- Geocoding -->
           <div class="bg-base-100 border-2 border-base-content">
             <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
@@ -217,7 +223,7 @@ defmodule RzeczywiscieWeb.AdminLive do
             </div>
             <div class="p-4">
               <p class="text-xs opacity-60 mb-4">
-                Extract transaction/property types from URLs for properties missing this data.
+                Infer missing transaction and property types from URLs, titles, and descriptions.
               </p>
 
               <%= if @backfill_result do %>
@@ -232,6 +238,32 @@ defmodule RzeczywiscieWeb.AdminLive do
                 class={"w-full px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @backfill_running, do: "border-base-content/30 opacity-50", else: "border-base-content hover:bg-base-content hover:text-base-100"}"}
               >
                 <%= if @backfill_running, do: "⏳ Running...", else: "Run Backfill" %>
+              </button>
+            </div>
+          </div>
+
+          <!-- Remove Duplicates -->
+          <div class="bg-base-100 border-2 border-base-content">
+            <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
+              <h3 class="text-sm font-bold uppercase tracking-wide">🔄 Deduplication</h3>
+            </div>
+            <div class="p-4">
+              <p class="text-xs opacity-60 mb-4">
+                Remove duplicate properties with the same URL. Keeps oldest entry.
+              </p>
+
+              <%= if @dedup_result do %>
+                <div class="mb-3 px-3 py-2 text-xs font-bold bg-success/20 text-success border border-success">
+                  ✓ <%= @dedup_result %>
+                </div>
+              <% end %>
+
+              <button
+                phx-click="run_dedup"
+                disabled={@dedup_running}
+                class={"w-full px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @dedup_running, do: "border-base-content/30 opacity-50", else: "border-warning text-warning hover:bg-warning hover:text-warning-content"}"}
+              >
+                <%= if @dedup_running, do: "⏳ Running...", else: "Remove Duplicates" %>
               </button>
             </div>
           </div>
@@ -374,6 +406,21 @@ defmodule RzeczywiscieWeb.AdminLive do
   end
 
   @impl true
+  def handle_event("run_dedup", _params, socket) do
+    Logger.info("Starting deduplication from admin panel")
+
+    socket = assign(socket, :dedup_running, true)
+
+    parent = self()
+    Task.start(fn ->
+      result = run_deduplication()
+      send(parent, {:dedup_complete, result})
+    end)
+
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_info({:backfill_complete, result}, socket) do
     socket =
       socket
@@ -428,6 +475,17 @@ defmodule RzeczywiscieWeb.AdminLive do
     {:noreply, socket}
   end
 
+  @impl true
+  def handle_info({:dedup_complete, result}, socket) do
+    socket =
+      socket
+      |> assign(:dedup_running, false)
+      |> assign(:dedup_result, result)
+      |> assign(:db_stats, get_db_stats())
+
+    {:noreply, socket}
+  end
+
   defp get_db_stats do
     total = Repo.aggregate(Property, :count, :id)
     active = Repo.aggregate(from(p in Property, where: p.active == true), :count, :id)
@@ -443,12 +501,28 @@ defmodule RzeczywiscieWeb.AdminLive do
       :count, :id
     )
 
+    # Count duplicate URLs
+    duplicate_query = """
+    SELECT COUNT(*) FROM (
+      SELECT url FROM properties
+      WHERE url IS NOT NULL
+      GROUP BY url
+      HAVING COUNT(*) > 1
+    ) as dupes
+    """
+
+    duplicates = case Ecto.Adapters.SQL.query(Repo, duplicate_query, []) do
+      {:ok, %{rows: [[count]]}} -> count
+      _ -> 0
+    end
+
     %{
       total: total,
       active: active,
       inactive: inactive,
       geocoded: geocoded,
-      missing_type: missing_type
+      missing_type: missing_type,
+      duplicates: duplicates
     }
   end
 
@@ -477,12 +551,21 @@ defmodule RzeczywiscieWeb.AdminLive do
       # Update each property
       updated =
         Enum.reduce(properties, 0, fn property, count ->
-          transaction_type = extract_transaction_type(property.url)
-          property_type = extract_property_type(property.url)
+          # Try to infer from URL first, then title, then description
+          text_to_check = [
+            property.url || "",
+            property.title || "",
+            property.description || ""
+          ] |> Enum.join(" ")
+
+          transaction_type = extract_transaction_type(text_to_check)
+          property_type = extract_property_type(text_to_check)
 
           changes = %{}
-          changes = if transaction_type, do: Map.put(changes, :transaction_type, transaction_type), else: changes
-          changes = if property_type, do: Map.put(changes, :property_type, property_type), else: changes
+          changes = if transaction_type && is_nil(property.transaction_type),
+            do: Map.put(changes, :transaction_type, transaction_type), else: changes
+          changes = if property_type && is_nil(property.property_type),
+            do: Map.put(changes, :property_type, property_type), else: changes
 
           if map_size(changes) > 0 do
             case RealEstate.update_property(property, changes) do
@@ -495,7 +578,7 @@ defmodule RzeczywiscieWeb.AdminLive do
                 count
             end
           else
-            Logger.info("- No type info found in URL for property #{property.id}")
+            Logger.info("- No type info found for property #{property.id}")
             count
           end
         end)
@@ -506,54 +589,83 @@ defmodule RzeczywiscieWeb.AdminLive do
     end
   end
 
-  defp extract_transaction_type(url) do
-    url_lower = String.downcase(url)
+  defp extract_transaction_type(text) do
+    text_lower = String.downcase(text)
 
     cond do
       # Keywords for sale (sprzedaż)
-      String.contains?(url_lower, "sprzedam") -> "sprzedaż"
-      String.contains?(url_lower, "sprzedaz") -> "sprzedaż"
-      String.contains?(url_lower, "na-sprzedaz") -> "sprzedaż"
-
+      String.contains?(text_lower, "sprzedam") -> "sprzedaż"
+      String.contains?(text_lower, "sprzedaz") -> "sprzedaż"
+      String.contains?(text_lower, "na-sprzedaz") -> "sprzedaż"
+      String.contains?(text_lower, "na sprzedaz") -> "sprzedaż"
+      String.contains?(text_lower, "/sprzedaz/") -> "sprzedaż"
+      String.match?(text_lower, ~r/\bsprzedaz\b/) -> "sprzedaż"
+      
       # Keywords for rent (wynajem)
-      String.contains?(url_lower, "wynajme") -> "wynajem"
-      String.contains?(url_lower, "wynajem") -> "wynajem"
-      String.contains?(url_lower, "do-wynajecia") -> "wynajem"
-      String.contains?(url_lower, "na-wynajem") -> "wynajem"
+      String.contains?(text_lower, "wynajme") -> "wynajem"
+      String.contains?(text_lower, "wynajem") -> "wynajem"
+      String.contains?(text_lower, "do-wynajecia") -> "wynajem"
+      String.contains?(text_lower, "na-wynajem") -> "wynajem"
+      String.contains?(text_lower, "do wynajecia") -> "wynajem"
+      String.contains?(text_lower, "na wynajem") -> "wynajem"
+      String.contains?(text_lower, "/wynajem/") -> "wynajem"
+      String.match?(text_lower, ~r/\bwynajem\b/) -> "wynajem"
+      String.contains?(text_lower, "najem") -> "wynajem"
 
       true -> nil
     end
   end
 
-  defp extract_property_type(url) do
-    url_lower = String.downcase(url)
+  defp extract_property_type(text) do
+    text_lower = String.downcase(text)
 
     cond do
+      # Commercial space (lokal użytkowy) - check first as it's most specific
+      String.contains?(text_lower, "lokal-uzytkowy") -> "lokal użytkowy"
+      String.contains?(text_lower, "lokal uzytkowy") -> "lokal użytkowy"
+      String.contains?(text_lower, "lokal-biurowy") -> "lokal użytkowy"
+      String.contains?(text_lower, "lokal-handlowy") -> "lokal użytkowy"
+      String.contains?(text_lower, "/lokal/") -> "lokal użytkowy"
+      String.match?(text_lower, ~r/\blokal\b/) -> "lokal użytkowy"
+      String.contains?(text_lower, "biuro") -> "lokal użytkowy"
+      String.contains?(text_lower, "sklep") -> "lokal użytkowy"
+      String.contains?(text_lower, "magazyn") -> "lokal użytkowy"
+      String.contains?(text_lower, "hala") -> "lokal użytkowy"
+
       # Apartment (mieszkanie)
-      String.contains?(url_lower, "mieszkanie") -> "mieszkanie"
-      String.contains?(url_lower, "mieszkania") -> "mieszkanie"
+      String.contains?(text_lower, "mieszkanie") -> "mieszkanie"
+      String.contains?(text_lower, "mieszkania") -> "mieszkanie"
+      String.contains?(text_lower, "/mieszkanie/") -> "mieszkanie"
+      String.match?(text_lower, ~r/\bmieszkanie\b/) -> "mieszkanie"
+      # Common abbreviations
+      String.match?(text_lower, ~r/\bmiesz\b/) -> "mieszkanie"
+      String.match?(text_lower, ~r/\bm\d/) -> "mieszkanie"  # M2, M3, M4 etc.
 
       # House (dom)
-      String.contains?(url_lower, "-dom-") -> "dom"
-      String.contains?(url_lower, "/dom-") -> "dom"
-      String.match?(url_lower, ~r/\bdom\b/) -> "dom"
+      String.contains?(text_lower, "-dom-") -> "dom"
+      String.contains?(text_lower, "/dom-") -> "dom"
+      String.contains?(text_lower, "/dom/") -> "dom"
+      String.match?(text_lower, ~r/\bdom\b/) -> "dom"
+      String.contains?(text_lower, "domy") -> "dom"
+      String.contains?(text_lower, "domek") -> "dom"
 
       # Room (pokój)
-      String.contains?(url_lower, "pokoj") -> "pokój"
+      String.contains?(text_lower, "pokoj") -> "pokój"
+      String.contains?(text_lower, "pokój") -> "pokój"
+      String.contains?(text_lower, "stancja") -> "pokój"
+      String.contains?(text_lower, "kawalerka") -> "pokój"
 
       # Garage (garaż)
-      String.contains?(url_lower, "garaz") -> "garaż"
+      String.contains?(text_lower, "garaz") -> "garaż"
+      String.contains?(text_lower, "garaż") -> "garaż"
+      String.contains?(text_lower, "miejsce parkingowe") -> "garaż"
+      String.contains?(text_lower, "parking") -> "garaż"
 
       # Plot/land (działka)
-      String.contains?(url_lower, "dzialka") -> "działka"
-
-      # Commercial space (lokal użytkowy)
-      String.contains?(url_lower, "lokal-uzytkowy") -> "lokal użytkowy"
-      String.contains?(url_lower, "lokal-biurowo") -> "lokal użytkowy"
-      String.contains?(url_lower, "lokal-handlowy") -> "lokal użytkowy"
-
-      # Student accommodation (stancja)
-      String.contains?(url_lower, "stancja") -> "stancja"
+      String.contains?(text_lower, "dzialka") -> "działka"
+      String.contains?(text_lower, "działka") -> "działka"
+      String.contains?(text_lower, "grunt") -> "działka"
+      String.contains?(text_lower, "teren") -> "działka"
 
       true -> nil
     end
@@ -608,5 +720,27 @@ defmodule RzeczywiscieWeb.AdminLive do
 
     {count, _} = RealEstate.mark_stale_properties_inactive(48)
     "Marked #{count} properties as inactive"
+  end
+
+  defp run_deduplication do
+    alias Rzeczywiscie.RealEstate
+
+    Logger.info("Running deduplication...")
+
+    case RealEstate.remove_duplicate_properties() do
+      {:ok, count} ->
+        result = if count == 0 do
+          "No duplicates found"
+        else
+          "Removed #{count} duplicate #{if count == 1, do: "property", else: "properties"}"
+        end
+        Logger.info("✓ Deduplication completed: #{result}")
+        result
+
+      {:error, reason} ->
+        error = "Failed: #{inspect(reason)}"
+        Logger.error("✗ Deduplication failed: #{error}")
+        error
+    end
   end
 end
