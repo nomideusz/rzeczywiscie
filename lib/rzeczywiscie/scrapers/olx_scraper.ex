@@ -245,6 +245,11 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
       # Try to extract price from card, if fails try title as fallback
       price = extract_price(card) || extract_price_from_text(title)
 
+      # Extract initial transaction type from text
+      initial_transaction_type = extract_transaction_type(search_text)
+      # Validate/correct based on price
+      validated_transaction_type = validate_transaction_type(initial_transaction_type, price)
+
       %{
         source: "olx",
         external_id: external_id || generate_id_from_url(url),
@@ -254,7 +259,7 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
         currency: "PLN",
         area_sqm: extract_area(card),
         rooms: extract_rooms(card),
-        transaction_type: extract_transaction_type(search_text),
+        transaction_type: validated_transaction_type,
         property_type: extract_property_type(search_text),
         city: extract_city(card),
         district: extract_district(card),
@@ -561,6 +566,22 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
       String.contains?(text_lower, "wynajęcie") -> "wynajem"
       String.contains?(text_lower, "wynajęciu") -> "wynajem"
 
+      # Room rental indicators (pokój = room, almost always rent)
+      String.contains?(text_lower, "pokój") -> "wynajem"
+      String.contains?(text_lower, "pokoj") -> "wynajem"
+      String.contains?(text_lower, "pokoi") -> "wynajem"
+      String.contains?(text_lower, "pokoik") -> "wynajem"
+      String.contains?(text_lower, "pokoje") -> "wynajem"
+      String.match?(text_lower, ~r/\d\s*os[\.\s]/) -> "wynajem"  # "2 os." = 2 osobowy
+      String.match?(text_lower, ~r/\d-?osobow/) -> "wynajem"  # "1-osobowy", "2osobowy"
+      String.contains?(text_lower, "osobowy") -> "wynajem"
+      String.contains?(text_lower, "osobowa") -> "wynajem"
+      String.contains?(text_lower, "współlokator") -> "wynajem"
+      String.contains?(text_lower, "wolne miejsce") -> "wynajem"
+      String.contains?(text_lower, "miejsce w") -> "wynajem"
+      String.contains?(text_lower, "kawalerka") and not String.contains?(text_lower, "sprzeda") -> "wynajem"
+      String.contains?(text_lower, "studio") and not String.contains?(text_lower, "sprzeda") -> "wynajem"
+
       # PRIORITY 4: Price indicators - monthly prices usually indicate rent
       # This is a fallback for ambiguous cases
       String.contains?(text_lower, "zł/mies") -> "wynajem"
@@ -619,6 +640,40 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
         "sprzedaż"
 
       true -> nil
+    end
+  end
+
+  # Validate/correct transaction type based on price
+  # If price is clearly in wrong range, override the text-based classification
+  defp validate_transaction_type(transaction_type, price) when is_nil(price), do: transaction_type
+  
+  defp validate_transaction_type(transaction_type, price) do
+    price_float = 
+      case price do
+        %Decimal{} -> Decimal.to_float(price)
+        n when is_number(n) -> n
+        _ -> nil
+      end
+
+    cond do
+      is_nil(price_float) -> 
+        transaction_type
+        
+      # Price < 30,000 zł - almost certainly rent, not sale
+      # (Even a tiny studio apartment costs more than 30k to buy in Poland)
+      price_float < 30_000 and transaction_type == "sprzedaż" ->
+        Logger.debug("Correcting transaction_type: #{price_float} zł marked as sale → rent")
+        "wynajem"
+        
+      # Price > 100,000 zł - almost certainly sale, not rent  
+      # (Monthly rent above 100k is extremely rare)
+      price_float > 100_000 and transaction_type == "wynajem" ->
+        Logger.debug("Correcting transaction_type: #{price_float} zł marked as rent → sale")
+        "sprzedaż"
+        
+      # Price in ambiguous range - trust the text-based classification
+      true -> 
+        transaction_type
     end
   end
 

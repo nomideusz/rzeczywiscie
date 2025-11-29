@@ -275,17 +275,21 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
 
     address = listing["address"] || %{}
     floor_size = listing["floorSize"] || listing["size"] || %{}
+    price = parse_json_price(listing["price"] || get_in(listing, ["offers", "price"]))
+    
+    # Validate transaction type based on price
+    validated_transaction_type = validate_transaction_type_by_price(transaction_type, price)
 
     %{
       source: "otodom",
       external_id: external_id || generate_id_from_url(url),
       title: title,
       url: url,
-      price: parse_json_price(listing["price"] || get_in(listing, ["offers", "price"])),
+      price: price,
       currency: listing["priceCurrency"] || "PLN",
       area_sqm: parse_json_number(floor_size["value"] || floor_size),
       rooms: parse_json_integer(listing["numberOfRooms"]),
-      transaction_type: transaction_type,
+      transaction_type: validated_transaction_type,
       property_type: extract_property_type_from_text(title <> " " <> url),
       city: address["addressLocality"],
       voivodeship: address["addressRegion"] || "małopolskie",
@@ -310,17 +314,21 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
     url = offer["url"] || ""
     title = String.trim(offer["name"] || "")
     external_id = extract_id_from_url(url)
+    price = parse_json_price(offer["price"])
+    
+    # Validate transaction type based on price
+    validated_transaction_type = validate_transaction_type_by_price(transaction_type, price)
 
     %{
       source: "otodom",
       external_id: external_id || generate_id_from_url(url),
       title: title,
       url: url,
-      price: parse_json_price(offer["price"]),
+      price: price,
       currency: offer["priceCurrency"] || "PLN",
       area_sqm: parse_json_number(floor_size["value"]),
       rooms: parse_json_integer(item["numberOfRooms"]),
-      transaction_type: transaction_type,
+      transaction_type: validated_transaction_type,
       property_type: extract_property_type_from_text(title <> " " <> url),
       city: address["addressLocality"],
       voivodeship: address["addressRegion"] || "małopolskie",
@@ -510,20 +518,25 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
       # Extract property type from URL or title
       property_type = extract_property_type(full_url, title)
       
+      price = extract_price(card)
+      
       # Validate transaction_type or extract from URL/title if needed
-      validated_transaction_type = if transaction_type in ["sprzedaż", "wynajem"] do
+      initial_transaction_type = if transaction_type in ["sprzedaż", "wynajem"] do
         transaction_type
       else
         # Fallback: try to extract from URL/title
         extract_transaction_type_from_text(full_url <> " " <> title) || transaction_type
       end
+      
+      # Validate based on price (catches misclassified listings)
+      validated_transaction_type = validate_transaction_type_by_price(initial_transaction_type, price)
 
       %{
         source: "otodom",
         external_id: external_id || generate_id_from_url(url),
         title: String.trim(title),
         url: full_url,
-        price: extract_price(card),
+        price: price,
         currency: "PLN",
         area_sqm: extract_area(card),
         rooms: extract_rooms(card),
@@ -861,6 +874,37 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
       String.contains?(text_lower, "otodom.pl") -> "sprzedaż"
       
       true -> nil
+    end
+  end
+
+  # Validate/correct transaction type based on price
+  # Catches misclassified listings from OLX/Otodom
+  defp validate_transaction_type_by_price(transaction_type, price) when is_nil(price), do: transaction_type
+  
+  defp validate_transaction_type_by_price(transaction_type, price) do
+    price_float = 
+      case price do
+        %Decimal{} -> Decimal.to_float(price)
+        n when is_number(n) -> n
+        _ -> nil
+      end
+
+    cond do
+      is_nil(price_float) -> 
+        transaction_type
+        
+      # Price < 30,000 zł - almost certainly rent, not sale
+      price_float < 30_000 and transaction_type == "sprzedaż" ->
+        Logger.debug("Otodom: Correcting transaction_type: #{price_float} zł marked as sale → rent")
+        "wynajem"
+        
+      # Price > 100,000 zł - almost certainly sale, not rent  
+      price_float > 100_000 and transaction_type == "wynajem" ->
+        Logger.debug("Otodom: Correcting transaction_type: #{price_float} zł marked as rent → sale")
+        "sprzedaż"
+        
+      true -> 
+        transaction_type
     end
   end
 
