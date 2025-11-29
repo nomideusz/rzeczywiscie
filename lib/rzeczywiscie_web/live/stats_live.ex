@@ -19,9 +19,13 @@ defmodule RzeczywiscieWeb.StatsLive do
       |> assign(:property_types, property_types)
       |> assign(:selected_property_type, "mieszkanie")
       |> assign(:selected_transaction_type, "all")
+      |> assign(:min_area, nil)
+      |> assign(:max_area, nil)
+      |> assign(:min_rooms, nil)
+      |> assign(:max_rooms, nil)
       |> assign(:sort_by, "sale_count")
       |> assign(:sort_dir, :desc)
-      |> assign(:filtered_district_prices, calculate_filtered_district_prices("mieszkanie", "all"))
+      |> assign(:filtered_district_prices, calculate_filtered_district_prices("mieszkanie", "all", nil, nil, nil, nil))
       |> sort_filtered_prices()
 
     {:ok, socket}
@@ -236,6 +240,50 @@ defmodule RzeczywiscieWeb.StatsLive do
                   >
                     Wynajem
                   </button>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Second Row: Area and Room Filters -->
+            <div class="flex flex-wrap gap-4 items-center mt-3 pt-3 border-t border-base-content/10">
+              <!-- Area Filter -->
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-bold uppercase tracking-wide opacity-60">Area m²:</span>
+                <form phx-change="filter_area" class="flex gap-1 items-center">
+                  <input 
+                    type="number" 
+                    name="min_area" 
+                    value={@min_area}
+                    placeholder="min"
+                    class="w-16 px-2 py-1 text-xs border border-base-content/30 bg-base-100 focus:border-primary focus:outline-none"
+                  />
+                  <span class="text-xs opacity-40">—</span>
+                  <input 
+                    type="number" 
+                    name="max_area" 
+                    value={@max_area}
+                    placeholder="max"
+                    class="w-16 px-2 py-1 text-xs border border-base-content/30 bg-base-100 focus:border-primary focus:outline-none"
+                  />
+                </form>
+                <!-- Quick area presets -->
+                <div class="flex gap-1">
+                  <button phx-click="set_area_preset" phx-value-preset="small" class={"px-2 py-1 text-[10px] font-bold border transition-colors cursor-pointer #{if @min_area == 20 and @max_area == 40, do: "bg-accent text-accent-content border-accent", else: "border-base-content/20 hover:bg-base-200"}"}>20-40</button>
+                  <button phx-click="set_area_preset" phx-value-preset="medium" class={"px-2 py-1 text-[10px] font-bold border transition-colors cursor-pointer #{if @min_area == 40 and @max_area == 60, do: "bg-accent text-accent-content border-accent", else: "border-base-content/20 hover:bg-base-200"}"}>40-60</button>
+                  <button phx-click="set_area_preset" phx-value-preset="large" class={"px-2 py-1 text-[10px] font-bold border transition-colors cursor-pointer #{if @min_area == 60 and @max_area == 100, do: "bg-accent text-accent-content border-accent", else: "border-base-content/20 hover:bg-base-200"}"}>60-100</button>
+                  <button phx-click="set_area_preset" phx-value-preset="clear" class="px-2 py-1 text-[10px] font-bold border border-base-content/20 hover:bg-base-200 transition-colors cursor-pointer">✕</button>
+                </div>
+              </div>
+              
+              <!-- Rooms Filter -->
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-bold uppercase tracking-wide opacity-60">Rooms:</span>
+                <div class="flex gap-1">
+                  <button phx-click="filter_rooms" phx-value-rooms="1" class={"px-2 py-1 text-xs font-bold border transition-colors cursor-pointer #{if @min_rooms == 1 and @max_rooms == 1, do: "bg-secondary text-secondary-content border-secondary", else: "border-base-content/30 hover:bg-base-200"}"}>1</button>
+                  <button phx-click="filter_rooms" phx-value-rooms="2" class={"px-2 py-1 text-xs font-bold border transition-colors cursor-pointer #{if @min_rooms == 2 and @max_rooms == 2, do: "bg-secondary text-secondary-content border-secondary", else: "border-base-content/30 hover:bg-base-200"}"}>2</button>
+                  <button phx-click="filter_rooms" phx-value-rooms="3" class={"px-2 py-1 text-xs font-bold border transition-colors cursor-pointer #{if @min_rooms == 3 and @max_rooms == 3, do: "bg-secondary text-secondary-content border-secondary", else: "border-base-content/30 hover:bg-base-200"}"}>3</button>
+                  <button phx-click="filter_rooms" phx-value-rooms="4+" class={"px-2 py-1 text-xs font-bold border transition-colors cursor-pointer #{if @min_rooms == 4 and @max_rooms == nil, do: "bg-secondary text-secondary-content border-secondary", else: "border-base-content/30 hover:bg-base-200"}"}>4+</button>
+                  <button phx-click="filter_rooms" phx-value-rooms="clear" class="px-2 py-1 text-xs font-bold border border-base-content/30 hover:bg-base-200 transition-colors cursor-pointer">All</button>
                 </div>
               </div>
             </div>
@@ -595,32 +643,103 @@ defmodule RzeczywiscieWeb.StatsLive do
 
   @impl true
   def handle_event("filter_property_type", %{"type" => type}, socket) do
-    filtered = calculate_filtered_district_prices(type, socket.assigns.selected_transaction_type)
-    
     socket =
       socket
       |> assign(:selected_property_type, type)
-      |> assign(:filtered_district_prices, filtered)
-      |> sort_filtered_prices()
+      |> refresh_district_prices()
 
     {:noreply, socket}
   end
 
   @impl true
   def handle_event("filter_transaction_type", %{"type" => type}, socket) do
-    filtered = calculate_filtered_district_prices(socket.assigns.selected_property_type, type)
-    
     # Reset sort to appropriate default when switching transaction type
     default_sort = if type == "all", do: "sale_count", else: "count"
     
     socket =
       socket
       |> assign(:selected_transaction_type, type)
-      |> assign(:filtered_district_prices, filtered)
       |> assign(:sort_by, default_sort)
-      |> sort_filtered_prices()
+      |> refresh_district_prices()
 
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("filter_area", %{"min_area" => min_str, "max_area" => max_str}, socket) do
+    min_area = parse_int_or_nil(min_str)
+    max_area = parse_int_or_nil(max_str)
+    
+    socket =
+      socket
+      |> assign(:min_area, min_area)
+      |> assign(:max_area, max_area)
+      |> refresh_district_prices()
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("set_area_preset", %{"preset" => preset}, socket) do
+    {min_area, max_area} = case preset do
+      "small" -> {20, 40}
+      "medium" -> {40, 60}
+      "large" -> {60, 100}
+      "clear" -> {nil, nil}
+      _ -> {nil, nil}
+    end
+    
+    socket =
+      socket
+      |> assign(:min_area, min_area)
+      |> assign(:max_area, max_area)
+      |> refresh_district_prices()
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("filter_rooms", %{"rooms" => rooms_str}, socket) do
+    {min_rooms, max_rooms} = case rooms_str do
+      "1" -> {1, 1}
+      "2" -> {2, 2}
+      "3" -> {3, 3}
+      "4+" -> {4, nil}
+      "clear" -> {nil, nil}
+      _ -> {nil, nil}
+    end
+    
+    socket =
+      socket
+      |> assign(:min_rooms, min_rooms)
+      |> assign(:max_rooms, max_rooms)
+      |> refresh_district_prices()
+
+    {:noreply, socket}
+  end
+
+  defp parse_int_or_nil(""), do: nil
+  defp parse_int_or_nil(nil), do: nil
+  defp parse_int_or_nil(str) when is_binary(str) do
+    case Integer.parse(str) do
+      {n, _} -> n
+      :error -> nil
+    end
+  end
+
+  defp refresh_district_prices(socket) do
+    filtered = calculate_filtered_district_prices(
+      socket.assigns.selected_property_type,
+      socket.assigns.selected_transaction_type,
+      socket.assigns.min_area,
+      socket.assigns.max_area,
+      socket.assigns.min_rooms,
+      socket.assigns.max_rooms
+    )
+    
+    socket
+    |> assign(:filtered_district_prices, filtered)
+    |> sort_filtered_prices()
   end
 
   @impl true
@@ -951,7 +1070,9 @@ defmodule RzeczywiscieWeb.StatsLive do
   defp price_range("wynajem"), do: {Decimal.new("300"), Decimal.new("100000")}
   defp price_range(_), do: {Decimal.new("1"), Decimal.new("999999999")}
 
-  defp calculate_filtered_district_prices(property_type, transaction_type) do
+  defp calculate_filtered_district_prices(property_type, transaction_type, min_area \\ nil, max_area \\ nil, min_rooms \\ nil, max_rooms \\ nil) do
+    filters = %{min_area: min_area, max_area: max_area, min_rooms: min_rooms, max_rooms: max_rooms}
+    
     # Get districts with this property type (with price sanity filter)
     base_query = from p in Property,
       where: p.active == true and 
@@ -959,6 +1080,32 @@ defmodule RzeczywiscieWeb.StatsLive do
              not is_nil(p.district) and 
              p.district != "" and
              not is_nil(p.price)
+    
+    # Add area filters
+    base_query = if min_area do
+      where(base_query, [p], not is_nil(p.area_sqm) and p.area_sqm >= ^min_area)
+    else
+      base_query
+    end
+    
+    base_query = if max_area do
+      where(base_query, [p], not is_nil(p.area_sqm) and p.area_sqm <= ^max_area)
+    else
+      base_query
+    end
+    
+    # Add room filters
+    base_query = if min_rooms do
+      where(base_query, [p], not is_nil(p.rooms) and p.rooms >= ^min_rooms)
+    else
+      base_query
+    end
+    
+    base_query = if max_rooms do
+      where(base_query, [p], p.rooms <= ^max_rooms)
+    else
+      base_query
+    end
     
     # Add transaction type and price range filter if not "all"
     base_query = case transaction_type do
@@ -985,13 +1132,13 @@ defmodule RzeczywiscieWeb.StatsLive do
       case transaction_type do
         "all" ->
           # Show both sale and rent
-          sale = get_district_stats(property_type, district, "sprzedaż")
-          rent = get_district_stats(property_type, district, "wynajem")
+          sale = get_district_stats(property_type, district, "sprzedaż", filters)
+          rent = get_district_stats(property_type, district, "wynajem", filters)
           %{district: district, sale: sale, rent: rent, mode: :both}
         
         type ->
           # Show only selected type
-          stats = get_district_stats(property_type, district, type)
+          stats = get_district_stats(property_type, district, type, filters)
           %{district: district, stats: stats, mode: :single, transaction_type: type}
       end
     end)
@@ -1003,7 +1150,7 @@ defmodule RzeczywiscieWeb.StatsLive do
     end)
   end
 
-  defp get_district_stats(property_type, district, transaction_type) do
+  defp get_district_stats(property_type, district, transaction_type, filters \\ %{}) do
     {min_valid, max_valid} = price_range(transaction_type)
     
     base_query = from(p in Property,
@@ -1015,24 +1162,74 @@ defmodule RzeczywiscieWeb.StatsLive do
              p.price >= ^min_valid and
              p.price <= ^max_valid)
     
+    # Apply area filters
+    base_query = if filters[:min_area] do
+      where(base_query, [p], not is_nil(p.area_sqm) and p.area_sqm >= ^filters[:min_area])
+    else
+      base_query
+    end
+    
+    base_query = if filters[:max_area] do
+      where(base_query, [p], not is_nil(p.area_sqm) and p.area_sqm <= ^filters[:max_area])
+    else
+      base_query
+    end
+    
+    # Apply room filters
+    base_query = if filters[:min_rooms] do
+      where(base_query, [p], not is_nil(p.rooms) and p.rooms >= ^filters[:min_rooms])
+    else
+      base_query
+    end
+    
+    base_query = if filters[:max_rooms] do
+      where(base_query, [p], p.rooms <= ^filters[:max_rooms])
+    else
+      base_query
+    end
+    
     count = Repo.aggregate(base_query, :count, :id)
     avg_price = Repo.aggregate(base_query, :avg, :price)
     min_price = Repo.aggregate(base_query, :min, :price)
     max_price = Repo.aggregate(base_query, :max, :price)
 
-    avg_per_sqm = Repo.one(
-      from p in Property,
-        where: p.active == true and 
-               p.property_type == ^property_type and
-               p.district == ^district and
-               p.transaction_type == ^transaction_type and
-               not is_nil(p.price) and 
-               p.price >= ^min_valid and
-               p.price <= ^max_valid and
-               not is_nil(p.area_sqm) and
-               p.area_sqm > 0,
-        select: avg(p.price / p.area_sqm)
-    )
+    # For avg_per_sqm, also apply the same filters
+    sqm_query = from(p in Property,
+      where: p.active == true and 
+             p.property_type == ^property_type and
+             p.district == ^district and
+             p.transaction_type == ^transaction_type and
+             not is_nil(p.price) and 
+             p.price >= ^min_valid and
+             p.price <= ^max_valid and
+             not is_nil(p.area_sqm) and
+             p.area_sqm > 0)
+    
+    sqm_query = if filters[:min_area] do
+      where(sqm_query, [p], p.area_sqm >= ^filters[:min_area])
+    else
+      sqm_query
+    end
+    
+    sqm_query = if filters[:max_area] do
+      where(sqm_query, [p], p.area_sqm <= ^filters[:max_area])
+    else
+      sqm_query
+    end
+    
+    sqm_query = if filters[:min_rooms] do
+      where(sqm_query, [p], not is_nil(p.rooms) and p.rooms >= ^filters[:min_rooms])
+    else
+      sqm_query
+    end
+    
+    sqm_query = if filters[:max_rooms] do
+      where(sqm_query, [p], p.rooms <= ^filters[:max_rooms])
+    else
+      sqm_query
+    end
+
+    avg_per_sqm = Repo.one(from p in subquery(sqm_query), select: avg(p.price / p.area_sqm))
 
     %{
       count: count || 0,
