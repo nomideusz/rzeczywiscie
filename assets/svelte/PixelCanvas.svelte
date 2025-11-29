@@ -1430,10 +1430,10 @@
     {/if}
 
     <!-- Inline unicorn placement controls - appears when position is selected -->
-    {#if pendingSpecialPixel && panelPosition}
+    {#if pendingSpecialPixel}
       <div 
         class="fixed z-[100] {isMobile ? 'bottom-20 left-1/2 -translate-x-1/2' : ''}"
-        style={isMobile ? '' : `left: ${panelPosition.left}; top: ${panelPosition.top};`}
+        style={isMobile ? '' : (panelPosition ? `left: ${panelPosition.left}; top: ${panelPosition.top};` : 'left: 50%; top: 50%; transform: translate(-50%, -50%);')}
       >
         <div class="bg-white rounded-xl shadow-2xl p-3 animate-in border-2 {unicornPositionValid ? 'border-purple-300' : 'border-red-300'}" style="width: 220px;">
           <!-- Compact header with direction toggle -->
