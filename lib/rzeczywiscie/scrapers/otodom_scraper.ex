@@ -526,7 +526,7 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
       # Extract property type from URL or title
       property_type = extract_property_type(full_url, title)
       
-      price = extract_price(card)
+      price = extract_price(card, title)
       
       # Validate transaction_type or extract from URL/title if needed
       initial_transaction_type = if transaction_type in ["sprzedaż", "wynajem"] do
@@ -686,11 +686,12 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
 
   defp extract_title_from_link(_), do: nil
 
-  defp extract_price(card) do
+  defp extract_price(card, title \\ nil) do
     selectors = [
       "span[data-cy='listing-item-price']",
       "p[class*='price']",
-      "span[class*='price']"
+      "span[class*='price']",
+      "[class*='Price']"
     ]
 
     result =
@@ -703,7 +704,18 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
         end
       end)
 
+    # Fallback 1: Try extracting from entire card text
+    result = result || extract_price_from_card_text(card)
+    
+    # Fallback 2: Try extracting from title
+    result = result || (title && parse_price(title))
+    
     result
+  end
+  
+  defp extract_price_from_card_text(card) do
+    full_text = Floki.text(card)
+    ExtractionHelpers.extract_price_from_full_text(full_text)
   end
 
   defp parse_price(text), do: ExtractionHelpers.parse_price(text)
@@ -1017,15 +1029,24 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
     cond do
       is_nil(price_float) -> 
         transaction_type
+      
+      # If transaction_type is nil, determine from price alone
+      is_nil(transaction_type) and price_float < 30_000 ->
+        Logger.debug("Otodom: Setting transaction_type from price: #{price_float} zł → rent")
+        "wynajem"
+        
+      is_nil(transaction_type) and price_float >= 30_000 ->
+        Logger.debug("Otodom: Setting transaction_type from price: #{price_float} zł → sale")
+        "sprzedaż"
         
       # Price < 30,000 zł - almost certainly rent, not sale
       price_float < 30_000 and transaction_type == "sprzedaż" ->
-        Logger.debug("Otodom: Correcting transaction_type: #{price_float} zł marked as sale → rent")
+        Logger.info("Otodom: Correcting transaction_type: #{price_float} zł marked as sale → rent")
         "wynajem"
         
       # Price > 100,000 zł - almost certainly sale, not rent  
       price_float > 100_000 and transaction_type == "wynajem" ->
-        Logger.debug("Otodom: Correcting transaction_type: #{price_float} zł marked as rent → sale")
+        Logger.info("Otodom: Correcting transaction_type: #{price_float} zł marked as rent → sale")
         "sprzedaż"
         
       true -> 

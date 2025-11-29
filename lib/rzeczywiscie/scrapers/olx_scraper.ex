@@ -243,7 +243,7 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
       search_text = "#{title} #{description} #{full_url}"
 
       # Try to extract price from card, if fails try title as fallback
-      price = extract_price(card) || extract_price_from_text(title)
+      price = extract_price(card, title)
 
       # Extract initial transaction type from text
       initial_transaction_type = extract_transaction_type(search_text)
@@ -367,7 +367,7 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
     result || {:error, :no_title}
   end
 
-  defp extract_price(card) do
+  defp extract_price(card, title \\ nil) do
     # Try multiple selectors for price
     selectors = [
       "p[data-testid='ad-price']",
@@ -390,22 +390,18 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
         end
       end)
 
-    # If still no price, try extracting from entire card text as last resort
-    result || extract_price_from_card_text(card)
+    # Fallback 1: Try extracting from entire card text
+    result = result || extract_price_from_card_text(card)
+    
+    # Fallback 2: Try extracting from title
+    result = result || (title && parse_price(title))
+    
+    result
   end
 
   defp extract_price_from_card_text(card) do
     full_text = Floki.text(card)
     ExtractionHelpers.extract_price_from_full_text(full_text)
-  end
-
-  # Extract price from title or description text (fallback method)
-  defp extract_price_from_text(text) do
-    if is_nil(text) or String.trim(text) == "" do
-      nil
-    else
-      parse_price(text)
-    end
   end
 
   defp parse_price(text), do: ExtractionHelpers.parse_price(text)
@@ -692,17 +688,26 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
     cond do
       is_nil(price_float) -> 
         transaction_type
+      
+      # If transaction_type is nil, determine from price alone
+      is_nil(transaction_type) and price_float < 30_000 ->
+        Logger.debug("Setting transaction_type from price: #{price_float} zł → rent")
+        "wynajem"
+        
+      is_nil(transaction_type) and price_float >= 30_000 ->
+        Logger.debug("Setting transaction_type from price: #{price_float} zł → sale")
+        "sprzedaż"
         
       # Price < 30,000 zł - almost certainly rent, not sale
       # (Even a tiny studio apartment costs more than 30k to buy in Poland)
       price_float < 30_000 and transaction_type == "sprzedaż" ->
-        Logger.debug("Correcting transaction_type: #{price_float} zł marked as sale → rent")
+        Logger.info("Correcting transaction_type: #{price_float} zł marked as sale → rent")
         "wynajem"
         
       # Price > 100,000 zł - almost certainly sale, not rent  
       # (Monthly rent above 100k is extremely rare)
       price_float > 100_000 and transaction_type == "wynajem" ->
-        Logger.debug("Correcting transaction_type: #{price_float} zł marked as rent → sale")
+        Logger.info("Correcting transaction_type: #{price_float} zł marked as rent → sale")
         "sprzedaż"
         
       # Price in ambiguous range - trust the text-based classification
