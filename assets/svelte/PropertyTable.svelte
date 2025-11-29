@@ -714,34 +714,39 @@
       {#each properties as property (property.id)}
         <div class="bg-base-100 border-2 border-base-content hover:border-primary transition-colors group">
           <!-- Image -->
-          {#if property.image_url}
-            <div class="relative aspect-video overflow-hidden border-b-2 border-base-content">
+          <div class="relative aspect-video overflow-hidden border-b-2 border-base-content {property.image_url ? '' : 'bg-base-300'}">
+            {#if property.image_url}
               <img
                 src={property.image_url}
                 alt=""
                 class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 loading="lazy"
               />
-              <!-- Badges -->
-              <div class="absolute top-2 left-2 flex gap-1">
-                <span class="px-2 py-0.5 text-[10px] font-bold uppercase bg-base-100 border border-base-content">
-                  {property.source}
-                </span>
-                {#if property.transaction_type}
-                  <span class="px-2 py-0.5 text-[10px] font-bold uppercase {getTransactionBg(property.transaction_type)}">
-                    {property.transaction_type}
-                  </span>
-                {/if}
+            {:else}
+              <!-- Placeholder -->
+              <div class="absolute inset-0 flex items-center justify-center">
+                <span class="text-6xl opacity-20">🏠</span>
               </div>
-              <!-- Favorite -->
-              <button
-                onclick={() => toggleFavorite(property.id)}
-                class="absolute top-2 right-2 text-xl"
-              >
-                {property.is_favorited ? '❤️' : '🤍'}
-              </button>
+            {/if}
+            <!-- Badges -->
+            <div class="absolute top-2 left-2 flex gap-1">
+              <span class="px-2 py-0.5 text-[10px] font-bold uppercase bg-base-100 border border-base-content">
+                {property.source}
+              </span>
+              {#if property.transaction_type}
+                <span class="px-2 py-0.5 text-[10px] font-bold uppercase {getTransactionBg(property.transaction_type)}">
+                  {property.transaction_type}
+                </span>
+              {/if}
             </div>
-          {/if}
+            <!-- Favorite -->
+            <button
+              onclick={() => toggleFavorite(property.id)}
+              class="absolute top-2 right-2 text-xl cursor-pointer"
+            >
+              {property.is_favorited ? '❤️' : '🤍'}
+            </button>
+          </div>
 
           <!-- Content -->
           <div class="p-4">
