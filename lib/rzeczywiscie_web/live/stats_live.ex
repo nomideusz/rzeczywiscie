@@ -9,10 +9,17 @@ defmodule RzeczywiscieWeb.StatsLive do
 
   @impl true
   def mount(_params, _session, socket) do
+    # Get available property types for filter
+    property_types = get_property_types()
+    
     socket =
       socket
       |> assign(:stats, calculate_stats())
       |> assign(:refreshing, false)
+      |> assign(:property_types, property_types)
+      |> assign(:selected_property_type, "mieszkanie")
+      |> assign(:selected_transaction_type, "all")
+      |> assign(:filtered_district_prices, calculate_filtered_district_prices("mieszkanie", "all"))
 
     {:ok, socket}
   end
@@ -259,58 +266,133 @@ defmodule RzeczywiscieWeb.StatsLive do
           </div>
         <% end %>
 
-        <!-- Apartment Prices by District -->
-        <%= if length(@stats.apartment_prices_by_district) > 0 do %>
-          <div class="bg-base-100 border-2 border-base-content mb-6">
-            <div class="px-4 py-2 border-b-2 border-base-content bg-primary/20">
-              <h2 class="text-sm font-bold uppercase tracking-wide">🏢 Apartment Prices by District (Mieszkania)</h2>
-              <p class="text-[10px] opacity-60">Detailed apartment price analysis per district</p>
+        <!-- Interactive Price Explorer -->
+        <div class="bg-base-100 border-2 border-base-content mb-6">
+          <div class="px-4 py-3 border-b-2 border-base-content bg-gradient-to-r from-primary/20 to-secondary/20">
+            <h2 class="text-sm font-bold uppercase tracking-wide">🔍 Price Explorer by District</h2>
+            <p class="text-[10px] opacity-60">Filter by property type and transaction type</p>
+          </div>
+          
+          <!-- Filters -->
+          <div class="px-4 py-3 border-b border-base-content/20 bg-base-200/50">
+            <div class="flex flex-wrap gap-4 items-center">
+              <!-- Property Type Filter -->
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-bold uppercase tracking-wide opacity-60">Property:</span>
+                <div class="flex flex-wrap gap-1">
+                  <%= for {type, count} <- @property_types do %>
+                    <button
+                      phx-click="filter_property_type"
+                      phx-value-type={type}
+                      class={"px-2 py-1 text-xs font-bold border transition-colors cursor-pointer #{if @selected_property_type == type, do: "bg-primary text-primary-content border-primary", else: "border-base-content/30 hover:bg-base-200"}"}
+                    >
+                      <%= type %> <span class="opacity-50">(<%= count %>)</span>
+                    </button>
+                  <% end %>
+                </div>
+              </div>
+              
+              <!-- Transaction Type Filter -->
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-bold uppercase tracking-wide opacity-60">Transaction:</span>
+                <div class="flex gap-1">
+                  <button
+                    phx-click="filter_transaction_type"
+                    phx-value-type="all"
+                    class={"px-2 py-1 text-xs font-bold border transition-colors cursor-pointer #{if @selected_transaction_type == "all", do: "bg-base-content text-base-100 border-base-content", else: "border-base-content/30 hover:bg-base-200"}"}
+                  >
+                    All
+                  </button>
+                  <button
+                    phx-click="filter_transaction_type"
+                    phx-value-type="sprzedaż"
+                    class={"px-2 py-1 text-xs font-bold border transition-colors cursor-pointer #{if @selected_transaction_type == "sprzedaż", do: "bg-info text-info-content border-info", else: "border-base-content/30 hover:bg-base-200"}"}
+                  >
+                    Sprzedaż
+                  </button>
+                  <button
+                    phx-click="filter_transaction_type"
+                    phx-value-type="wynajem"
+                    class={"px-2 py-1 text-xs font-bold border transition-colors cursor-pointer #{if @selected_transaction_type == "wynajem", do: "bg-warning text-warning-content border-warning", else: "border-base-content/30 hover:bg-base-200"}"}
+                  >
+                    Wynajem
+                  </button>
+                </div>
+              </div>
             </div>
+          </div>
+
+          <!-- Results Table -->
+          <%= if length(@filtered_district_prices) > 0 do %>
             <div class="overflow-x-auto">
               <table class="w-full text-sm">
                 <thead class="bg-base-200 border-b border-base-content/30">
-                  <tr>
-                    <th class="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wide">District</th>
-                    <th class="px-3 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-info" colspan="5">Sprzedaż</th>
-                    <th class="px-3 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-warning" colspan="5">Wynajem</th>
-                  </tr>
-                  <tr class="bg-base-100">
-                    <th class="px-3 py-1"></th>
-                    <th class="px-1 py-1 text-[9px] font-bold uppercase opacity-60">#</th>
-                    <th class="px-1 py-1 text-[9px] font-bold uppercase opacity-60">Avg</th>
-                    <th class="px-1 py-1 text-[9px] font-bold uppercase opacity-60">Min</th>
-                    <th class="px-1 py-1 text-[9px] font-bold uppercase opacity-60">Max</th>
-                    <th class="px-1 py-1 text-[9px] font-bold uppercase opacity-60">/m²</th>
-                    <th class="px-1 py-1 text-[9px] font-bold uppercase opacity-60">#</th>
-                    <th class="px-1 py-1 text-[9px] font-bold uppercase opacity-60">Avg</th>
-                    <th class="px-1 py-1 text-[9px] font-bold uppercase opacity-60">Min</th>
-                    <th class="px-1 py-1 text-[9px] font-bold uppercase opacity-60">Max</th>
-                    <th class="px-1 py-1 text-[9px] font-bold uppercase opacity-60">/m²</th>
-                  </tr>
+                  <%= if @selected_transaction_type == "all" do %>
+                    <tr>
+                      <th class="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wide">District</th>
+                      <th class="px-3 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-info" colspan="5">Sprzedaż</th>
+                      <th class="px-3 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-warning" colspan="5">Wynajem</th>
+                    </tr>
+                    <tr class="bg-base-100">
+                      <th class="px-3 py-1"></th>
+                      <th class="px-1 py-1 text-[9px] font-bold uppercase opacity-60">#</th>
+                      <th class="px-1 py-1 text-[9px] font-bold uppercase opacity-60">Avg</th>
+                      <th class="px-1 py-1 text-[9px] font-bold uppercase opacity-60">Min</th>
+                      <th class="px-1 py-1 text-[9px] font-bold uppercase opacity-60">Max</th>
+                      <th class="px-1 py-1 text-[9px] font-bold uppercase opacity-60">/m²</th>
+                      <th class="px-1 py-1 text-[9px] font-bold uppercase opacity-60">#</th>
+                      <th class="px-1 py-1 text-[9px] font-bold uppercase opacity-60">Avg</th>
+                      <th class="px-1 py-1 text-[9px] font-bold uppercase opacity-60">Min</th>
+                      <th class="px-1 py-1 text-[9px] font-bold uppercase opacity-60">Max</th>
+                      <th class="px-1 py-1 text-[9px] font-bold uppercase opacity-60">/m²</th>
+                    </tr>
+                  <% else %>
+                    <tr>
+                      <th class="px-4 py-2 text-left text-[10px] font-bold uppercase tracking-wide">District</th>
+                      <th class="px-2 py-2 text-center text-[10px] font-bold uppercase tracking-wide">#</th>
+                      <th class="px-2 py-2 text-center text-[10px] font-bold uppercase tracking-wide">Avg Price</th>
+                      <th class="px-2 py-2 text-center text-[10px] font-bold uppercase tracking-wide">Min</th>
+                      <th class="px-2 py-2 text-center text-[10px] font-bold uppercase tracking-wide">Max</th>
+                      <th class="px-2 py-2 text-center text-[10px] font-bold uppercase tracking-wide">Avg/m²</th>
+                    </tr>
+                  <% end %>
                 </thead>
                 <tbody class="divide-y divide-base-content/20">
-                  <%= for item <- @stats.apartment_prices_by_district do %>
-                    <tr class="hover:bg-base-200/50">
-                      <td class="px-3 py-2 font-bold text-sm"><%= item.district %></td>
-                      <%!-- Sale columns --%>
-                      <td class="px-1 py-2 text-center text-info text-xs"><%= item.sale.count %></td>
-                      <td class="px-1 py-2 text-center font-bold text-xs"><%= format_price_short(item.sale.avg_price) %></td>
-                      <td class="px-1 py-2 text-center text-[10px] text-success"><%= format_price_short(item.sale.min_price) %></td>
-                      <td class="px-1 py-2 text-center text-[10px] text-error"><%= format_price_short(item.sale.max_price) %></td>
-                      <td class="px-1 py-2 text-center text-[10px] opacity-70"><%= format_price_short(item.sale.avg_per_sqm) %></td>
-                      <%!-- Rent columns --%>
-                      <td class="px-1 py-2 text-center text-warning text-xs"><%= item.rent.count %></td>
-                      <td class="px-1 py-2 text-center font-bold text-xs"><%= format_price_short(item.rent.avg_price) %></td>
-                      <td class="px-1 py-2 text-center text-[10px] text-success"><%= format_price_short(item.rent.min_price) %></td>
-                      <td class="px-1 py-2 text-center text-[10px] text-error"><%= format_price_short(item.rent.max_price) %></td>
-                      <td class="px-1 py-2 text-center text-[10px] opacity-70"><%= format_price_short(item.rent.avg_per_sqm) %></td>
-                    </tr>
+                  <%= for item <- @filtered_district_prices do %>
+                    <%= if item.mode == :both do %>
+                      <tr class="hover:bg-base-200/50">
+                        <td class="px-3 py-2 font-bold text-sm"><%= item.district %></td>
+                        <td class="px-1 py-2 text-center text-info text-xs"><%= item.sale.count %></td>
+                        <td class="px-1 py-2 text-center font-bold text-xs"><%= format_price_short(item.sale.avg_price) %></td>
+                        <td class="px-1 py-2 text-center text-[10px] text-success"><%= format_price_short(item.sale.min_price) %></td>
+                        <td class="px-1 py-2 text-center text-[10px] text-error"><%= format_price_short(item.sale.max_price) %></td>
+                        <td class="px-1 py-2 text-center text-[10px] opacity-70"><%= format_price_short(item.sale.avg_per_sqm) %></td>
+                        <td class="px-1 py-2 text-center text-warning text-xs"><%= item.rent.count %></td>
+                        <td class="px-1 py-2 text-center font-bold text-xs"><%= format_price_short(item.rent.avg_price) %></td>
+                        <td class="px-1 py-2 text-center text-[10px] text-success"><%= format_price_short(item.rent.min_price) %></td>
+                        <td class="px-1 py-2 text-center text-[10px] text-error"><%= format_price_short(item.rent.max_price) %></td>
+                        <td class="px-1 py-2 text-center text-[10px] opacity-70"><%= format_price_short(item.rent.avg_per_sqm) %></td>
+                      </tr>
+                    <% else %>
+                      <tr class="hover:bg-base-200/50">
+                        <td class="px-4 py-2 font-bold"><%= item.district %></td>
+                        <td class={"px-2 py-2 text-center #{if item.transaction_type == "sprzedaż", do: "text-info", else: "text-warning"}"}><%= item.stats.count %></td>
+                        <td class="px-2 py-2 text-center font-bold"><%= format_price_short(item.stats.avg_price) %></td>
+                        <td class="px-2 py-2 text-center text-success"><%= format_price_short(item.stats.min_price) %></td>
+                        <td class="px-2 py-2 text-center text-error"><%= format_price_short(item.stats.max_price) %></td>
+                        <td class="px-2 py-2 text-center opacity-70"><%= format_price_short(item.stats.avg_per_sqm) %></td>
+                      </tr>
+                    <% end %>
                   <% end %>
                 </tbody>
               </table>
             </div>
-          </div>
-        <% end %>
+          <% else %>
+            <div class="p-8 text-center opacity-50">
+              <p class="text-sm">No data available for selected filters</p>
+            </div>
+          <% end %>
+        </div>
 
         <!-- Sources & Types Row -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
@@ -555,7 +637,35 @@ defmodule RzeczywiscieWeb.StatsLive do
       socket
       |> assign(:refreshing, true)
       |> assign(:stats, calculate_stats())
+      |> assign(:filtered_district_prices, calculate_filtered_district_prices(
+          socket.assigns.selected_property_type,
+          socket.assigns.selected_transaction_type
+        ))
       |> assign(:refreshing, false)
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("filter_property_type", %{"type" => type}, socket) do
+    filtered = calculate_filtered_district_prices(type, socket.assigns.selected_transaction_type)
+    
+    socket =
+      socket
+      |> assign(:selected_property_type, type)
+      |> assign(:filtered_district_prices, filtered)
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("filter_transaction_type", %{"type" => type}, socket) do
+    filtered = calculate_filtered_district_prices(socket.assigns.selected_property_type, type)
+    
+    socket =
+      socket
+      |> assign(:selected_transaction_type, type)
+      |> assign(:filtered_district_prices, filtered)
 
     {:noreply, socket}
   end
@@ -993,6 +1103,123 @@ defmodule RzeczywiscieWeb.StatsLive do
         }
       }
     end)
+  end
+
+  defp get_property_types do
+    Repo.all(
+      from p in Property,
+        where: p.active == true and not is_nil(p.property_type),
+        group_by: p.property_type,
+        select: {p.property_type, count(p.id)},
+        order_by: [desc: count(p.id)]
+    )
+  end
+
+  defp calculate_filtered_district_prices(property_type, transaction_type) do
+    # Get districts with this property type
+    base_query = from p in Property,
+      where: p.active == true and 
+             p.property_type == ^property_type and
+             not is_nil(p.district) and 
+             p.district != "" and
+             not is_nil(p.price)
+    
+    # Add transaction type filter if not "all"
+    base_query = case transaction_type do
+      "all" -> base_query
+      type -> where(base_query, [p], p.transaction_type == ^type)
+    end
+
+    districts = Repo.all(
+      from p in subquery(base_query),
+        group_by: p.district,
+        select: p.district,
+        order_by: [desc: count(p.id)],
+        limit: 25
+    )
+
+    Enum.map(districts, fn district ->
+      case transaction_type do
+        "all" ->
+          # Show both sale and rent
+          sale = get_district_stats(property_type, district, "sprzedaż")
+          rent = get_district_stats(property_type, district, "wynajem")
+          %{district: district, sale: sale, rent: rent, mode: :both}
+        
+        type ->
+          # Show only selected type
+          stats = get_district_stats(property_type, district, type)
+          %{district: district, stats: stats, mode: :single, transaction_type: type}
+      end
+    end)
+    |> Enum.filter(fn item ->
+      case item.mode do
+        :both -> item.sale.count > 0 or item.rent.count > 0
+        :single -> item.stats.count > 0
+      end
+    end)
+  end
+
+  defp get_district_stats(property_type, district, transaction_type) do
+    count = Repo.aggregate(
+      from(p in Property,
+        where: p.active == true and 
+               p.property_type == ^property_type and
+               p.district == ^district and
+               p.transaction_type == ^transaction_type and
+               not is_nil(p.price)),
+      :count, :id
+    )
+    
+    avg_price = Repo.aggregate(
+      from(p in Property,
+        where: p.active == true and 
+               p.property_type == ^property_type and
+               p.district == ^district and
+               p.transaction_type == ^transaction_type and
+               not is_nil(p.price)),
+      :avg, :price
+    )
+
+    avg_per_sqm = Repo.one(
+      from p in Property,
+        where: p.active == true and 
+               p.property_type == ^property_type and
+               p.district == ^district and
+               p.transaction_type == ^transaction_type and
+               not is_nil(p.price) and 
+               not is_nil(p.area_sqm) and
+               p.area_sqm > 0,
+        select: avg(p.price / p.area_sqm)
+    )
+
+    min_price = Repo.aggregate(
+      from(p in Property,
+        where: p.active == true and 
+               p.property_type == ^property_type and
+               p.district == ^district and
+               p.transaction_type == ^transaction_type and
+               not is_nil(p.price)),
+      :min, :price
+    )
+
+    max_price = Repo.aggregate(
+      from(p in Property,
+        where: p.active == true and 
+               p.property_type == ^property_type and
+               p.district == ^district and
+               p.transaction_type == ^transaction_type and
+               not is_nil(p.price)),
+      :max, :price
+    )
+
+    %{
+      count: count || 0,
+      avg_price: avg_price && Decimal.round(avg_price, 0),
+      avg_per_sqm: avg_per_sqm && Decimal.round(avg_per_sqm, 0),
+      min_price: min_price,
+      max_price: max_price
+    }
   end
 
   defp calculate_apartment_prices_by_district do
