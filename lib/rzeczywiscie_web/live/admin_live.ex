@@ -20,6 +20,9 @@ defmodule RzeczywiscieWeb.AdminLive do
       |> assign(:geocode_result, nil)
       |> assign(:cleanup_running, false)
       |> assign(:cleanup_result, nil)
+      |> assign(:fix_misclassified_running, false)
+      |> assign(:fix_misclassified_result, nil)
+      |> assign(:misclassified_preview, RealEstate.preview_misclassified_transaction_types())
       |> assign(:dedup_running, false)
       |> assign(:dedup_result, nil)
       |> assign(:export_running, false)
@@ -379,6 +382,43 @@ defmodule RzeczywiscieWeb.AdminLive do
               </button>
             </div>
           </div>
+
+          <!-- Fix Misclassified -->
+          <div class="bg-base-100 border-2 border-base-content">
+            <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
+              <h3 class="text-sm font-bold uppercase tracking-wide">🔄 Fix Misclassified</h3>
+            </div>
+            <div class="p-4">
+              <p class="text-xs opacity-60 mb-3">
+                Fix transaction types based on price: Sale &lt;30k → Rent, Rent &gt;100k → Sale
+              </p>
+
+              <div class="mb-3 grid grid-cols-2 gap-2 text-xs">
+                <div class="px-2 py-1 bg-info/10 border border-info/30">
+                  <span class="font-bold text-info"><%= @misclassified_preview.sales_to_rent %></span>
+                  <span class="opacity-60">sales → rent</span>
+                </div>
+                <div class="px-2 py-1 bg-warning/10 border border-warning/30">
+                  <span class="font-bold text-warning"><%= @misclassified_preview.rent_to_sales %></span>
+                  <span class="opacity-60">rent → sales</span>
+                </div>
+              </div>
+
+              <%= if @fix_misclassified_result do %>
+                <div class="mb-3 px-3 py-2 text-xs font-bold bg-success/20 text-success border border-success">
+                  ✓ <%= @fix_misclassified_result %>
+                </div>
+              <% end %>
+
+              <button
+                phx-click="fix_misclassified"
+                disabled={@fix_misclassified_running || (@misclassified_preview.sales_to_rent == 0 and @misclassified_preview.rent_to_sales == 0)}
+                class={"w-full px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @fix_misclassified_running || (@misclassified_preview.sales_to_rent == 0 and @misclassified_preview.rent_to_sales == 0), do: "border-base-content/30 opacity-50", else: "border-primary text-primary hover:bg-primary hover:text-primary-content"}"}
+              >
+                <%= if @fix_misclassified_running, do: "⏳ Running...", else: "Fix Transaction Types" %>
+              </button>
+            </div>
+          </div>
         </div>
 
         <!-- Data Quality Exports -->
@@ -550,6 +590,21 @@ defmodule RzeczywiscieWeb.AdminLive do
   end
 
   @impl true
+  def handle_event("fix_misclassified", _params, socket) do
+    Logger.info("Fixing misclassified transaction types from admin panel")
+
+    socket = assign(socket, :fix_misclassified_running, true)
+
+    parent = self()
+    Task.start(fn ->
+      {:ok, result} = RealEstate.fix_misclassified_transaction_types()
+      send(parent, {:fix_misclassified_complete, result})
+    end)
+
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_event("run_dedup", _params, socket) do
     Logger.info("Starting deduplication from admin panel")
 
@@ -674,6 +729,20 @@ defmodule RzeczywiscieWeb.AdminLive do
       socket
       |> assign(:cleanup_running, false)
       |> assign(:cleanup_result, result)
+      |> assign(:db_stats, get_db_stats())
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:fix_misclassified_complete, result}, socket) do
+    msg = "Fixed #{result.sales_to_rent} sales→rent, #{result.rent_to_sales} rent→sales"
+    
+    socket =
+      socket
+      |> assign(:fix_misclassified_running, false)
+      |> assign(:fix_misclassified_result, msg)
+      |> assign(:misclassified_preview, RealEstate.preview_misclassified_transaction_types())
       |> assign(:db_stats, get_db_stats())
 
     {:noreply, socket}

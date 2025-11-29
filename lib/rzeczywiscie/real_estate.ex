@@ -277,6 +277,60 @@ defmodule Rzeczywiscie.RealEstate do
   end
 
   @doc """
+  Fix misclassified transaction types based on price ranges.
+  
+  - Sale listings with price < 30,000 zł are likely rentals
+  - Rent listings with price > 100,000 zł are likely sales
+  
+  Returns {:ok, %{sales_to_rent: count, rent_to_sales: count}}
+  """
+  def fix_misclassified_transaction_types do
+    # Sales that should be rentals (price < 30,000 zł)
+    {sales_to_rent, _} = from(p in Property,
+      where: p.active == true and
+             p.transaction_type == "sprzedaż" and
+             not is_nil(p.price) and
+             p.price < ^Decimal.new("30000")
+    )
+    |> Repo.update_all(set: [transaction_type: "wynajem"])
+
+    # Rentals that should be sales (price > 100,000 zł)
+    {rent_to_sales, _} = from(p in Property,
+      where: p.active == true and
+             p.transaction_type == "wynajem" and
+             not is_nil(p.price) and
+             p.price > ^Decimal.new("100000")
+    )
+    |> Repo.update_all(set: [transaction_type: "sprzedaż"])
+
+    {:ok, %{sales_to_rent: sales_to_rent, rent_to_sales: rent_to_sales}}
+  end
+
+  @doc """
+  Preview misclassified listings without fixing them.
+  Returns counts of properties that would be reclassified.
+  """
+  def preview_misclassified_transaction_types do
+    sales_to_rent = from(p in Property,
+      where: p.active == true and
+             p.transaction_type == "sprzedaż" and
+             not is_nil(p.price) and
+             p.price < ^Decimal.new("30000")
+    )
+    |> Repo.aggregate(:count, :id)
+
+    rent_to_sales = from(p in Property,
+      where: p.active == true and
+             p.transaction_type == "wynajem" and
+             not is_nil(p.price) and
+             p.price > ^Decimal.new("100000")
+    )
+    |> Repo.aggregate(:count, :id)
+
+    %{sales_to_rent: sales_to_rent, rent_to_sales: rent_to_sales}
+  end
+
+  @doc """
   Delete a property.
   """
   def delete_property(%Property{} = property) do
