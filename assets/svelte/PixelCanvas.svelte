@@ -1002,16 +1002,16 @@
               {/if}
             </button>
 
-            <!-- Divider -->
-            <div class="w-px h-6 bg-neutral-200"></div>
-
-            <!-- Mode button - always show 1x1 -->
-            <button
-              on:click={() => togglePixelMode("normal")}
-              class="w-10 h-10 font-bold text-[10px] transition-all active:scale-95 flex items-center justify-center {pixelMode === 'normal' ? 'bg-neutral-900 text-white rounded-full' : 'text-neutral-900'}"
-            >
-              1x1
-            </button>
+            <!-- Mode button - only show if other options exist -->
+            {#if userStats.mega_pixels_available > 0 || userStats.massive_pixels_available > 0 || Object.values(userStats.special_pixels_available || {}).some(c => c > 0)}
+              <div class="w-px h-6 bg-neutral-200"></div>
+              <button
+                on:click={() => togglePixelMode("normal")}
+                class="w-10 h-10 font-bold text-[10px] transition-all active:scale-95 flex items-center justify-center {pixelMode === 'normal' ? 'bg-neutral-900 text-white rounded-full' : 'text-neutral-900'}"
+              >
+                1x1
+              </button>
+            {/if}
 
             <!-- Divider -->
             <div class="w-px h-6 bg-neutral-200"></div>
@@ -1024,7 +1024,7 @@
           <!-- Desktop: Original layout -->
           <div class="flex items-end gap-3">
             <button
-              class="w-12 h-12 rounded-full shadow-lg transition-all active:scale-95 relative overflow-hidden"
+              class="w-12 h-12 rounded-full shadow-lg transition-all active:scale-95 relative overflow-hidden cursor-pointer"
               style="background-color: {selectedColor};"
               on:click={openPalette}
             >
@@ -1049,9 +1049,9 @@
     {#if !isMobile}
       <div class="fixed bottom-6 right-6 flex items-center gap-2">
         <div class="bg-white rounded-full shadow-lg flex items-center overflow-hidden">
-          <button class="w-10 h-10 text-neutral-600 hover:bg-neutral-50 text-lg font-medium transition-colors" on:click={() => adjustZoom(-0.25)}>−</button>
+          <button class="w-10 h-10 text-neutral-600 hover:bg-neutral-50 text-lg font-medium transition-colors cursor-pointer" on:click={() => adjustZoom(-0.25)}>−</button>
           <span class="text-xs text-neutral-500 w-12 text-center font-medium">{Math.round(zoom * 100)}%</span>
-          <button class="w-10 h-10 text-neutral-600 hover:bg-neutral-50 text-lg font-medium transition-colors" on:click={() => adjustZoom(0.25)}>+</button>
+          <button class="w-10 h-10 text-neutral-600 hover:bg-neutral-50 text-lg font-medium transition-colors cursor-pointer" on:click={() => adjustZoom(0.25)}>+</button>
         </div>
       </div>
     {/if}
@@ -1221,7 +1221,7 @@
                 {#if userStats.mega_pixels_available > 0}
                   <button
                     on:click={() => togglePixelMode("mega")}
-                    class="text-xs font-bold py-1.5 px-2 border-2 transition-all {pixelMode === 'mega' ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-900 border-neutral-900 hover:bg-neutral-50'}"
+                    class="text-xs font-bold py-1.5 px-2 border-2 transition-all cursor-pointer {pixelMode === 'mega' ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-900 border-neutral-900 hover:bg-neutral-50'}"
                   >
                     Mega ×{userStats.mega_pixels_available}
                   </button>
@@ -1229,7 +1229,7 @@
                 {#if userStats.massive_pixels_available > 0}
                   <button
                     on:click={() => togglePixelMode("massive")}
-                    class="text-xs font-bold py-1.5 px-2 border-2 transition-all {pixelMode === 'massive' ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-900 border-neutral-900 hover:bg-neutral-50'}"
+                    class="text-xs font-bold py-1.5 px-2 border-2 transition-all cursor-pointer {pixelMode === 'massive' ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-900 border-neutral-900 hover:bg-neutral-50'}"
                   >
                     Massive ×{userStats.massive_pixels_available}
                   </button>
@@ -1238,7 +1238,7 @@
                   {#if count > 0}
                     <button
                       on:click={() => live.pushEvent("select_special_pixel", { special_type: type })}
-                      class="text-xs font-bold py-1.5 px-2 border-2 transition-all {pixelMode === 'special' ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-900 border-neutral-900 hover:bg-neutral-50'}"
+                      class="text-xs font-bold py-1.5 px-2 border-2 transition-all cursor-pointer {pixelMode === 'special' ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-900 border-neutral-900 hover:bg-neutral-50'}"
                     >
                       {#if type === 'unicorn'}
                         <span class="bg-gradient-to-r from-purple-600 via-pink-500 to-purple-600 bg-clip-text text-transparent">Unicorn</span>
@@ -1298,13 +1298,13 @@
             <div class="flex gap-2">
               <button
                 on:click={() => { unicornDirection = 'left'; drawCanvas() }}
-                class="flex-1 py-2 px-3 border-2 transition-all text-sm font-medium {unicornDirection === 'left' ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-300 hover:border-neutral-400'}"
+                class="flex-1 py-2 px-3 border-2 transition-all text-sm font-medium cursor-pointer {unicornDirection === 'left' ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-300 hover:border-neutral-400'}"
               >
                 ← Left
               </button>
               <button
                 on:click={() => { unicornDirection = 'right'; drawCanvas() }}
-                class="flex-1 py-2 px-3 border-2 transition-all text-sm font-medium {unicornDirection === 'right' ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-300 hover:border-neutral-400'}"
+                class="flex-1 py-2 px-3 border-2 transition-all text-sm font-medium cursor-pointer {unicornDirection === 'right' ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-300 hover:border-neutral-400'}"
               >
                 Right →
               </button>
@@ -1314,14 +1314,14 @@
           <div class="flex gap-2">
             <button
               on:click={cancelSpecialPixel}
-              class="flex-1 px-4 py-2 border-2 border-neutral-300 text-neutral-700 hover:bg-neutral-50 transition-colors font-medium"
+              class="flex-1 px-4 py-2 border-2 border-neutral-300 text-neutral-700 hover:bg-neutral-50 transition-colors font-medium cursor-pointer"
             >
               Cancel
             </button>
             <button
               on:click={confirmSpecialPixel}
               disabled={!claimerName.trim()}
-              class="flex-1 px-4 py-2 bg-neutral-900 text-white hover:bg-neutral-800 transition-colors font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+              class="flex-1 px-4 py-2 bg-neutral-900 text-white hover:bg-neutral-800 transition-colors font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Claim 🦄
             </button>
