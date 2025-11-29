@@ -555,6 +555,10 @@
     padding: 8px 12px;
     z-index: 1000;
     font-size: 12px;
+    opacity: 0.95;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    color: oklch(var(--bc));
   }
 
   .map-legend {
@@ -567,6 +571,9 @@
     z-index: 1000;
     font-size: 11px;
     min-width: 180px;
+    opacity: 0.95;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
   }
 
   .legend-title {
@@ -577,6 +584,7 @@
     padding: 8px 12px;
     background: oklch(var(--b2));
     border-bottom: 2px solid oklch(var(--bc));
+    color: oklch(var(--bc));
   }
 
   .heatmap-toggle {
@@ -591,6 +599,7 @@
     letter-spacing: 0.03em;
     border-bottom: 1px solid oklch(var(--bc) / 0.2);
     transition: background 0.15s;
+    color: oklch(var(--bc));
   }
 
   .heatmap-toggle:hover {
@@ -610,8 +619,9 @@
     text-transform: uppercase;
     letter-spacing: 0.05em;
     padding: 6px 12px;
-    opacity: 0.5;
+    opacity: 0.7;
     border-bottom: 1px solid oklch(var(--bc) / 0.2);
+    color: oklch(var(--bc));
   }
 
   .legend-item {
@@ -619,6 +629,7 @@
     align-items: center;
     padding: 4px 12px;
     font-size: 10px;
+    color: oklch(var(--bc));
   }
 
   .legend-item:last-child {
