@@ -24,6 +24,9 @@ defmodule RzeczywiscieWeb.AdminLive do
       |> assign(:fix_misclassified_running, false)
       |> assign(:fix_misclassified_result, nil)
       |> assign(:misclassified_preview, RealEstate.preview_misclassified_transaction_types())
+      |> assign(:backfill_districts_running, false)
+      |> assign(:backfill_districts_result, nil)
+      |> assign(:missing_districts_count, get_missing_districts_count())
       |> assign(:dedup_running, false)
       |> assign(:dedup_result, nil)
       |> assign(:export_running, false)
@@ -420,6 +423,37 @@ defmodule RzeczywiscieWeb.AdminLive do
               </button>
             </div>
           </div>
+
+          <!-- Backfill Districts -->
+          <div class="bg-base-100 border-2 border-base-content">
+            <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
+              <h3 class="text-sm font-bold uppercase tracking-wide">📍 Backfill Districts</h3>
+            </div>
+            <div class="p-4">
+              <p class="text-xs opacity-60 mb-3">
+                Re-scrape properties to extract missing district data from listing pages.
+              </p>
+
+              <div class="mb-3 px-2 py-1 bg-warning/10 border border-warning/30 text-xs">
+                <span class="font-bold text-warning"><%= @missing_districts_count %></span>
+                <span class="opacity-60">properties missing district</span>
+              </div>
+
+              <%= if @backfill_districts_result do %>
+                <div class="mb-3 px-3 py-2 text-xs font-bold bg-success/20 text-success border border-success">
+                  ✓ <%= @backfill_districts_result %>
+                </div>
+              <% end %>
+
+              <button
+                phx-click="backfill_districts"
+                disabled={@backfill_districts_running || @missing_districts_count == 0}
+                class={"w-full px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @backfill_districts_running || @missing_districts_count == 0, do: "border-base-content/30 opacity-50", else: "border-accent text-accent hover:bg-accent hover:text-accent-content"}"}
+              >
+                <%= if @backfill_districts_running, do: "⏳ Running (up to 50)...", else: "Backfill Districts (50)" %>
+              </button>
+            </div>
+          </div>
         </div>
 
         <!-- Data Quality Exports -->
@@ -606,6 +640,22 @@ defmodule RzeczywiscieWeb.AdminLive do
   end
 
   @impl true
+  def handle_event("backfill_districts", _params, socket) do
+    Logger.info("Backfilling missing districts from admin panel")
+
+    socket = assign(socket, :backfill_districts_running, true)
+
+    parent = self()
+    Task.start(fn ->
+      alias Rzeczywiscie.Scrapers.PropertyRescraper
+      result = PropertyRescraper.rescrape_missing(missing: :district, limit: 50, delay: 2000)
+      send(parent, {:backfill_districts_complete, result})
+    end)
+
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_event("run_dedup", _params, socket) do
     Logger.info("Starting deduplication from admin panel")
 
@@ -750,6 +800,25 @@ defmodule RzeczywiscieWeb.AdminLive do
   end
 
   @impl true
+  def handle_info({:backfill_districts_complete, result}, socket) do
+    msg = case result do
+      {:ok, %{total: total, updated: updated, failed: failed}} ->
+        "Processed #{total}: #{updated} updated, #{failed} failed"
+      _ ->
+        "Completed"
+    end
+    
+    socket =
+      socket
+      |> assign(:backfill_districts_running, false)
+      |> assign(:backfill_districts_result, msg)
+      |> assign(:missing_districts_count, get_missing_districts_count())
+      |> assign(:db_stats, get_db_stats())
+
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_info({:dedup_complete, result}, socket) do
     socket =
       socket
@@ -855,6 +924,13 @@ defmodule RzeczywiscieWeb.AdminLive do
       stale: stale,
       stale_by_source: stale_by_source
     }
+  end
+
+  defp get_missing_districts_count do
+    Repo.aggregate(
+      from(p in Property, where: p.active == true and (is_nil(p.district) or p.district == "")),
+      :count, :id
+    )
   end
 
   defp run_backfill_task do
