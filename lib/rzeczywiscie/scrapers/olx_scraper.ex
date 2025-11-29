@@ -241,12 +241,15 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
       description = extract_description(card)
       search_text = "#{title} #{description} #{full_url}"
 
+      # Try to extract price from card, if fails try title as fallback
+      price = extract_price(card) || extract_price_from_text(title)
+
       %{
         source: "olx",
         external_id: external_id || generate_id_from_url(url),
         title: String.trim(title),
         url: full_url,
-        price: extract_price(card),
+        price: price,
         currency: "PLN",
         area_sqm: extract_area(card),
         rooms: extract_rooms(card),
@@ -364,7 +367,11 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
       "p[data-testid='ad-price']",
       "[data-testid='ad-price']",
       "p[class*='price']",
-      "span[class*='price']"
+      "span[class*='price']",
+      "div[class*='price']",
+      "[class*='Price']",  # Capital P variant
+      "p",  # Generic paragraph - might contain price
+      "span"  # Generic span - might contain price
     ]
 
     result =
@@ -377,12 +384,50 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
         end
       end)
 
-    result
+    # If still no price, try extracting from entire card text as last resort
+    result || extract_price_from_card_text(card)
+  end
+
+  defp extract_price_from_card_text(card) do
+    # Get all text from card
+    full_text = Floki.text(card)
+    
+    # Look for price with "zł" to be more specific
+    regex = ~r/(\d{1,3}(?:[\s,.]\d{3})*(?:[,.]\d{1,2})?)\s*zł/i
+    
+    case Regex.run(regex, full_text) do
+      [_, price_str] ->
+        clean_price =
+          price_str
+          |> String.replace(~r/\s+/, "")
+          |> String.replace(",", ".")
+
+        case Decimal.parse(clean_price) do
+          {decimal, _} ->
+            if Decimal.compare(decimal, Decimal.new("1")) != :lt and
+                 Decimal.compare(decimal, Decimal.new("99999999")) != :gt do
+              decimal
+            else
+              nil
+            end
+          :error -> nil
+        end
+      _ -> nil
+    end
+  end
+
+  # Extract price from title or description text (fallback method)
+  defp extract_price_from_text(text) do
+    if is_nil(text) or String.trim(text) == "" do
+      nil
+    else
+      parse_price(text)
+    end
   end
 
   defp parse_price(text) do
     # Use regex to extract price pattern first, before stripping chars
-    # Matches patterns like: "1 200 zł", "1,200.50 PLN", "1200", "1 200,50"
+    # Matches patterns like: "1 200 zł", "1,200.50 PLN", "1200", "1 200,50", "2500 zł"
     regex = ~r/(\d{1,3}(?:[\s,.]\d{3})*(?:[,.]\d{1,2})?)\s*(?:zł|PLN)?/i
 
     case Regex.run(regex, text) do

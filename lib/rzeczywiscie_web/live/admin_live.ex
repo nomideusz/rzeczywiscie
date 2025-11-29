@@ -691,7 +691,10 @@ defmodule RzeczywiscieWeb.AdminLive do
                 count
             end
           else
-            Logger.info("- No type info found for property #{property.id}")
+            # Log why no changes were made (debugging)
+            if rem(count, 50) == 0 do
+              Logger.info("- No type info found for property #{property.id} (URL: #{String.slice(property.url || "N/A", 0, 60)}...)")
+            end
             count
           end
         end)
@@ -703,7 +706,12 @@ defmodule RzeczywiscieWeb.AdminLive do
   end
 
   defp extract_transaction_type(text) do
-    text_lower = String.downcase(text)
+    # Handle nil or empty text - default to sale
+    text_lower = if is_nil(text) or String.trim(text) == "" do
+      ""
+    else
+      String.downcase(text)
+    end
 
     cond do
       # Keywords for sale (sprzedaż)
@@ -731,13 +739,43 @@ defmodule RzeczywiscieWeb.AdminLive do
       # Otodom rent patterns
       String.contains?(text_lower, "rent") -> "wynajem"
       String.contains?(text_lower, "/pl/oferta/") && String.contains?(text_lower, "miesi") -> "wynajem"
+      
+      # ULTRA-AGGRESSIVE FALLBACK: ANY olx.pl URL without clear rent indicators -> sale
+      String.contains?(text_lower, "olx.pl") and
+        not String.contains?(text_lower, "wynaj") and
+        not String.contains?(text_lower, "najem") and
+        not String.contains?(text_lower, "/mies") and
+        not String.contains?(text_lower, " mc") ->
+        "sprzedaż"
+      
+      # Otodom fallback: if no clear rent indicators, assume sale
+      String.contains?(text_lower, "otodom.pl") and
+        not String.contains?(text_lower, "wynaj") and
+        not String.contains?(text_lower, "rent") ->
+        "sprzedaż"
+      
+      # EXTREME FALLBACK: If we still have NO transaction type at all
+      # Default to sale (statistics show 80%+ of all real estate listings are sales)
+      # Only exclude if we see clear rent indicators
+      not String.contains?(text_lower, "wynaj") and
+        not String.contains?(text_lower, "najem") and
+        not String.contains?(text_lower, "/mies") and
+        not String.contains?(text_lower, " mc") and
+        not String.contains?(text_lower, "mc.") and
+        not String.contains?(text_lower, "rent") ->
+        "sprzedaż"
 
       true -> nil
     end
   end
 
   defp extract_property_type(text) do
-    text_lower = String.downcase(text)
+    # Handle nil or empty text - default to apartment
+    text_lower = if is_nil(text) or String.trim(text) == "" do
+      ""
+    else
+      String.downcase(text)
+    end
 
     cond do
       # Commercial space (lokal użytkowy) - check first as it's most specific
@@ -812,13 +850,28 @@ defmodule RzeczywiscieWeb.AdminLive do
       String.contains?(text_lower, "land") -> "działka"
 
       # ULTRA-AGGRESSIVE FALLBACK: If we still don't know and it's OLX/Otodom
-      # Default to mieszkanie (apartment) - most common property type
+      # Default to mieszkanie (apartment) - most common property type (~70% of listings)
+      # Simplified: just check domain, exclude obvious non-apartments
       (String.contains?(text_lower, "olx.pl") or String.contains?(text_lower, "otodom.pl")) and
-        (String.contains?(text_lower, "nieruchomosci") or String.contains?(text_lower, "/oferta/") or String.contains?(text_lower, "/pl/oferta/")) and
         not String.contains?(text_lower, "dom") and
         not String.contains?(text_lower, "dzialka") and
         not String.contains?(text_lower, "garaz") and
-        not String.contains?(text_lower, "parking") ->
+        not String.contains?(text_lower, "parking") and
+        not String.contains?(text_lower, "grunt") ->
+        "mieszkanie"
+      
+      # EXTREME FALLBACK: If we STILL have no property type
+      # Default to mieszkanie (apartment) - most common property type in Poland
+      # Only exclude if we see clear indicators of other types
+      not String.contains?(text_lower, "dom") and
+        not String.contains?(text_lower, "house") and
+        not String.contains?(text_lower, "dzialka") and
+        not String.contains?(text_lower, "działka") and
+        not String.contains?(text_lower, "garaz") and
+        not String.contains?(text_lower, "garaż") and
+        not String.contains?(text_lower, "parking") and
+        not String.contains?(text_lower, "grunt") and
+        not String.contains?(text_lower, "land") ->
         "mieszkanie"
 
       true -> nil
@@ -1040,4 +1093,6 @@ defmodule RzeczywiscieWeb.AdminLive do
     end
   end
   defp escape_csv(value), do: to_string(value)
+end
+
 end
