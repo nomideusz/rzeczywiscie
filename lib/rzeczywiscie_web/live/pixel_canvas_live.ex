@@ -95,7 +95,11 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
             color: color,
             user_id: user_id,
             updated_at: pixel.updated_at,
-            pixel_tier: :normal
+            pixel_tier: :normal,
+            is_special: false,
+            special_type: nil,
+            claimer_name: nil,
+            claimer_color: nil
           })
 
           stats = PixelCanvas.stats()
