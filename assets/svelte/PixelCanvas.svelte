@@ -681,10 +681,18 @@
     : true
   
   // Calculate screen position for the inline control panel
-  $: panelPosition = pendingSpecialPixel ? (() => {
+  $: panelPosition = pendingSpecialPixel && canvas ? (() => {
     const pixelSizeZoomed = Math.round(pixelSize * zoom)
-    const screenX = (pendingSpecialPixel.x * pixelSizeZoomed) + panOffset.x
-    const screenY = (pendingSpecialPixel.y * pixelSizeZoomed) + panOffset.y
+    
+    // Get canvas position on screen
+    const rect = canvas.getBoundingClientRect()
+    
+    // Calculate pixel position relative to canvas, then add canvas position on screen
+    const pixelXOnCanvas = pendingSpecialPixel.x * pixelSizeZoomed
+    const pixelYOnCanvas = pendingSpecialPixel.y * pixelSizeZoomed
+    
+    const screenX = rect.left + pixelXOnCanvas
+    const screenY = rect.top + pixelYOnCanvas
     
     // Position panel to the right of the unicorn with some offset
     // Panel width is 220px (as defined in the template)
@@ -1097,11 +1105,11 @@
             <!-- Color button with cooldown and first-time hint -->
             <div class="relative">
               {#if showColorHint}
-                <div class="absolute -top-12 left-1/2 -translate-x-1/2 whitespace-nowrap animate-bounce-gentle">
+                <div class="absolute -top-12 left-1/2 whitespace-nowrap animate-bounce-gentle">
                   <div class="bg-neutral-900 text-white text-[10px] px-2 py-1 rounded-lg shadow-lg">
                     Tap to change color
                   </div>
-                  <div class="w-2 h-2 bg-neutral-900 rotate-45 absolute -bottom-1 left-1/2 -translate-x-1/2"></div>
+                  <div class="w-2 h-2 bg-neutral-900 rotate-45 absolute -bottom-1 left-1/2" style="transform: translateX(-50%);"></div>
                 </div>
               {/if}
               <button
