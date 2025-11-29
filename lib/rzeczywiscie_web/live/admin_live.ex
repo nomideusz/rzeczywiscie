@@ -66,7 +66,7 @@ defmodule RzeczywiscieWeb.AdminLive do
       <!-- Quick Stats -->
       <div class="bg-base-100 border-b-2 border-base-content">
         <div class="container mx-auto">
-          <div class="grid grid-cols-2 md:grid-cols-6 divide-x-2 divide-base-content">
+          <div class="grid grid-cols-2 md:grid-cols-7 divide-x-2 divide-base-content">
             <div class="p-3 text-center">
               <div class="text-xl font-black text-primary"><%= @db_stats.total %></div>
               <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">Total</div>
@@ -74,6 +74,10 @@ defmodule RzeczywiscieWeb.AdminLive do
             <div class="p-3 text-center">
               <div class="text-xl font-black text-success"><%= @db_stats.active %></div>
               <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">Active</div>
+            </div>
+            <div class="p-3 text-center">
+              <div class={"text-xl font-black #{if @db_stats.stale > 0, do: "text-warning", else: "text-success"}"}><%= @db_stats.stale %></div>
+              <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">Stale (48h+)</div>
             </div>
             <div class="p-3 text-center">
               <div class="text-xl font-black text-secondary"><%= @db_stats.geocoded %></div>
@@ -94,6 +98,23 @@ defmodule RzeczywiscieWeb.AdminLive do
           </div>
         </div>
       </div>
+
+      <!-- Stale Properties Breakdown -->
+      <%= if @db_stats.stale > 0 do %>
+        <div class="bg-warning/10 border-b-2 border-warning">
+          <div class="container mx-auto px-4 py-3">
+            <div class="flex flex-wrap items-center gap-4">
+              <span class="text-xs font-bold uppercase tracking-wide">⚠️ Stale Properties (not seen in 48h+):</span>
+              <%= for {source, count} <- @db_stats.stale_by_source do %>
+                <span class="px-2 py-1 text-xs font-bold bg-warning/20 border border-warning">
+                  <%= String.upcase(source) %>: <%= count %>
+                </span>
+              <% end %>
+              <span class="text-xs opacity-60">These will become inactive on next cleanup run</span>
+            </div>
+          </div>
+        </div>
+      <% end %>
 
       <div class="container mx-auto px-4 py-6">
         <!-- Scrapers Section -->
@@ -737,13 +758,32 @@ defmodule RzeczywiscieWeb.AdminLive do
       _ -> 0
     end
 
+    # Count stale properties (active but not seen in 48+ hours - will become inactive)
+    cutoff = DateTime.utc_now() |> DateTime.add(-48 * 3600, :second)
+    
+    stale = Repo.aggregate(
+      from(p in Property, where: p.active == true and p.last_seen_at < ^cutoff),
+      :count, :id
+    )
+
+    # Stale breakdown by source
+    stale_by_source = from(p in Property,
+      where: p.active == true and p.last_seen_at < ^cutoff,
+      group_by: p.source,
+      select: {p.source, count(p.id)}
+    )
+    |> Repo.all()
+    |> Enum.into(%{})
+
     %{
       total: total,
       active: active,
       inactive: inactive,
       geocoded: geocoded,
       missing_type: missing_type,
-      duplicates: duplicates
+      duplicates: duplicates,
+      stale: stale,
+      stale_by_source: stale_by_source
     }
   end
 
