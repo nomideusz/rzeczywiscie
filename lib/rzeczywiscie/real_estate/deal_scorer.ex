@@ -47,10 +47,12 @@ defmodule Rzeczywiscie.RealEstate.DealScorer do
     property_type = Keyword.get(opts, :property_type)
     min_score = Keyword.get(opts, :min_score, 20)
     
-    # Get active properties with price
+    # Get active properties with price and complete type info
     base_query = from p in Property,
-      where: p.active == true and not is_nil(p.price),
-      preload: [:price_history]
+      where: p.active == true and 
+             not is_nil(p.price) and
+             not is_nil(p.property_type) and
+             not is_nil(p.transaction_type)
     
     # Apply filters
     base_query = if transaction_type do
@@ -119,10 +121,21 @@ defmodule Rzeczywiscie.RealEstate.DealScorer do
 
   defp get_market_context_for_key({district, property_type, transaction_type}) do
     query = from p in Property,
-      where: p.active == true and 
-             not is_nil(p.price) and
-             p.property_type == ^property_type and
-             p.transaction_type == ^transaction_type
+      where: p.active == true and not is_nil(p.price)
+    
+    # Add property type filter if available (handle nil)
+    query = if property_type do
+      where(query, [p], p.property_type == ^property_type)
+    else
+      where(query, [p], is_nil(p.property_type))
+    end
+    
+    # Add transaction type filter if available (handle nil)
+    query = if transaction_type do
+      where(query, [p], p.transaction_type == ^transaction_type)
+    else
+      where(query, [p], is_nil(p.transaction_type))
+    end
     
     # Add district filter if available
     query = if district && district != "" do
