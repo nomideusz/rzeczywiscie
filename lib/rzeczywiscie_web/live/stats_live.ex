@@ -60,7 +60,7 @@ defmodule RzeczywiscieWeb.StatsLive do
       <!-- Main Stats Grid -->
       <div class="bg-base-100 border-b-2 border-base-content">
         <div class="container mx-auto">
-          <div class="grid grid-cols-2 md:grid-cols-4 divide-x-2 divide-base-content">
+          <div class="grid grid-cols-2 md:grid-cols-5 divide-x-2 divide-base-content">
             <div class="p-4 text-center">
               <div class="text-3xl font-black text-primary"><%= @stats.total_properties %></div>
               <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">Total Properties</div>
@@ -81,11 +81,100 @@ defmodule RzeczywiscieWeb.StatsLive do
               <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">Added Today</div>
               <div class="text-xs opacity-50">Last 24h</div>
             </div>
+            <div class="p-4 text-center">
+              <div class={"text-3xl font-black #{if @stats.stale_count > 0, do: "text-warning", else: "text-success"}"}><%= @stats.stale_count %></div>
+              <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">Stale (48h+)</div>
+              <div class="text-xs opacity-50">Will deactivate soon</div>
+            </div>
           </div>
         </div>
       </div>
 
+      <!-- Stale Warning -->
+      <%= if @stats.stale_count > 0 do %>
+        <div class="bg-warning/10 border-b-2 border-warning">
+          <div class="container mx-auto px-4 py-3">
+            <div class="flex flex-wrap items-center gap-4">
+              <span class="text-xs font-bold uppercase tracking-wide">⚠️ Stale Properties:</span>
+              <%= for {source, count} <- @stats.stale_by_source do %>
+                <span class="px-2 py-1 text-xs font-bold bg-warning/20 border border-warning">
+                  <%= String.upcase(source) %>: <%= count %>
+                </span>
+              <% end %>
+              <span class="text-xs opacity-60">Not seen in 48h+ — will become inactive</span>
+            </div>
+          </div>
+        </div>
+      <% end %>
+
       <div class="container mx-auto px-4 py-6">
+        <!-- Price Statistics -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <!-- Sale Prices -->
+          <div class="bg-base-100 border-2 border-base-content">
+            <div class="px-4 py-2 border-b-2 border-base-content bg-info/20">
+              <h2 class="text-sm font-bold uppercase tracking-wide">💰 Sale Prices (Sprzedaż)</h2>
+            </div>
+            <%= if @stats.sale_price_stats.count > 0 do %>
+              <div class="grid grid-cols-2 md:grid-cols-4 divide-x divide-base-content/20">
+                <div class="p-4 text-center">
+                  <div class="text-xl font-black text-info"><%= format_price_short(@stats.sale_price_stats.avg_price) %></div>
+                  <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">Avg Price</div>
+                </div>
+                <div class="p-4 text-center">
+                  <div class="text-xl font-black"><%= format_price_short(@stats.sale_price_stats.avg_price_per_sqm) %>/m²</div>
+                  <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">Avg per m²</div>
+                </div>
+                <div class="p-4 text-center">
+                  <div class="text-lg font-black text-success"><%= format_price_short(@stats.sale_price_stats.min_price) %></div>
+                  <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">Min</div>
+                </div>
+                <div class="p-4 text-center">
+                  <div class="text-lg font-black text-error"><%= format_price_short(@stats.sale_price_stats.max_price) %></div>
+                  <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">Max</div>
+                </div>
+              </div>
+              <div class="px-4 py-2 bg-base-200 text-xs text-center opacity-60">
+                Based on <%= @stats.sale_price_stats.count %> properties with price & area data
+              </div>
+            <% else %>
+              <div class="p-4 text-center opacity-50">No sale data available</div>
+            <% end %>
+          </div>
+
+          <!-- Rent Prices -->
+          <div class="bg-base-100 border-2 border-base-content">
+            <div class="px-4 py-2 border-b-2 border-base-content bg-warning/20">
+              <h2 class="text-sm font-bold uppercase tracking-wide">🏠 Rent Prices (Wynajem)</h2>
+            </div>
+            <%= if @stats.rent_price_stats.count > 0 do %>
+              <div class="grid grid-cols-2 md:grid-cols-4 divide-x divide-base-content/20">
+                <div class="p-4 text-center">
+                  <div class="text-xl font-black text-warning"><%= format_price_short(@stats.rent_price_stats.avg_price) %></div>
+                  <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">Avg Price</div>
+                </div>
+                <div class="p-4 text-center">
+                  <div class="text-xl font-black"><%= format_price_short(@stats.rent_price_stats.avg_price_per_sqm) %>/m²</div>
+                  <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">Avg per m²</div>
+                </div>
+                <div class="p-4 text-center">
+                  <div class="text-lg font-black text-success"><%= format_price_short(@stats.rent_price_stats.min_price) %></div>
+                  <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">Min</div>
+                </div>
+                <div class="p-4 text-center">
+                  <div class="text-lg font-black text-error"><%= format_price_short(@stats.rent_price_stats.max_price) %></div>
+                  <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">Max</div>
+                </div>
+              </div>
+              <div class="px-4 py-2 bg-base-200 text-xs text-center opacity-60">
+                Based on <%= @stats.rent_price_stats.count %> properties with price & area data
+              </div>
+            <% else %>
+              <div class="p-4 text-center opacity-50">No rent data available</div>
+            <% end %>
+          </div>
+        </div>
+
         <!-- Sources & Types Row -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
           <!-- Sources -->
@@ -163,10 +252,35 @@ defmodule RzeczywiscieWeb.StatsLive do
           </div>
         </div>
 
+        <!-- Room Distribution -->
+        <div class="bg-base-100 border-2 border-base-content mb-6">
+          <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
+            <h2 class="text-sm font-bold uppercase tracking-wide">🛏️ Room Distribution</h2>
+          </div>
+          <div class="p-4">
+            <div class="flex items-end gap-1 h-32">
+              <%= for {rooms, count} <- @stats.room_distribution do %>
+                <% max_count = @stats.room_distribution |> Enum.map(fn {_, c} -> c end) |> Enum.max(fn -> 1 end) %>
+                <% height_pct = count / max_count * 100 %>
+                <div class="flex-1 flex flex-col items-center">
+                  <div class="text-xs font-bold mb-1"><%= count %></div>
+                  <div 
+                    class="w-full bg-primary/80 hover:bg-primary transition-colors rounded-t"
+                    style={"height: #{height_pct}%"}
+                    title={"#{rooms} rooms: #{count} properties"}
+                  ></div>
+                  <div class="text-xs font-bold mt-2 opacity-60"><%= rooms %></div>
+                </div>
+              <% end %>
+            </div>
+            <div class="text-center text-xs opacity-50 mt-2">Number of rooms</div>
+          </div>
+        </div>
+
         <!-- Data Quality -->
         <div class="bg-base-100 border-2 border-base-content mb-6">
           <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
-            <h2 class="text-sm font-bold uppercase tracking-wide">Data Quality</h2>
+            <h2 class="text-sm font-bold uppercase tracking-wide">📊 Data Quality</h2>
           </div>
           <div class="grid grid-cols-2 md:grid-cols-4 divide-x divide-base-content/20">
             <div class="p-4">
@@ -175,9 +289,10 @@ defmodule RzeczywiscieWeb.StatsLive do
                 <span class="text-xs font-bold text-success mb-1"><%= Float.round(@stats.with_price / max(@stats.active_properties, 1) * 100, 0) %>%</span>
               </div>
               <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">With Price</div>
-              <div class="mt-2 h-1 bg-base-300">
-                <div class="h-1 bg-success" style={"width: #{Float.round(@stats.with_price / max(@stats.active_properties, 1) * 100, 0)}%"}></div>
+              <div class="mt-2 h-2 bg-base-300 rounded">
+                <div class="h-2 bg-success rounded" style={"width: #{Float.round(@stats.with_price / max(@stats.active_properties, 1) * 100, 0)}%"}></div>
               </div>
+              <div class="text-[10px] text-error mt-1"><%= @stats.missing_price %> missing</div>
             </div>
             <div class="p-4">
               <div class="flex items-end gap-2">
@@ -185,9 +300,10 @@ defmodule RzeczywiscieWeb.StatsLive do
                 <span class="text-xs font-bold text-success mb-1"><%= Float.round(@stats.with_area / max(@stats.active_properties, 1) * 100, 0) %>%</span>
               </div>
               <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">With Area</div>
-              <div class="mt-2 h-1 bg-base-300">
-                <div class="h-1 bg-success" style={"width: #{Float.round(@stats.with_area / max(@stats.active_properties, 1) * 100, 0)}%"}></div>
+              <div class="mt-2 h-2 bg-base-300 rounded">
+                <div class="h-2 bg-success rounded" style={"width: #{Float.round(@stats.with_area / max(@stats.active_properties, 1) * 100, 0)}%"}></div>
               </div>
+              <div class="text-[10px] text-error mt-1"><%= @stats.missing_area %> missing</div>
             </div>
             <div class="p-4">
               <div class="flex items-end gap-2">
@@ -195,19 +311,27 @@ defmodule RzeczywiscieWeb.StatsLive do
                 <span class="text-xs font-bold text-warning mb-1"><%= Float.round(@stats.with_rooms / max(@stats.active_properties, 1) * 100, 0) %>%</span>
               </div>
               <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">With Rooms</div>
-              <div class="mt-2 h-1 bg-base-300">
-                <div class="h-1 bg-warning" style={"width: #{Float.round(@stats.with_rooms / max(@stats.active_properties, 1) * 100, 0)}%"}></div>
+              <div class="mt-2 h-2 bg-base-300 rounded">
+                <div class="h-2 bg-warning rounded" style={"width: #{Float.round(@stats.with_rooms / max(@stats.active_properties, 1) * 100, 0)}%"}></div>
               </div>
+              <div class="text-[10px] text-error mt-1"><%= @stats.missing_rooms %> missing</div>
             </div>
             <div class="p-4">
               <div class="flex items-end gap-2">
-                <span class="font-black text-2xl"><%= @stats.complete_data %></span>
-                <span class="text-xs font-bold text-info mb-1"><%= Float.round(@stats.complete_data / max(@stats.active_properties, 1) * 100, 0) %>%</span>
+                <span class="font-black text-2xl"><%= @stats.geocoded_count %></span>
+                <span class="text-xs font-bold text-info mb-1"><%= Float.round(@stats.geocoded_percentage, 0) %>%</span>
               </div>
-              <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">Complete Data</div>
-              <div class="mt-2 h-1 bg-base-300">
-                <div class="h-1 bg-info" style={"width: #{Float.round(@stats.complete_data / max(@stats.active_properties, 1) * 100, 0)}%"}></div>
+              <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">With Location</div>
+              <div class="mt-2 h-2 bg-base-300 rounded">
+                <div class="h-2 bg-info rounded" style={"width: #{Float.round(@stats.geocoded_percentage, 0)}%"}></div>
               </div>
+              <div class="text-[10px] text-error mt-1"><%= @stats.missing_location %> missing</div>
+            </div>
+          </div>
+          <div class="px-4 py-2 bg-base-200 border-t border-base-content/20">
+            <div class="flex justify-between items-center">
+              <span class="text-xs font-bold uppercase tracking-wide opacity-60">Complete Data (all fields)</span>
+              <span class="font-black text-lg"><%= @stats.complete_data %> <span class="text-xs font-normal opacity-60">(<%= Float.round(@stats.complete_data / max(@stats.active_properties, 1) * 100, 1) %>%)</span></span>
             </div>
           </div>
         </div>
@@ -438,6 +562,42 @@ defmodule RzeczywiscieWeb.StatsLive do
     # Price drops
     price_drops = RealEstate.get_properties_with_price_drops(7) |> Enum.take(10)
 
+    # Price statistics for sale properties
+    sale_price_stats = calculate_price_stats("sprzedaż")
+    rent_price_stats = calculate_price_stats("wynajem")
+
+    # Room distribution
+    room_distribution =
+      Repo.all(
+        from p in Property,
+          where: p.active == true and not is_nil(p.rooms),
+          group_by: p.rooms,
+          select: {p.rooms, count(p.id)},
+          order_by: p.rooms
+      )
+      |> Enum.take(8)
+
+    # Stale properties (not seen in 48+ hours)
+    cutoff = DateTime.utc_now() |> DateTime.add(-48 * 3600, :second)
+    stale_count = Repo.aggregate(
+      from(p in Property, where: p.active == true and p.last_seen_at < ^cutoff),
+      :count, :id
+    )
+
+    stale_by_source = from(p in Property,
+      where: p.active == true and p.last_seen_at < ^cutoff,
+      group_by: p.source,
+      select: {p.source, count(p.id)}
+    )
+    |> Repo.all()
+    |> Enum.into(%{})
+
+    # Missing data breakdown
+    missing_price = Repo.aggregate(from(p in Property, where: p.active == true and is_nil(p.price)), :count, :id)
+    missing_area = Repo.aggregate(from(p in Property, where: p.active == true and is_nil(p.area_sqm)), :count, :id)
+    missing_rooms = Repo.aggregate(from(p in Property, where: p.active == true and is_nil(p.rooms)), :count, :id)
+    missing_location = Repo.aggregate(from(p in Property, where: p.active == true and is_nil(p.latitude)), :count, :id)
+
     %{
       total_properties: total_properties,
       active_properties: active_properties,
@@ -455,8 +615,55 @@ defmodule RzeczywiscieWeb.StatsLive do
       with_rooms: with_rooms,
       complete_data: complete_data,
       recent_activity: recent_activity,
-      price_drops: price_drops
+      price_drops: price_drops,
+      sale_price_stats: sale_price_stats,
+      rent_price_stats: rent_price_stats,
+      room_distribution: room_distribution,
+      stale_count: stale_count,
+      stale_by_source: stale_by_source,
+      missing_price: missing_price,
+      missing_area: missing_area,
+      missing_rooms: missing_rooms,
+      missing_location: missing_location
     }
+  end
+
+  defp calculate_price_stats(transaction_type) do
+    query = from p in Property,
+      where: p.active == true and 
+             p.transaction_type == ^transaction_type and 
+             not is_nil(p.price) and 
+             not is_nil(p.area_sqm) and
+             p.area_sqm > 0
+
+    count = Repo.aggregate(query, :count, :id)
+    
+    if count > 0 do
+      avg_price = Repo.aggregate(query, :avg, :price)
+      min_price = Repo.aggregate(query, :min, :price)
+      max_price = Repo.aggregate(query, :max, :price)
+      
+      # Calculate average price per sqm
+      avg_price_per_sqm = Repo.one(
+        from p in Property,
+          where: p.active == true and 
+                 p.transaction_type == ^transaction_type and 
+                 not is_nil(p.price) and 
+                 not is_nil(p.area_sqm) and
+                 p.area_sqm > 0,
+          select: avg(p.price / p.area_sqm)
+      )
+
+      %{
+        count: count,
+        avg_price: avg_price && Decimal.round(avg_price, 0),
+        min_price: min_price,
+        max_price: max_price,
+        avg_price_per_sqm: avg_price_per_sqm && Decimal.round(avg_price_per_sqm, 0)
+      }
+    else
+      %{count: 0, avg_price: nil, min_price: nil, max_price: nil, avg_price_per_sqm: nil}
+    end
   end
 
   defp format_price(price) when is_nil(price), do: "N/A"
@@ -468,5 +675,20 @@ defmodule RzeczywiscieWeb.StatsLive do
     |> then(fn p ->
       "#{trunc(p)} zł"
     end)
+  end
+
+  defp format_price_short(nil), do: "—"
+
+  defp format_price_short(price) do
+    value = Decimal.to_float(price)
+    
+    cond do
+      value >= 1_000_000 ->
+        "#{Float.round(value / 1_000_000, 1)}M zł"
+      value >= 1_000 ->
+        "#{Float.round(value / 1_000, 0)}k zł"
+      true ->
+        "#{trunc(value)} zł"
+    end
   end
 end
