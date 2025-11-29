@@ -252,20 +252,23 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
      |> assign(:selected_special_type, special_type)}
   end
 
-  def handle_event("place_special_pixel", %{"x" => x, "y" => y, "name" => name}, socket) do
+  def handle_event("place_special_pixel", %{"x" => x, "y" => y, "name" => name} = params, socket) do
     color = socket.assigns.selected_color
     user_id = socket.assigns.user_id
     special_type = socket.assigns.selected_special_type
+    direction = String.to_existing_atom(params["direction"] || "right")
 
-    case PixelCanvas.place_special_pixel(x, y, color, user_id, special_type, name, color) do
+    case PixelCanvas.place_special_pixel(x, y, color, user_id, special_type, name, color, direction) do
       {:ok, pixel} ->
+        # Store with direction in special_type
+        full_special_type = "#{special_type}:#{direction}"
         pixels = Map.put(socket.assigns.pixels, {x, y}, %{
           color: color,
           user_id: user_id,
           updated_at: pixel.updated_at,
           pixel_tier: :normal,
           is_special: true,
-          special_type: special_type,
+          special_type: full_special_type,
           claimer_name: name,
           claimer_color: color
         })
@@ -274,11 +277,11 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
         user_stats = PixelCanvas.get_user_stats(user_id)
         milestone_progress = PixelCanvas.milestone_progress()
 
-        # Broadcast special pixel placement
+        # Broadcast special pixel placement with direction
         Phoenix.PubSub.broadcast(
           Rzeczywiscie.PubSub,
           @topic,
-          {:special_pixel_placed, x, y, color, user_id, special_type, name, color, stats, milestone_progress, socket.assigns.session_id}
+          {:special_pixel_placed, x, y, color, user_id, full_special_type, name, color, stats, milestone_progress, socket.assigns.session_id}
         )
 
         # Schedule cooldown update
@@ -295,7 +298,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
          |> assign(:milestone_progress, milestone_progress)
          |> assign(:pixel_mode, :normal)
          |> assign(:selected_special_type, nil)
-         |> put_flash(:info, "Special #{special_type} pixel claimed! #{name} ✨")}
+         |> put_flash(:info, "#{String.capitalize(to_string(special_type))} claimed by #{name}! 🦄")}
 
       {:error, :no_special_pixel_available} ->
         {:noreply, put_flash(socket, :error, "You don't have this special pixel available")}

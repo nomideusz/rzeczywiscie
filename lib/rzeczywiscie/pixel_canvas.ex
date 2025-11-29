@@ -55,22 +55,63 @@ defmodule Rzeczywiscie.PixelCanvas do
     |> Map.new()
   end
 
+  # Unicorn shape offsets (facing right) - must match frontend UNICORN_SHAPE
+  @unicorn_shape_right [
+    {6, -9}, {7, -9}, {7, -8},  # horn
+    {5, -8}, {6, -8},  # head top
+    {2, -7}, {3, -8}, {3, -7}, {4, -7}, {5, -7}, {6, -7},  # mane + head
+    {1, -6}, {2, -6}, {3, -6}, {4, -6}, {5, -6}, {6, -6}, {7, -6},  # mane + head + eye
+    {1, -5}, {2, -5}, {3, -5}, {4, -5}, {5, -5},  # mane + neck
+    {0, -4}, {1, -4}, {2, -4}, {3, -4}, {4, -4}, {5, -4},  # mane + body
+    {0, -3}, {1, -3}, {2, -3}, {3, -3}, {4, -3},  # mane + body
+    {-1, -2}, {0, -2}, {1, -2}, {2, -2}, {3, -2}, {5, -2}, {6, -2},  # tail + body + legs
+    {-1, -1}, {0, -1}, {2, -1}, {3, -1}, {5, -1}, {6, -1},  # tail + legs
+    {0, 0}, {2, 0}, {3, 0}, {5, 0}, {6, 0}  # tail + feet
+  ]
+
+  # Unicorn shape facing left (mirror of right)
+  @unicorn_shape_left Enum.map(@unicorn_shape_right, fn {dx, dy} -> {-dx, dy} end)
+
+  @doc """
+  Returns the unicorn shape offsets for a given direction.
+  """
+  def unicorn_shape(:left), do: @unicorn_shape_left
+  def unicorn_shape(:right), do: @unicorn_shape_right
+  def unicorn_shape(_), do: @unicorn_shape_right
+
   @doc """
   Places a special pixel on the canvas with the user's name and color.
+  Uses a transaction to prevent race conditions.
   Returns {:ok, pixel} or {:error, reason}
   """
-  def place_special_pixel(x, y, color, user_id, special_type, claimer_name, claimer_color) do
-    # Check cooldown
+  def place_special_pixel(x, y, color, user_id, special_type, claimer_name, claimer_color, direction \\ :right) do
+    # Check cooldown first (outside transaction)
     case check_cooldown(user_id) do
       :ok ->
-        # Check if user has this special pixel available
-        stats = get_or_create_user_stats(user_id)
-        available_count = Map.get(stats.special_pixels_available || %{}, special_type, 0)
+        # Use transaction with row-level locking
+        Repo.transaction(fn ->
+          # Lock and get user stats
+          stats = get_or_create_user_stats(user_id)
+          available_count = Map.get(stats.special_pixels_available || %{}, special_type, 0)
 
-        if available_count > 0 do
-          # Check if position is already occupied
-          case pixel_at(x, y) do
-            nil ->
+          if available_count > 0 do
+            # Get all positions the unicorn would occupy
+            shape_offsets = unicorn_shape(direction)
+            positions = Enum.map(shape_offsets, fn {dx, dy} -> {x + dx, y + dy} end)
+
+            # Check if ANY position is already occupied
+            occupied = Pixel
+            |> where([p], fragment("(?, ?) IN (SELECT * FROM unnest(?::int[], ?::int[]))",
+              p.x, p.y,
+              ^Enum.map(positions, &elem(&1, 0)),
+              ^Enum.map(positions, &elem(&1, 1))))
+            |> limit(1)
+            |> Repo.one()
+
+            if occupied do
+              Repo.rollback(:position_occupied)
+            else
+              # Store anchor pixel with direction metadata
               attrs = %{
                 x: x,
                 y: y,
@@ -79,40 +120,35 @@ defmodule Rzeczywiscie.PixelCanvas do
                 pixel_tier: :normal,
                 is_massive: false,
                 is_special: true,
-                special_type: special_type,
+                special_type: "#{special_type}:#{direction}",
                 claimer_name: claimer_name,
                 claimer_color: claimer_color
               }
 
-              result = %Pixel{}
-              |> Pixel.changeset(attrs)
-              |> Repo.insert()
-
-              # Decrement available special pixel
-              case result do
+              case %Pixel{} |> Pixel.changeset(attrs) |> Repo.insert() do
                 {:ok, pixel} ->
+                  # Decrement available special pixel
                   updated_specials = Map.update(
                     stats.special_pixels_available,
                     special_type,
                     0,
-                    &(&1 - 1)
+                    &max(0, &1 - 1)
                   )
 
                   stats
                   |> UserPixelStats.changeset(%{special_pixels_available: updated_specials})
-                  |> Repo.update()
+                  |> Repo.update!()
 
-                  {:ok, pixel}
-                error ->
-                  error
+                  pixel
+
+                {:error, _changeset} ->
+                  Repo.rollback(:insert_failed)
               end
-
-            _pixel ->
-              {:error, :position_occupied}
+            end
+          else
+            Repo.rollback(:no_special_pixel_available)
           end
-        else
-          {:error, :no_special_pixel_available}
-        end
+        end)
 
       {:error, seconds_remaining} ->
         {:error, {:cooldown, seconds_remaining}}

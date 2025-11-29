@@ -49,6 +49,7 @@
   let showNameModal = false  // Modal for entering name when placing special pixel
   let pendingSpecialPixel = null  // {x, y, type} for special pixel to be placed
   let claimerName = ''  // Name entered by user
+  let unicornDirection = 'right'  // Direction unicorn faces: 'left' or 'right'
   let hoveredSpecialPixel = null  // Info about hovered special pixel {name, type, color}
   let mousePosition = { x: 0, y: 0 }  // Track mouse position for tooltip
   const CURSOR_THROTTLE_MS = 250
@@ -67,7 +68,7 @@
   }
   
   // Colorful unicorn shape (facing right, ~45 pixels)
-  const UNICORN_SHAPE = [
+  const UNICORN_SHAPE_RIGHT = [
     // Horn (yellow)
     { dx: 6, dy: -9, type: 'horn' },
     { dx: 7, dy: -9, type: 'horn' },
@@ -157,11 +158,28 @@
     { dx: 6, dy: 0, type: 'body' },
   ]
 
+  // Left-facing unicorn (mirror of right)
+  const UNICORN_SHAPE_LEFT = UNICORN_SHAPE_RIGHT.map(p => ({ dx: -p.dx, dy: p.dy, type: p.type }))
+
+  // Get unicorn shape by direction
+  function getUnicornShape(direction) {
+    return direction === 'left' ? UNICORN_SHAPE_LEFT : UNICORN_SHAPE_RIGHT
+  }
+
+  // Parse direction from special_type (e.g., "unicorn:left" -> "left")
+  function getUnicornDirection(specialType) {
+    if (!specialType) return 'right'
+    const parts = specialType.split(':')
+    return parts[1] || 'right'
+  }
+
   // Check if a position is part of any unicorn shape
   function getUnicornAtPosition(x, y) {
     for (const pixel of pixels) {
-      if (pixel.is_special && pixel.special_type === 'unicorn') {
-        for (const offset of UNICORN_SHAPE) {
+      if (pixel.is_special && pixel.special_type?.startsWith('unicorn')) {
+        const direction = getUnicornDirection(pixel.special_type)
+        const shape = getUnicornShape(direction)
+        for (const offset of shape) {
           if (pixel.x + offset.dx === x && pixel.y + offset.dy === y) {
             return pixel
           }
@@ -436,13 +454,17 @@
     pixels.forEach(pixel => {
       if (!pixel.is_special) return
 
-      if (pixel.special_type === 'unicorn') {
+      if (pixel.special_type?.startsWith('unicorn')) {
         // Rainbow glow effect
         const hue = (Date.now() / 20) % 360
         ctx.shadowBlur = 15
         ctx.shadowColor = `hsl(${hue}, 100%, 60%)`
         
-        UNICORN_SHAPE.forEach(offset => {
+        // Get correct shape based on direction
+        const direction = getUnicornDirection(pixel.special_type)
+        const shape = getUnicornShape(direction)
+        
+        shape.forEach(offset => {
           const px = (pixel.x + offset.dx) * cellSize + 1
           const py = (pixel.y + offset.dy) * cellSize + 1
           const color = UNICORN_COLORS[offset.type] || '#FFFFFF'
@@ -511,7 +533,8 @@
         const hue = (Date.now() / 20) % 360
         ctx.shadowBlur = 12
         ctx.shadowColor = `hsl(${hue}, 100%, 60%)`
-        UNICORN_SHAPE.forEach(offset => {
+        const previewShape = getUnicornShape(unicornDirection)
+        previewShape.forEach(offset => {
           const px = hoveredPixel.x + offset.dx
           const py = hoveredPixel.y + offset.dy
           if (px >= 0 && px < width && py >= 0 && py < height) {
@@ -594,7 +617,8 @@
       live.pushEvent("place_special_pixel", {
         x: pendingSpecialPixel.x,
         y: pendingSpecialPixel.y,
-        name: claimerName.trim()
+        name: claimerName.trim(),
+        direction: unicornDirection
       })
       showNameModal = false
       pendingSpecialPixel = null
@@ -606,6 +630,11 @@
     showNameModal = false
     pendingSpecialPixel = null
     claimerName = ''
+  }
+
+  function toggleUnicornDirection() {
+    unicornDirection = unicornDirection === 'right' ? 'left' : 'right'
+    if (ctx) drawCanvas()
   }
 
   function togglePixelMode(mode) {
@@ -1248,8 +1277,10 @@
     {#if showNameModal}
       <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
         <div class="bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full mx-4 animate-in">
-          <h3 class="text-lg font-bold text-neutral-900 mb-2">Claim Special Pixel</h3>
-          <p class="text-sm text-neutral-600 mb-4">Enter your name to claim this pixel forever:</p>
+          <h3 class="text-lg font-bold text-neutral-900 mb-2">
+            Claim your <span class="bg-gradient-to-r from-purple-600 via-pink-500 to-purple-600 bg-clip-text text-transparent">Unicorn</span>
+          </h3>
+          <p class="text-sm text-neutral-600 mb-4">Your name will be immortalized forever:</p>
           
           <input
             type="text"
@@ -1260,6 +1291,25 @@
             on:keydown={(e) => e.key === 'Enter' && confirmSpecialPixel()}
             autofocus
           />
+
+          <!-- Direction choice -->
+          <div class="mb-4">
+            <label class="text-xs text-neutral-500 mb-2 block">Which way should it face?</label>
+            <div class="flex gap-2">
+              <button
+                on:click={() => { unicornDirection = 'left'; drawCanvas() }}
+                class="flex-1 py-2 px-3 border-2 transition-all text-sm font-medium {unicornDirection === 'left' ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-300 hover:border-neutral-400'}"
+              >
+                ← Left
+              </button>
+              <button
+                on:click={() => { unicornDirection = 'right'; drawCanvas() }}
+                class="flex-1 py-2 px-3 border-2 transition-all text-sm font-medium {unicornDirection === 'right' ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-300 hover:border-neutral-400'}"
+              >
+                Right →
+              </button>
+            </div>
+          </div>
           
           <div class="flex gap-2">
             <button
@@ -1273,7 +1323,7 @@
               disabled={!claimerName.trim()}
               class="flex-1 px-4 py-2 bg-neutral-900 text-white hover:bg-neutral-800 transition-colors font-bold disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Claim
+              Claim 🦄
             </button>
           </div>
         </div>
