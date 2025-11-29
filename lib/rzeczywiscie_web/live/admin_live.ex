@@ -431,8 +431,8 @@ defmodule RzeczywiscieWeb.AdminLive do
   defp run_geocode_task do
     alias Rzeczywiscie.Workers.GeocodingWorker
     Logger.info("Running geocoding task...")
-    :ok = GeocodingWorker.perform(%Oban.Job{})
-    "Geocoding complete"
+    :ok = GeocodingWorker.perform(%Oban.Job{args: %{"batch_size" => 50, "delay_ms" => 500}})
+    "Geocoded up to 50 properties"
   end
 
   defp run_dedup_task do
