@@ -53,6 +53,7 @@
   let nameInputElement = null  // Reference to name input for focus
   let hoveredSpecialPixel = null  // Info about hovered special pixel {name, type, color}
   let mousePosition = { x: 0, y: 0 }  // Track mouse position for tooltip
+  let invalidPlacementBlink = false  // Visual feedback for invalid unicorn placement
   const CURSOR_THROTTLE_MS = 250
 
   // Unicorn shape definition - colorful pixel art unicorn
@@ -554,17 +555,33 @@
         ctx.shadowBlur = 0
       } else if (!pendingSpecialPixel && Object.values(userStats.special_pixels_available || {}).some(c => c > 0)) {
         // Draw colorful unicorn shape preview following cursor (when unicorn is available)
+        const isValidPosition = isUnicornPositionValid(hoveredPixel.x, hoveredPixel.y, unicornDirection)
         ctx.globalAlpha = 0.6
-        const hue = (Date.now() / 20) % 360
-        ctx.shadowBlur = 12
-        ctx.shadowColor = `hsl(${hue}, 100%, 60%)`
+        
+        if (isValidPosition && !invalidPlacementBlink) {
+          // Valid position - show rainbow glow
+          const hue = (Date.now() / 20) % 360
+          ctx.shadowBlur = 12
+          ctx.shadowColor = `hsl(${hue}, 100%, 60%)`
+        } else {
+          // Invalid position or blink - show red glow
+          ctx.shadowBlur = 12
+          ctx.shadowColor = 'rgba(239, 68, 68, 0.8)'
+        }
+        
         const previewShape = getUnicornShape(unicornDirection)
         previewShape.forEach(offset => {
           const px = hoveredPixel.x + offset.dx
           const py = hoveredPixel.y + offset.dy
           if (px >= 0 && px < width && py >= 0 && py < height) {
-            const color = UNICORN_COLORS[offset.type] || '#FFFFFF'
-            if (offset.type === 'body') {
+            let color = UNICORN_COLORS[offset.type] || '#FFFFFF'
+            
+            // Tint red if invalid
+            if (!isValidPosition || invalidPlacementBlink) {
+              color = '#EF4444'  // Red color for invalid position
+            }
+            
+            if (offset.type === 'body' && (isValidPosition && !invalidPlacementBlink)) {
               ctx.fillStyle = '#E8E0F0'
               ctx.fillRect(px * cellSize, py * cellSize, cellSize, cellSize)
             }
@@ -641,16 +658,30 @@
     if (x >= 0 && x < width && y >= 0 && y < height) {
       // Check if unicorn modal is already open (reposition)
       if (pendingSpecialPixel) {
-        pendingSpecialPixel = { x, y }
-        claimerName = ''
-        setTimeout(() => nameInputElement?.focus(), 50)
-        drawCanvas()
+        const isValid = isUnicornPositionValid(x, y, unicornDirection)
+        if (isValid) {
+          pendingSpecialPixel = { x, y }
+          claimerName = ''
+          setTimeout(() => nameInputElement?.focus(), 50)
+          drawCanvas()
+        } else {
+          // Show red blink feedback for invalid position
+          invalidPlacementBlink = true
+          setTimeout(() => { invalidPlacementBlink = false }, 500)
+        }
       }
-      // Auto-open unicorn modal if available
+      // Auto-open unicorn modal if available (only if position is valid)
       else if (Object.values(userStats.special_pixels_available || {}).some(c => c > 0)) {
-        pendingSpecialPixel = { x, y }
-        setTimeout(() => nameInputElement?.focus(), 50)
-        drawCanvas()
+        const isValid = isUnicornPositionValid(x, y, unicornDirection)
+        if (isValid) {
+          pendingSpecialPixel = { x, y }
+          setTimeout(() => nameInputElement?.focus(), 50)
+          drawCanvas()
+        } else {
+          // Show red blink feedback for invalid position
+          invalidPlacementBlink = true
+          setTimeout(() => { invalidPlacementBlink = false }, 500)
+        }
       }
       // Place massive pixel if mode is active and available
       else if (pixelMode === "massive" && userStats.massive_pixels_available > 0) {
@@ -733,6 +764,11 @@
   
   // Redraw canvas when pending position or validity changes
   $: if (ctx && pendingSpecialPixel !== undefined) {
+    drawCanvas()
+  }
+  
+  // Redraw when invalid placement blink triggers
+  $: if (ctx && invalidPlacementBlink !== undefined) {
     drawCanvas()
   }
 
@@ -948,16 +984,30 @@
       if (x >= 0 && x < width && y >= 0 && y < height) {
         // Check if unicorn modal is already open (reposition)
         if (pendingSpecialPixel) {
-          pendingSpecialPixel = { x, y }
-          claimerName = ''
-          setTimeout(() => nameInputElement?.focus(), 50)
-          drawCanvas()
+          const isValid = isUnicornPositionValid(x, y, unicornDirection)
+          if (isValid) {
+            pendingSpecialPixel = { x, y }
+            claimerName = ''
+            setTimeout(() => nameInputElement?.focus(), 50)
+            drawCanvas()
+          } else {
+            // Show red blink feedback for invalid position
+            invalidPlacementBlink = true
+            setTimeout(() => { invalidPlacementBlink = false }, 500)
+          }
         }
-        // Auto-open unicorn modal if available
+        // Auto-open unicorn modal if available (only if position is valid)
         else if (Object.values(userStats.special_pixels_available || {}).some(c => c > 0)) {
-          pendingSpecialPixel = { x, y }
-          setTimeout(() => nameInputElement?.focus(), 50)
-          drawCanvas()
+          const isValid = isUnicornPositionValid(x, y, unicornDirection)
+          if (isValid) {
+            pendingSpecialPixel = { x, y }
+            setTimeout(() => nameInputElement?.focus(), 50)
+            drawCanvas()
+          } else {
+            // Show red blink feedback for invalid position
+            invalidPlacementBlink = true
+            setTimeout(() => { invalidPlacementBlink = false }, 500)
+          }
         }
         // Place massive pixel if mode is active and available
         else if (pixelMode === "massive" && userStats.massive_pixels_available > 0) {
@@ -1472,7 +1522,7 @@
           <!-- Status message -->
           {#if !unicornPositionValid}
             <div class="mb-2 py-1 px-2 bg-neutral-100 border border-neutral-300 text-[10px] text-neutral-600 text-center">
-              Position blocked
+              Rotate or click elsewhere
             </div>
           {/if}
           
