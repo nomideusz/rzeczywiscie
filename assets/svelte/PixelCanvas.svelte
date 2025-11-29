@@ -612,8 +612,32 @@
     }
   }
 
+  // Check if unicorn position is valid (no overlapping pixels)
+  function isUnicornPositionValid(x, y, direction) {
+    const shape = getUnicornShape(direction)
+    for (const offset of shape) {
+      const px = x + offset.dx
+      const py = y + offset.dy
+      // Check bounds
+      if (px < 0 || px >= width || py < 0 || py >= height) {
+        return false
+      }
+      // Check if position is occupied by existing pixel
+      const occupied = pixels.find(p => p.x === px && p.y === py)
+      if (occupied) {
+        return false
+      }
+    }
+    return true
+  }
+
+  // Reactive check for position validity
+  $: unicornPositionValid = pendingSpecialPixel 
+    ? isUnicornPositionValid(pendingSpecialPixel.x, pendingSpecialPixel.y, unicornDirection)
+    : true
+
   function confirmSpecialPixel() {
-    if (pendingSpecialPixel && claimerName.trim()) {
+    if (pendingSpecialPixel && claimerName.trim() && unicornPositionValid) {
       live.pushEvent("place_special_pixel", {
         x: pendingSpecialPixel.x,
         y: pendingSpecialPixel.y,
@@ -1273,55 +1297,61 @@
       </div>
     {/if}
 
-    <!-- Name entry modal for special pixels -->
+    <!-- Name entry modal for special pixels - positioned to side so canvas is visible -->
     {#if showNameModal}
-      <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
-        <div class="bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full mx-4 animate-in">
-          <h3 class="text-lg font-bold text-neutral-900 mb-2">
+      <div class="fixed {isMobile ? 'inset-x-4 bottom-4' : 'top-6 left-6'} z-[100] max-w-xs">
+        <div class="bg-white rounded-xl shadow-2xl p-5 animate-in border-2 border-neutral-200">
+          <h3 class="text-base font-bold text-neutral-900 mb-2">
             Claim your <span class="bg-gradient-to-r from-purple-600 via-pink-500 to-purple-600 bg-clip-text text-transparent">Unicorn</span>
           </h3>
-          <p class="text-sm text-neutral-600 mb-4">Your name will be immortalized forever:</p>
           
           <input
             type="text"
             bind:value={claimerName}
             placeholder="Your name"
             maxlength="20"
-            class="w-full px-4 py-2 border-2 border-neutral-300 focus:border-neutral-900 focus:outline-none mb-4"
-            on:keydown={(e) => e.key === 'Enter' && confirmSpecialPixel()}
+            class="w-full px-3 py-2 border-2 border-neutral-300 focus:border-neutral-900 focus:outline-none mb-3 text-sm"
+            on:keydown={(e) => e.key === 'Enter' && unicornPositionValid && confirmSpecialPixel()}
             autofocus
           />
 
           <!-- Direction choice -->
-          <div class="mb-4">
-            <label class="text-xs text-neutral-500 mb-2 block">Which way should it face?</label>
+          <div class="mb-3">
+            <label class="text-xs text-neutral-500 mb-1.5 block">Direction:</label>
             <div class="flex gap-2">
               <button
                 on:click={() => { unicornDirection = 'left'; drawCanvas() }}
-                class="flex-1 py-2 px-3 border-2 transition-all text-sm font-medium cursor-pointer {unicornDirection === 'left' ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-300 hover:border-neutral-400'}"
+                class="flex-1 py-1.5 px-2 border-2 transition-all text-xs font-medium cursor-pointer {unicornDirection === 'left' ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-300 hover:border-neutral-400'}"
               >
                 ← Left
               </button>
               <button
                 on:click={() => { unicornDirection = 'right'; drawCanvas() }}
-                class="flex-1 py-2 px-3 border-2 transition-all text-sm font-medium cursor-pointer {unicornDirection === 'right' ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-300 hover:border-neutral-400'}"
+                class="flex-1 py-1.5 px-2 border-2 transition-all text-xs font-medium cursor-pointer {unicornDirection === 'right' ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-300 hover:border-neutral-400'}"
               >
                 Right →
               </button>
             </div>
           </div>
+
+          <!-- Position validity warning -->
+          {#if !unicornPositionValid}
+            <div class="mb-3 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
+              ⚠️ Position blocked! Try rotating or pick a different spot.
+            </div>
+          {/if}
           
           <div class="flex gap-2">
             <button
               on:click={cancelSpecialPixel}
-              class="flex-1 px-4 py-2 border-2 border-neutral-300 text-neutral-700 hover:bg-neutral-50 transition-colors font-medium cursor-pointer"
+              class="flex-1 px-3 py-2 border-2 border-neutral-300 text-neutral-700 hover:bg-neutral-50 transition-colors text-sm font-medium cursor-pointer"
             >
               Cancel
             </button>
             <button
               on:click={confirmSpecialPixel}
-              disabled={!claimerName.trim()}
-              class="flex-1 px-4 py-2 bg-neutral-900 text-white hover:bg-neutral-800 transition-colors font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={!claimerName.trim() || !unicornPositionValid}
+              class="flex-1 px-3 py-2 bg-neutral-900 text-white hover:bg-neutral-800 transition-colors text-sm font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Claim 🦄
             </button>
