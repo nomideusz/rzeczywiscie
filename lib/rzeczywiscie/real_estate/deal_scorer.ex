@@ -206,18 +206,28 @@ defmodule Rzeczywiscie.RealEstate.DealScorer do
   """
   def get_price_drops(days \\ 7, limit \\ 20) do
     cutoff = DateTime.utc_now() |> DateTime.add(-days * 24 * 3600, :second)
-    min_valid_price = Decimal.new("100")
+    
+    # Use proper minimum prices by transaction type
+    # For price drops, we need current price to be reasonable
+    min_rent_price = Decimal.new(@min_price_rent)  # 200 PLN
+    min_sale_price = Decimal.new(@min_price_sale)  # 30,000 PLN
+    min_history_price = Decimal.new("500")  # History price should also be reasonable
     
     from(ph in PriceHistory,
       join: p in Property,
       on: ph.property_id == p.id,
       where: p.active == true and 
              not is_nil(p.price) and
-             p.price >= ^min_valid_price and
-             ph.price >= ^min_valid_price and
+             not is_nil(p.transaction_type) and
+             # Current price must meet minimum for transaction type
+             ((p.transaction_type == "wynajem" and p.price >= ^min_rent_price) or
+              (p.transaction_type == "sprzedaż" and p.price >= ^min_sale_price) or
+              (p.transaction_type not in ["wynajem", "sprzedaż"] and p.price >= ^min_history_price)) and
+             # History price should also be reasonable
+             ph.price >= ^min_history_price and
              ph.detected_at >= ^cutoff and 
              ph.change_percentage < 0 and
-             ph.change_percentage > -90,  # Filter out extreme drops (data errors)
+             ph.change_percentage > -70,  # Tighter filter: drops > 70% are likely errors
       order_by: [asc: ph.change_percentage],
       limit: ^limit,
       select: {p, ph}
