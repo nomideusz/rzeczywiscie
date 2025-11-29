@@ -674,6 +674,38 @@
     ? isUnicornPositionValid(pendingSpecialPixel.x, pendingSpecialPixel.y, unicornDirection)
     : true
   
+  // Calculate screen position for the inline control panel
+  $: panelPosition = pendingSpecialPixel ? (() => {
+    const pixelSizeZoomed = Math.round(pixelSize * zoom)
+    const screenX = (pendingSpecialPixel.x * pixelSizeZoomed) + panOffset.x
+    const screenY = (pendingSpecialPixel.y * pixelSizeZoomed) + panOffset.y
+    
+    // Position panel to the right of the unicorn with some offset
+    // Panel width is 220px (as defined in the template)
+    const panelWidth = 220
+    const panelHeight = 150 // approximate
+    const offset = 20
+    
+    let left = screenX + pixelSizeZoomed + offset
+    let top = screenY
+    
+    // Keep panel on screen
+    if (left + panelWidth > window.innerWidth - 20) {
+      left = screenX - panelWidth - offset // Put it on the left instead
+    }
+    if (left < 20) {
+      left = 20
+    }
+    if (top + panelHeight > window.innerHeight - 20) {
+      top = window.innerHeight - panelHeight - 20
+    }
+    if (top < 20) {
+      top = 20
+    }
+    
+    return { left: `${left}px`, top: `${top}px` }
+  })() : null
+  
   // Redraw canvas when pending position or validity changes
   $: if (ctx && pendingSpecialPixel !== undefined) {
     drawCanvas()
@@ -1360,9 +1392,10 @@
     {/if}
 
     <!-- Inline unicorn placement controls - appears when position is selected -->
-    {#if pendingSpecialPixel}
+    {#if pendingSpecialPixel && panelPosition}
       <div 
-        class="fixed z-[100] {isMobile ? 'bottom-20 left-1/2 -translate-x-1/2' : 'top-20 left-6'}"
+        class="fixed z-[100] {isMobile ? 'bottom-20 left-1/2 -translate-x-1/2' : ''}"
+        style={isMobile ? '' : `left: ${panelPosition.left}; top: ${panelPosition.top};`}
       >
         <div class="bg-white rounded-xl shadow-2xl p-3 animate-in border-2 {unicornPositionValid ? 'border-purple-300' : 'border-red-300'}" style="width: 220px;">
           <!-- Compact header with direction toggle -->
