@@ -189,7 +189,7 @@ defmodule RzeczywiscieWeb.StatsLive do
         <div class="bg-base-100 border-2 border-base-content mb-6">
           <div class="px-4 py-3 border-b-2 border-base-content bg-gradient-to-r from-primary/20 to-secondary/20">
             <h2 class="text-sm font-bold uppercase tracking-wide">🔍 Price Explorer by District</h2>
-            <p class="text-[10px] opacity-60">Filter by property type and transaction type</p>
+            <p class="text-[10px] opacity-60">Filter by property type and transaction type • Outliers excluded (Sale: 30k-50M zł, Rent: 300-100k zł)</p>
           </div>
           
           <!-- Filters -->
@@ -852,10 +852,14 @@ defmodule RzeczywiscieWeb.StatsLive do
   end
 
   defp calculate_price_stats(transaction_type) do
+    {min_valid, max_valid} = price_range(transaction_type)
+    
     query = from p in Property,
       where: p.active == true and 
              p.transaction_type == ^transaction_type and 
              not is_nil(p.price) and 
+             p.price >= ^min_valid and
+             p.price <= ^max_valid and
              not is_nil(p.area_sqm) and
              p.area_sqm > 0
 
@@ -872,6 +876,8 @@ defmodule RzeczywiscieWeb.StatsLive do
           where: p.active == true and 
                  p.transaction_type == ^transaction_type and 
                  not is_nil(p.price) and 
+                 p.price >= ^min_valid and
+                 p.price <= ^max_valid and
                  not is_nil(p.area_sqm) and
                  p.area_sqm > 0,
           select: avg(p.price / p.area_sqm)
@@ -938,8 +944,15 @@ defmodule RzeczywiscieWeb.StatsLive do
     )
   end
 
+  # Price sanity filters to exclude misclassified listings
+  # Sale: 30k - 50M zł (anything below 30k is likely rent misclassified as sale)
+  # Rent: 300 - 100k zł/month
+  defp price_range("sprzedaż"), do: {Decimal.new("30000"), Decimal.new("50000000")}
+  defp price_range("wynajem"), do: {Decimal.new("300"), Decimal.new("100000")}
+  defp price_range(_), do: {Decimal.new("1"), Decimal.new("999999999")}
+
   defp calculate_filtered_district_prices(property_type, transaction_type) do
-    # Get districts with this property type
+    # Get districts with this property type (with price sanity filter)
     base_query = from p in Property,
       where: p.active == true and 
              p.property_type == ^property_type and
@@ -947,10 +960,17 @@ defmodule RzeczywiscieWeb.StatsLive do
              p.district != "" and
              not is_nil(p.price)
     
-    # Add transaction type filter if not "all"
+    # Add transaction type and price range filter if not "all"
     base_query = case transaction_type do
-      "all" -> base_query
-      type -> where(base_query, [p], p.transaction_type == ^type)
+      "all" -> 
+        # For "all" mode, we accept prices valid for either sale OR rent
+        # This means: >= 300 (rent min) and <= 50M (sale max)
+        where(base_query, [p], p.price >= ^Decimal.new("300") and p.price <= ^Decimal.new("50000000"))
+      type -> 
+        {min_price, max_price} = price_range(type)
+        base_query
+        |> where([p], p.transaction_type == ^type)
+        |> where([p], p.price >= ^min_price and p.price <= ^max_price)
     end
 
     districts = Repo.all(
@@ -984,25 +1004,21 @@ defmodule RzeczywiscieWeb.StatsLive do
   end
 
   defp get_district_stats(property_type, district, transaction_type) do
-    count = Repo.aggregate(
-      from(p in Property,
-        where: p.active == true and 
-               p.property_type == ^property_type and
-               p.district == ^district and
-               p.transaction_type == ^transaction_type and
-               not is_nil(p.price)),
-      :count, :id
-    )
+    {min_valid, max_valid} = price_range(transaction_type)
     
-    avg_price = Repo.aggregate(
-      from(p in Property,
-        where: p.active == true and 
-               p.property_type == ^property_type and
-               p.district == ^district and
-               p.transaction_type == ^transaction_type and
-               not is_nil(p.price)),
-      :avg, :price
-    )
+    base_query = from(p in Property,
+      where: p.active == true and 
+             p.property_type == ^property_type and
+             p.district == ^district and
+             p.transaction_type == ^transaction_type and
+             not is_nil(p.price) and
+             p.price >= ^min_valid and
+             p.price <= ^max_valid)
+    
+    count = Repo.aggregate(base_query, :count, :id)
+    avg_price = Repo.aggregate(base_query, :avg, :price)
+    min_price = Repo.aggregate(base_query, :min, :price)
+    max_price = Repo.aggregate(base_query, :max, :price)
 
     avg_per_sqm = Repo.one(
       from p in Property,
@@ -1011,29 +1027,11 @@ defmodule RzeczywiscieWeb.StatsLive do
                p.district == ^district and
                p.transaction_type == ^transaction_type and
                not is_nil(p.price) and 
+               p.price >= ^min_valid and
+               p.price <= ^max_valid and
                not is_nil(p.area_sqm) and
                p.area_sqm > 0,
         select: avg(p.price / p.area_sqm)
-    )
-
-    min_price = Repo.aggregate(
-      from(p in Property,
-        where: p.active == true and 
-               p.property_type == ^property_type and
-               p.district == ^district and
-               p.transaction_type == ^transaction_type and
-               not is_nil(p.price)),
-      :min, :price
-    )
-
-    max_price = Repo.aggregate(
-      from(p in Property,
-        where: p.active == true and 
-               p.property_type == ^property_type and
-               p.district == ^district and
-               p.transaction_type == ^transaction_type and
-               not is_nil(p.price)),
-      :max, :price
     )
 
     %{
