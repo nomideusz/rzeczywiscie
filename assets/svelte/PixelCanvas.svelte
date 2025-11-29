@@ -960,10 +960,10 @@
                 </span>
               {/if}
             </div>
-            <div class="relative h-1.5 bg-neutral-200 border border-neutral-300">
+            <div class="relative h-2 bg-neutral-200 border border-neutral-300">
               <div class="absolute inset-y-0 left-0 bg-neutral-900 transition-all duration-300" style="width: {(userStats.progress_to_mega / 15) * 100}%"></div>
             </div>
-            <p class="text-[10px] text-neutral-500 mt-0.5">{userStats.progress_to_mega}/15</p>
+            <p class="text-xs text-neutral-500 mt-1">{userStats.progress_to_mega}/15</p>
           </div>
 
           <!-- Massive progress -->
@@ -976,10 +976,10 @@
                 </span>
               {/if}
             </div>
-            <div class="relative h-1.5 bg-neutral-200 border border-neutral-300">
+            <div class="relative h-2 bg-neutral-200 border border-neutral-300">
               <div class="absolute inset-y-0 left-0 bg-neutral-900 transition-all duration-300" style="width: {(userStats.progress_to_massive_bonus / 100) * 100}%"></div>
             </div>
-            <p class="text-[10px] text-neutral-500 mt-0.5">{userStats.progress_to_massive_bonus}/100</p>
+            <p class="text-xs text-neutral-500 mt-1">{userStats.progress_to_massive_bonus}/100</p>
           </div>
         </div>
 
@@ -987,7 +987,7 @@
         {#if milestoneProgress.next_milestone}
           <div class="bg-white/90 backdrop-blur rounded-xl shadow-lg px-4 py-2.5">
             <div class="flex items-center justify-between gap-2 mb-1">
-              <span class="text-sm font-semibold text-neutral-900">
+              <span class="text-xs text-neutral-700">
                 {#if milestoneProgress.next_milestone.reward === 'unicorn'}
                   <span class="bg-gradient-to-r from-purple-600 via-pink-500 to-purple-600 bg-clip-text text-transparent font-bold">
                     {milestoneProgress.next_milestone.name}
@@ -1000,7 +1000,7 @@
             <div class="relative h-2 bg-neutral-200 border border-neutral-300">
               <div class="absolute inset-y-0 left-0 bg-neutral-900 transition-all duration-300" style="width: {(milestoneProgress.total_pixels / milestoneProgress.next_milestone.threshold) * 100}%"></div>
             </div>
-            <p class="text-xs text-neutral-500 mt-1">{milestoneProgress.total_pixels}/{milestoneProgress.next_milestone.threshold} pixels</p>
+            <p class="text-xs text-neutral-500 mt-1">{milestoneProgress.total_pixels}/{milestoneProgress.next_milestone.threshold}</p>
             <p class="text-[10px] text-neutral-400 mt-0.5">Community unlocks for all</p>
           </div>
         {/if}
