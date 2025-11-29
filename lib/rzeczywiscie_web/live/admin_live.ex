@@ -201,6 +201,24 @@ defmodule RzeczywiscieWeb.AdminLive do
           </div>
         </div>
 
+        <!-- Data Exports -->
+        <div class="bg-base-100 border-2 border-base-content">
+          <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
+            <h2 class="text-sm font-bold uppercase tracking-wide">📤 Data Exports</h2>
+          </div>
+          <div class="p-4">
+            <p class="text-xs opacity-60 mb-3">Export data for analysis in spreadsheets</p>
+            <div class="flex flex-wrap gap-3">
+              <button phx-click="export_hot_deals" class="px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 border-warning text-warning hover:bg-warning hover:text-warning-content transition-colors">
+                🔥 Export Hot Deals (CSV)
+              </button>
+              <button phx-click="export_price_drops" class="px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 border-error text-error hover:bg-error hover:text-error-content transition-colors">
+                📉 Export Price Drops (CSV)
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- Quick Links -->
         <div class="bg-base-100 border-2 border-base-content">
           <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
@@ -264,6 +282,32 @@ defmodule RzeczywiscieWeb.AdminLive do
     end)
     
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("export_hot_deals", _params, socket) do
+    alias Rzeczywiscie.RealEstate.DealScorer
+    
+    # Get hot deals with all details
+    hot_deals = DealScorer.get_hot_deals(limit: 200, min_score: 0)
+    
+    csv_content = generate_hot_deals_csv(hot_deals)
+    filename = "hot_deals_#{Date.utc_today()}.csv"
+    
+    {:noreply, push_event(socket, "download_csv", %{data: csv_content, filename: filename})}
+  end
+
+  @impl true
+  def handle_event("export_price_drops", _params, socket) do
+    alias Rzeczywiscie.RealEstate.DealScorer
+    
+    # Get price drops
+    price_drops = DealScorer.get_price_drops(30, 200)
+    
+    csv_content = generate_price_drops_csv(price_drops)
+    filename = "price_drops_#{Date.utc_today()}.csv"
+    
+    {:noreply, push_event(socket, "download_csv", %{data: csv_content, filename: filename})}
   end
 
   @impl true
@@ -844,5 +888,86 @@ defmodule RzeczywiscieWeb.AdminLive do
       true -> nil
     end
   end
+
+  # CSV generation helpers
+  
+  defp generate_hot_deals_csv(hot_deals) do
+    headers = ["ID", "Total Score", "Price vs Avg", "Price/m² Score", "Price Drop", "Urgency", "Days Listed", "Title", "Price", "Area", "Rooms", "District", "Property Type", "Transaction Type", "Price/m²", "Market Avg", "Source", "URL"]
+    
+    rows = Enum.map(hot_deals, fn {property, score_data} ->
+      scores = score_data.scores
+      context = score_data.market_context
+      
+      price_per_sqm = if property.price && property.area_sqm && Decimal.compare(property.area_sqm, 0) == :gt do
+        Decimal.div(property.price, property.area_sqm) |> Decimal.round(0) |> Decimal.to_string()
+      else
+        ""
+      end
+      
+      market_avg = if context && context.avg_price do
+        context.avg_price |> Float.round(0) |> trunc() |> to_string()
+      else
+        ""
+      end
+      
+      [
+        property.id,
+        score_data.total_score,
+        scores.price_vs_avg,
+        scores.price_per_sqm,
+        scores.price_drop,
+        scores.urgency_keywords,
+        scores.days_on_market,
+        escape_csv(property.title),
+        property.price && Decimal.to_string(property.price) || "",
+        property.area_sqm && Decimal.to_string(property.area_sqm) || "",
+        property.rooms || "",
+        escape_csv(property.district || ""),
+        property.property_type || "",
+        property.transaction_type || "",
+        price_per_sqm,
+        market_avg,
+        property.source,
+        property.url
+      ]
+    end)
+    
+    [headers | rows]
+    |> Enum.map(&Enum.join(&1, ","))
+    |> Enum.join("\n")
+  end
+
+  defp generate_price_drops_csv(price_drops) do
+    headers = ["ID", "Title", "Current Price", "History Price", "Change %", "District", "Property Type", "Detected At", "Source", "URL"]
+    
+    rows = Enum.map(price_drops, fn {property, history} ->
+      [
+        property.id,
+        escape_csv(property.title),
+        property.price && Decimal.to_string(property.price) || "",
+        history.price && Decimal.to_string(history.price) || "",
+        history.change_percentage && Decimal.to_string(Decimal.round(history.change_percentage, 1)) || "",
+        escape_csv(property.district || ""),
+        property.property_type || "",
+        history.detected_at && Calendar.strftime(history.detected_at, "%Y-%m-%d %H:%M") || "",
+        property.source,
+        property.url
+      ]
+    end)
+    
+    [headers | rows]
+    |> Enum.map(&Enum.join(&1, ","))
+    |> Enum.join("\n")
+  end
+
+  defp escape_csv(nil), do: ""
+  defp escape_csv(value) when is_binary(value) do
+    if String.contains?(value, [",", "\"", "\n"]) do
+      "\"" <> String.replace(value, "\"", "\"\"") <> "\""
+    else
+      value
+    end
+  end
+  defp escape_csv(value), do: to_string(value)
 
 end
