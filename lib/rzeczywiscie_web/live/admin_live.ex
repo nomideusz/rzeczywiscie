@@ -397,7 +397,7 @@ defmodule RzeczywiscieWeb.AdminLive do
   defp run_enrichment_task(:rescrape, target) do
     alias Rzeczywiscie.Scrapers.PropertyRescraper
     Logger.info("Running rescrape for #{target}...")
-    {:ok, stats} = PropertyRescraper.rescrape_missing(target)
+    {:ok, stats} = PropertyRescraper.rescrape_missing(missing: target, limit: 50, delay: 2000)
     "Re-scraped: #{stats.updated} updated, #{stats.failed} failed"
   end
 
