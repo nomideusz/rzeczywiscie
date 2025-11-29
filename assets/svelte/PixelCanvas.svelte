@@ -52,20 +52,108 @@
   let hoveredSpecialPixel = null  // Info about hovered special pixel {name, type, color}
   const CURSOR_THROTTLE_MS = 250
 
-  // Unicorn shape definition - relative offsets from anchor point
-  // Creates a small unicorn silhouette facing right (~7 pixels)
-  //       #          <- horn
-  //      ##          <- head  
-  //     ###          <- body
-  //      #           <- front leg
+  // Unicorn shape definition - colorful pixel art unicorn
+  // Each pixel has position offset and color
+  const UNICORN_COLORS = {
+    horn: '#FFE135',      // Yellow horn
+    body: '#FFFFFF',      // White body
+    eye: '#1a1a1a',       // Black eye
+    mane1: '#6B4B88',     // Dark purple
+    mane2: '#7B5B98',     // Medium purple
+    mane3: '#9B7BB8',     // Light purple
+    mane4: '#B8A0C8',     // Lavender
+    mane5: '#D8C0E8',     // Light lavender
+  }
+  
+  // Colorful unicorn shape (facing right, ~45 pixels)
   const UNICORN_SHAPE = [
-    { dx: 2, dy: -2 },   // horn tip
-    { dx: 1, dy: -1 },   // head top
-    { dx: 2, dy: -1 },   // ear
-    { dx: 0, dy: 0 },    // body left (anchor)
-    { dx: 1, dy: 0 },    // body middle  
-    { dx: 2, dy: 0 },    // body right
-    { dx: 1, dy: 1 },    // front leg
+    // Horn (yellow)
+    { dx: 6, dy: -9, type: 'horn' },
+    { dx: 7, dy: -9, type: 'horn' },
+    { dx: 7, dy: -8, type: 'horn' },
+    
+    // Top of head & ear
+    { dx: 5, dy: -8, type: 'body' },
+    { dx: 6, dy: -8, type: 'body' },
+    
+    // Mane top
+    { dx: 2, dy: -7, type: 'mane2' },
+    { dx: 3, dy: -8, type: 'mane3' },
+    { dx: 3, dy: -7, type: 'mane4' },
+    
+    // Head row 1
+    { dx: 4, dy: -7, type: 'body' },
+    { dx: 5, dy: -7, type: 'body' },
+    { dx: 6, dy: -7, type: 'body' },
+    
+    // Mane middle
+    { dx: 1, dy: -6, type: 'mane1' },
+    { dx: 2, dy: -6, type: 'mane2' },
+    { dx: 3, dy: -6, type: 'mane3' },
+    
+    // Head row 2 with eye
+    { dx: 4, dy: -6, type: 'body' },
+    { dx: 5, dy: -6, type: 'body' },
+    { dx: 6, dy: -6, type: 'eye' },
+    { dx: 7, dy: -6, type: 'body' },
+    
+    // Mane continues
+    { dx: 1, dy: -5, type: 'mane2' },
+    { dx: 2, dy: -5, type: 'mane3' },
+    { dx: 3, dy: -5, type: 'mane4' },
+    
+    // Neck
+    { dx: 4, dy: -5, type: 'body' },
+    { dx: 5, dy: -5, type: 'body' },
+    
+    // Mane lower
+    { dx: 0, dy: -4, type: 'mane1' },
+    { dx: 1, dy: -4, type: 'mane2' },
+    { dx: 2, dy: -4, type: 'mane4' },
+    { dx: 3, dy: -4, type: 'mane5' },
+    
+    // Body top
+    { dx: 4, dy: -4, type: 'body' },
+    { dx: 5, dy: -4, type: 'body' },
+    
+    // Mane/tail start
+    { dx: 0, dy: -3, type: 'mane2' },
+    { dx: 1, dy: -3, type: 'mane3' },
+    { dx: 2, dy: -3, type: 'mane5' },
+    
+    // Body middle
+    { dx: 3, dy: -3, type: 'body' },
+    { dx: 4, dy: -3, type: 'body' },
+    
+    // Tail
+    { dx: -1, dy: -2, type: 'mane1' },
+    { dx: 0, dy: -2, type: 'mane3' },
+    { dx: 1, dy: -2, type: 'mane4' },
+    
+    // Body with legs starting
+    { dx: 2, dy: -2, type: 'body' },
+    { dx: 3, dy: -2, type: 'body' },
+    { dx: 5, dy: -2, type: 'body' },
+    { dx: 6, dy: -2, type: 'body' },
+    
+    // Tail with yellow accent
+    { dx: -1, dy: -1, type: 'horn' },
+    { dx: 0, dy: -1, type: 'mane2' },
+    
+    // Legs
+    { dx: 2, dy: -1, type: 'body' },
+    { dx: 3, dy: -1, type: 'body' },
+    { dx: 5, dy: -1, type: 'body' },
+    { dx: 6, dy: -1, type: 'body' },
+    
+    // Tail end
+    { dx: 0, dy: 0, type: 'mane3' },
+    
+    // Feet
+    { dx: 2, dy: 0, type: 'body' },
+    { dx: 3, dy: 0, type: 'body' },
+    { dx: 5, dy: 0, type: 'body' },
+    { dx: 6, dy: 0, type: 'body' },
   ]
 
   // Check if a position is part of any unicorn shape
@@ -348,17 +436,15 @@
       if (!pixel.is_special) return
 
       if (pixel.special_type === 'unicorn') {
-        // Draw unicorn shape with rainbow animation
-        const hue = (Date.now() / 15) % 360
-        ctx.shadowBlur = 20
-        ctx.shadowColor = `hsl(${hue}, 100%, 60%)`
-        
-        // Use claimer's color for the unicorn
-        ctx.fillStyle = pixel.claimer_color || pixel.color
+        // Draw colorful unicorn shape with subtle glow
+        ctx.shadowBlur = 8
+        ctx.shadowColor = 'rgba(155, 123, 184, 0.6)'
         
         UNICORN_SHAPE.forEach(offset => {
           const px = (pixel.x + offset.dx) * cellSize + 1
           const py = (pixel.y + offset.dy) * cellSize + 1
+          // Use the defined color for each pixel type
+          ctx.fillStyle = UNICORN_COLORS[offset.type] || '#FFFFFF'
           ctx.fillRect(px, py, cellSize - 2, cellSize - 2)
         })
       }
@@ -411,14 +497,15 @@
         }
         ctx.shadowBlur = 0
       } else if (pixelMode === "special") {
-        // Draw unicorn shape preview with rainbow glow
-        const hue = (Date.now() / 15) % 360
-        ctx.shadowBlur = 12
-        ctx.shadowColor = `hsl(${hue}, 100%, 60%)`
+        // Draw colorful unicorn shape preview
+        ctx.globalAlpha = 0.7
+        ctx.shadowBlur = 8
+        ctx.shadowColor = 'rgba(155, 123, 184, 0.6)'
         UNICORN_SHAPE.forEach(offset => {
           const px = hoveredPixel.x + offset.dx
           const py = hoveredPixel.y + offset.dy
           if (px >= 0 && px < width && py >= 0 && py < height) {
+            ctx.fillStyle = UNICORN_COLORS[offset.type] || '#FFFFFF'
             ctx.fillRect(
               px * cellSize + 1,
               py * cellSize + 1,
@@ -428,6 +515,7 @@
           }
         })
         ctx.shadowBlur = 0
+        ctx.globalAlpha = 0.5
       } else {
         // Draw single pixel preview
         ctx.fillRect(
