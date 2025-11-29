@@ -508,6 +508,14 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
 
       # Extract property type from URL or title
       property_type = extract_property_type(full_url, title)
+      
+      # Validate transaction_type or extract from URL/title if needed
+      validated_transaction_type = if transaction_type in ["sprzedaż", "wynajem"] do
+        transaction_type
+      else
+        # Fallback: try to extract from URL/title
+        extract_transaction_type_from_text(full_url <> " " <> title) || transaction_type
+      end
 
       %{
         source: "otodom",
@@ -518,7 +526,7 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
         currency: "PLN",
         area_sqm: extract_area(card),
         rooms: extract_rooms(card),
-        transaction_type: transaction_type,
+        transaction_type: validated_transaction_type,
         property_type: property_type,
         city: extract_city(card),
         voivodeship: "małopolskie",
@@ -957,6 +965,34 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
       String.match?(url_lower, ~r/\bsklep\b/) -> "lokal użytkowy"
       String.match?(url_lower, ~r/\bmagazyn\b/) -> "lokal użytkowy"
 
+      true -> nil
+    end
+  end
+
+  # Extract transaction type from text (URL, title)
+  defp extract_transaction_type_from_text(text) do
+    text_lower = String.downcase(text)
+
+    cond do
+      # Rent patterns
+      String.contains?(text_lower, "/wynajem") -> "wynajem"
+      String.contains?(text_lower, "wynajem") -> "wynajem"
+      String.contains?(text_lower, "/rent") -> "wynajem"
+      String.contains?(text_lower, "rent") -> "wynajem"
+      String.contains?(text_lower, "do-wynajecia") -> "wynajem"
+      String.contains?(text_lower, "/mies") -> "wynajem"
+      String.contains?(text_lower, "mc.") -> "wynajem"
+      
+      # Sale patterns
+      String.contains?(text_lower, "/sprzedaz") -> "sprzedaż"
+      String.contains?(text_lower, "sprzedaz") -> "sprzedaż"
+      String.contains?(text_lower, "/sale") -> "sprzedaż"
+      String.contains?(text_lower, "/sell") -> "sprzedaż"
+      String.contains?(text_lower, "na-sprzedaz") -> "sprzedaż"
+      
+      # Default for Otodom: if no clear rent indicators, assume sale
+      String.contains?(text_lower, "otodom.pl") -> "sprzedaż"
+      
       true -> nil
     end
   end

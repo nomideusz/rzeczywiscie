@@ -754,6 +754,22 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
       String.contains?(text_lower, "/mieszkania/") -> "sprzedaż"
       String.contains?(text_lower, "/domy/") -> "sprzedaż"
       String.contains?(text_lower, "/dzialki/") -> "sprzedaż"
+      
+      # PRIORITY 7: Generic OLX listing fallback
+      # If it's an OLX property listing (oferta/ID.html) and no rent indicators, assume sale
+      String.match?(text_lower, ~r/olx\.pl.*\/oferta\/.*\.html/) and
+        not String.contains?(text_lower, "wynaj") and
+        not String.contains?(text_lower, "/mies") and
+        not String.contains?(text_lower, "mc") ->
+        "sprzedaż"
+
+      # PRIORITY 8: Last resort - if URL is from olx.pl and has nieruchomosci/mieszkania
+      # but still no clear type, default to sale (90% of OLX are sales)
+      String.contains?(text_lower, "olx.pl") and
+        String.contains?(text_lower, "nieruchomosci") and
+        not String.contains?(text_lower, "wynaj") and
+        not String.contains?(text_lower, "najem") ->
+        "sprzedaż"
 
       true -> nil
     end
