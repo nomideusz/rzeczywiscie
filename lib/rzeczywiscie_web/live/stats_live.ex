@@ -703,7 +703,7 @@ defmodule RzeczywiscieWeb.StatsLive do
     
     if max_count > 0 do
       height = count / max_count * max_height
-      max(height, min_height) |> Float.round(0) |> trunc()
+      trunc(max(height, min_height))
     else
       min_height
     end
