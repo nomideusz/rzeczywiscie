@@ -335,6 +335,45 @@ defmodule Rzeczywiscie.RealEstate do
   end
 
   @doc """
+  Clear obviously invalid prices (likely room counts extracted as prices).
+  
+  Prices under 100 PLN are clearly errors (room counts like "2 zł", "3 zł").
+  These are set to nil so they can be re-scraped properly.
+  
+  Returns {:ok, count} where count is the number of properties fixed.
+  """
+  def clear_invalid_prices do
+    # Prices under 100 PLN are clearly room counts or extraction errors
+    {count, _} = from(p in Property,
+      where: p.active == true and
+             not is_nil(p.price) and
+             p.price < ^Decimal.new("100")
+    )
+    |> Repo.update_all(set: [price: nil])
+
+    {:ok, count}
+  end
+
+  @doc """
+  Preview properties with invalid prices.
+  Returns count of properties that would be fixed.
+  """
+  def preview_invalid_prices do
+    from(p in Property,
+      where: p.active == true and
+             not is_nil(p.price) and
+             p.price < ^Decimal.new("100"),
+      select: %{
+        id: p.id,
+        title: p.title,
+        price: p.price,
+        transaction_type: p.transaction_type
+      }
+    )
+    |> Repo.all()
+  end
+
+  @doc """
   Delete a property.
   """
   def delete_property(%Property{} = property) do

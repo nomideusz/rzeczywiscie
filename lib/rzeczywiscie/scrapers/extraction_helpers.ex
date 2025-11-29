@@ -7,15 +7,26 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
 
   require Logger
 
+  # Minimum valid prices to avoid extracting room counts or erroneous values
+  # Rent: at least 100 PLN (no one rents for less)
+  # Sale: at least 10,000 PLN (no one sells for less)
+  # We use 100 as base minimum since we may not know transaction type at parse time
+  @min_price_pln 100
+  @max_price_pln 99_999_999
+
   @doc """
   Parse price text to Decimal.
   Handles formats like: "1 200 zł", "1,200.50 PLN", "1200", "1 200,50"
   
-  Returns nil if price is out of range (1 to 99,999,999 PLN) or unparseable.
+  Returns nil if:
+  - Price is below #{@min_price_pln} PLN (likely room count or error)
+  - Price is above #{@max_price_pln} PLN (database limit)
+  - Text is unparseable
   """
   def parse_price(text) when is_binary(text) do
-    # Use regex to extract price pattern first, before stripping chars
-    regex = ~r/(\d{1,3}(?:[\s,.]\d{3})*(?:[,.]\d{1,2})?)\s*(?:zł|PLN)?/i
+    # REQUIRE "zł" or "PLN" suffix to avoid matching random numbers like room counts
+    # More strict regex: must end with currency indicator
+    regex = ~r/(\d{1,3}(?:[\s,.]\d{3})*(?:[,.]\d{1,2})?)\s*(?:zł|PLN)/i
 
     case Regex.run(regex, text) do
       [_, price_str] ->
@@ -27,13 +38,17 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
 
         case Decimal.parse(clean_price) do
           {decimal, _} ->
-            # Validate: price should be reasonable (1 to 99,999,999 PLN)
-            # Database constraint: precision 10, scale 2 = max 99,999,999.99
-            if Decimal.compare(decimal, Decimal.new("1")) != :lt and
-                 Decimal.compare(decimal, Decimal.new("99999999")) != :gt do
+            min_price = Decimal.new(@min_price_pln)
+            max_price = Decimal.new(@max_price_pln)
+            
+            # Validate: price should be reasonable
+            # - At least 100 PLN (anything less is likely a room count like "2 zł" or "3 zł")
+            # - At most 99,999,999 PLN (database constraint)
+            if Decimal.compare(decimal, min_price) != :lt and
+                 Decimal.compare(decimal, max_price) != :gt do
               decimal
             else
-              Logger.warning("Price out of range: #{clean_price} PLN - ignoring")
+              Logger.debug("Price out of range: #{clean_price} PLN (must be #{@min_price_pln}-#{@max_price_pln}) - ignoring")
               nil
             end
 
@@ -259,9 +274,10 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
   @doc """
   Extract price from entire document text as a fallback.
   Looks for price patterns with zł/PLN suffix.
+  Validates that extracted price is >= #{@min_price_pln} PLN.
   """
   def extract_price_from_full_text(text) when is_binary(text) do
-    # Look for price with zł to be specific
+    # Look for price with zł/PLN to be specific - REQUIRE currency suffix
     regex = ~r/(\d{1,3}(?:[\s,.]\d{3})*(?:[,.]\d{1,2})?)\s*(?:zł|PLN)/i
 
     case Regex.run(regex, text) do
