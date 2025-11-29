@@ -175,6 +175,90 @@ defmodule RzeczywiscieWeb.StatsLive do
           </div>
         </div>
 
+        <!-- Prices by Property Type -->
+        <%= if length(@stats.price_by_property_type) > 0 do %>
+          <div class="bg-base-100 border-2 border-base-content mb-6">
+            <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
+              <h2 class="text-sm font-bold uppercase tracking-wide">🏘️ Prices by Property Type</h2>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead class="bg-base-200 border-b border-base-content/30">
+                  <tr>
+                    <th class="px-4 py-2 text-left text-[10px] font-bold uppercase tracking-wide">Type</th>
+                    <th class="px-4 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-info" colspan="3">Sprzedaż</th>
+                    <th class="px-4 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-warning" colspan="3">Wynajem</th>
+                  </tr>
+                  <tr class="bg-base-100">
+                    <th class="px-4 py-1"></th>
+                    <th class="px-2 py-1 text-[9px] font-bold uppercase opacity-60">Count</th>
+                    <th class="px-2 py-1 text-[9px] font-bold uppercase opacity-60">Avg Price</th>
+                    <th class="px-2 py-1 text-[9px] font-bold uppercase opacity-60">Avg/m²</th>
+                    <th class="px-2 py-1 text-[9px] font-bold uppercase opacity-60">Count</th>
+                    <th class="px-2 py-1 text-[9px] font-bold uppercase opacity-60">Avg Price</th>
+                    <th class="px-2 py-1 text-[9px] font-bold uppercase opacity-60">Avg/m²</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-base-content/20">
+                  <%= for item <- @stats.price_by_property_type do %>
+                    <tr class="hover:bg-base-200/50">
+                      <td class="px-4 py-2 font-bold capitalize"><%= item.type %></td>
+                      <td class="px-2 py-2 text-center text-info"><%= item.sale.count %></td>
+                      <td class="px-2 py-2 text-center font-bold"><%= format_price_short(item.sale.avg_price) %></td>
+                      <td class="px-2 py-2 text-center text-xs"><%= format_price_short(item.sale.avg_per_sqm) %></td>
+                      <td class="px-2 py-2 text-center text-warning"><%= item.rent.count %></td>
+                      <td class="px-2 py-2 text-center font-bold"><%= format_price_short(item.rent.avg_price) %></td>
+                      <td class="px-2 py-2 text-center text-xs"><%= format_price_short(item.rent.avg_per_sqm) %></td>
+                    </tr>
+                  <% end %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        <% end %>
+
+        <!-- Prices by District -->
+        <%= if length(@stats.price_by_district) > 0 do %>
+          <div class="bg-base-100 border-2 border-base-content mb-6">
+            <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
+              <h2 class="text-sm font-bold uppercase tracking-wide">📍 Prices by District (Dzielnice)</h2>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead class="bg-base-200 border-b border-base-content/30">
+                  <tr>
+                    <th class="px-4 py-2 text-left text-[10px] font-bold uppercase tracking-wide">District</th>
+                    <th class="px-4 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-info" colspan="3">Sprzedaż</th>
+                    <th class="px-4 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-warning" colspan="3">Wynajem</th>
+                  </tr>
+                  <tr class="bg-base-100">
+                    <th class="px-4 py-1"></th>
+                    <th class="px-2 py-1 text-[9px] font-bold uppercase opacity-60">Count</th>
+                    <th class="px-2 py-1 text-[9px] font-bold uppercase opacity-60">Avg Price</th>
+                    <th class="px-2 py-1 text-[9px] font-bold uppercase opacity-60">Avg/m²</th>
+                    <th class="px-2 py-1 text-[9px] font-bold uppercase opacity-60">Count</th>
+                    <th class="px-2 py-1 text-[9px] font-bold uppercase opacity-60">Avg Price</th>
+                    <th class="px-2 py-1 text-[9px] font-bold uppercase opacity-60">Avg/m²</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-base-content/20">
+                  <%= for item <- @stats.price_by_district do %>
+                    <tr class="hover:bg-base-200/50">
+                      <td class="px-4 py-2 font-bold"><%= item.district %></td>
+                      <td class="px-2 py-2 text-center text-info"><%= item.sale.count %></td>
+                      <td class="px-2 py-2 text-center font-bold"><%= format_price_short(item.sale.avg_price) %></td>
+                      <td class="px-2 py-2 text-center text-xs"><%= format_price_short(item.sale.avg_per_sqm) %></td>
+                      <td class="px-2 py-2 text-center text-warning"><%= item.rent.count %></td>
+                      <td class="px-2 py-2 text-center font-bold"><%= format_price_short(item.rent.avg_price) %></td>
+                      <td class="px-2 py-2 text-center text-xs"><%= format_price_short(item.rent.avg_per_sqm) %></td>
+                    </tr>
+                  <% end %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        <% end %>
+
         <!-- Sources & Types Row -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
           <!-- Sources -->
@@ -570,6 +654,12 @@ defmodule RzeczywiscieWeb.StatsLive do
     sale_price_stats = calculate_price_stats("sprzedaż")
     rent_price_stats = calculate_price_stats("wynajem")
 
+    # Price statistics by property type
+    price_by_property_type = calculate_prices_by_property_type()
+    
+    # Price statistics by district (top 10 districts with most properties)
+    price_by_district = calculate_prices_by_district()
+
     # Room distribution
     room_distribution =
       Repo.all(
@@ -622,6 +712,8 @@ defmodule RzeczywiscieWeb.StatsLive do
       price_drops: price_drops,
       sale_price_stats: sale_price_stats,
       rent_price_stats: rent_price_stats,
+      price_by_property_type: price_by_property_type,
+      price_by_district: price_by_district,
       room_distribution: room_distribution,
       stale_count: stale_count,
       stale_by_source: stale_by_source,
@@ -668,6 +760,120 @@ defmodule RzeczywiscieWeb.StatsLive do
     else
       %{count: 0, avg_price: nil, min_price: nil, max_price: nil, avg_price_per_sqm: nil}
     end
+  end
+
+  defp calculate_prices_by_property_type do
+    # Get property types with the most listings
+    property_types = ["mieszkanie", "dom", "pokój", "kawalerka", "działka", "garaż"]
+    
+    Enum.map(property_types, fn prop_type ->
+      # Sale stats
+      sale_stats = Repo.one(
+        from p in Property,
+          where: p.active == true and 
+                 p.property_type == ^prop_type and
+                 p.transaction_type == "sprzedaż" and
+                 not is_nil(p.price) and 
+                 not is_nil(p.area_sqm) and
+                 p.area_sqm > 0,
+          select: %{
+            count: count(p.id),
+            avg_price: avg(p.price),
+            avg_per_sqm: avg(p.price / p.area_sqm)
+          }
+      )
+
+      # Rent stats
+      rent_stats = Repo.one(
+        from p in Property,
+          where: p.active == true and 
+                 p.property_type == ^prop_type and
+                 p.transaction_type == "wynajem" and
+                 not is_nil(p.price) and 
+                 not is_nil(p.area_sqm) and
+                 p.area_sqm > 0,
+          select: %{
+            count: count(p.id),
+            avg_price: avg(p.price),
+            avg_per_sqm: avg(p.price / p.area_sqm)
+          }
+      )
+
+      %{
+        type: prop_type,
+        sale: %{
+          count: sale_stats.count || 0,
+          avg_price: sale_stats.avg_price && Decimal.round(sale_stats.avg_price, 0),
+          avg_per_sqm: sale_stats.avg_per_sqm && Decimal.round(sale_stats.avg_per_sqm, 0)
+        },
+        rent: %{
+          count: rent_stats.count || 0,
+          avg_price: rent_stats.avg_price && Decimal.round(rent_stats.avg_price, 0),
+          avg_per_sqm: rent_stats.avg_per_sqm && Decimal.round(rent_stats.avg_per_sqm, 0)
+        }
+      }
+    end)
+    |> Enum.filter(fn x -> x.sale.count > 0 or x.rent.count > 0 end)
+  end
+
+  defp calculate_prices_by_district do
+    # Get top 15 districts by number of active properties
+    top_districts = Repo.all(
+      from p in Property,
+        where: p.active == true and not is_nil(p.district) and p.district != "",
+        group_by: p.district,
+        select: p.district,
+        order_by: [desc: count(p.id)],
+        limit: 15
+    )
+
+    Enum.map(top_districts, fn district ->
+      # Sale stats for this district
+      sale_stats = Repo.one(
+        from p in Property,
+          where: p.active == true and 
+                 p.district == ^district and
+                 p.transaction_type == "sprzedaż" and
+                 not is_nil(p.price) and 
+                 not is_nil(p.area_sqm) and
+                 p.area_sqm > 0,
+          select: %{
+            count: count(p.id),
+            avg_price: avg(p.price),
+            avg_per_sqm: avg(p.price / p.area_sqm)
+          }
+      )
+
+      # Rent stats for this district
+      rent_stats = Repo.one(
+        from p in Property,
+          where: p.active == true and 
+                 p.district == ^district and
+                 p.transaction_type == "wynajem" and
+                 not is_nil(p.price) and 
+                 not is_nil(p.area_sqm) and
+                 p.area_sqm > 0,
+          select: %{
+            count: count(p.id),
+            avg_price: avg(p.price),
+            avg_per_sqm: avg(p.price / p.area_sqm)
+          }
+      )
+
+      %{
+        district: district,
+        sale: %{
+          count: sale_stats.count || 0,
+          avg_price: sale_stats.avg_price && Decimal.round(sale_stats.avg_price, 0),
+          avg_per_sqm: sale_stats.avg_per_sqm && Decimal.round(sale_stats.avg_per_sqm, 0)
+        },
+        rent: %{
+          count: rent_stats.count || 0,
+          avg_price: rent_stats.avg_price && Decimal.round(rent_stats.avg_price, 0),
+          avg_per_sqm: rent_stats.avg_per_sqm && Decimal.round(rent_stats.avg_per_sqm, 0)
+        }
+      }
+    end)
   end
 
   defp format_price(price) when is_nil(price), do: "N/A"
