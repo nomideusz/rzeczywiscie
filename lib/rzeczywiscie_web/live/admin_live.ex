@@ -24,9 +24,6 @@ defmodule RzeczywiscieWeb.AdminLive do
       |> assign(:fix_misclassified_running, false)
       |> assign(:fix_misclassified_result, nil)
       |> assign(:misclassified_preview, RealEstate.preview_misclassified_transaction_types())
-      |> assign(:backfill_districts_running, false)
-      |> assign(:backfill_districts_result, nil)
-      |> assign(:missing_districts_count, get_missing_districts_count())
       |> assign(:dedup_running, false)
       |> assign(:dedup_result, nil)
       |> assign(:export_running, false)
@@ -34,6 +31,8 @@ defmodule RzeczywiscieWeb.AdminLive do
       |> assign(:backfill_rooms_result, nil)
       |> assign(:rescrape_running, false)
       |> assign(:rescrape_result, nil)
+      |> assign(:rescrape_target, :price)
+      |> assign(:rescrape_missing_count, get_missing_count(:price))
       |> assign(:olx_pages, 2)
       |> assign(:otodom_pages, 2)
       |> assign(:db_stats, get_db_stats())
@@ -312,12 +311,53 @@ defmodule RzeczywiscieWeb.AdminLive do
           <!-- Re-scrape Missing Data -->
           <div class="bg-base-100 border-2 border-base-content">
             <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
-              <h3 class="text-sm font-bold uppercase tracking-wide">🔄 Re-scrape</h3>
+              <h3 class="text-sm font-bold uppercase tracking-wide">🔄 Re-scrape Missing Data</h3>
             </div>
             <div class="p-4">
-              <p class="text-xs opacity-60 mb-4">
-                Re-fetch up to 50 property pages to extract missing price/area/rooms data.
+              <p class="text-xs opacity-60 mb-3">
+                Re-fetch property pages to extract missing data (50 at a time).
               </p>
+
+              <!-- Target Selection -->
+              <div class="mb-3">
+                <span class="text-xs font-bold uppercase tracking-wide opacity-60">Target:</span>
+                <div class="flex gap-1 mt-1">
+                  <button
+                    phx-click="set_rescrape_target"
+                    phx-value-target="price"
+                    class={"px-2 py-1 text-xs font-bold border transition-colors cursor-pointer #{if @rescrape_target == :price, do: "bg-accent text-accent-content border-accent", else: "border-base-content/30 hover:bg-base-200"}"}
+                  >
+                    Price
+                  </button>
+                  <button
+                    phx-click="set_rescrape_target"
+                    phx-value-target="area"
+                    class={"px-2 py-1 text-xs font-bold border transition-colors cursor-pointer #{if @rescrape_target == :area, do: "bg-accent text-accent-content border-accent", else: "border-base-content/30 hover:bg-base-200"}"}
+                  >
+                    Area
+                  </button>
+                  <button
+                    phx-click="set_rescrape_target"
+                    phx-value-target="rooms"
+                    class={"px-2 py-1 text-xs font-bold border transition-colors cursor-pointer #{if @rescrape_target == :rooms, do: "bg-accent text-accent-content border-accent", else: "border-base-content/30 hover:bg-base-200"}"}
+                  >
+                    Rooms
+                  </button>
+                  <button
+                    phx-click="set_rescrape_target"
+                    phx-value-target="district"
+                    class={"px-2 py-1 text-xs font-bold border transition-colors cursor-pointer #{if @rescrape_target == :district, do: "bg-accent text-accent-content border-accent", else: "border-base-content/30 hover:bg-base-200"}"}
+                  >
+                    District
+                  </button>
+                </div>
+              </div>
+
+              <!-- Missing Count -->
+              <div class="mb-3 px-2 py-1 bg-warning/10 border border-warning/30 text-xs">
+                <span class="font-bold text-warning"><%= @rescrape_missing_count %></span>
+                <span class="opacity-60">properties missing <%= @rescrape_target %></span>
+              </div>
 
               <%= if @rescrape_result do %>
                 <div class="mb-3 px-3 py-2 text-xs font-bold bg-success/20 text-success border border-success">
@@ -327,10 +367,10 @@ defmodule RzeczywiscieWeb.AdminLive do
 
               <button
                 phx-click="run_rescrape"
-                disabled={@rescrape_running}
-                class={"w-full px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @rescrape_running, do: "border-base-content/30 opacity-50", else: "border-accent text-accent hover:bg-accent hover:text-accent-content"}"}
+                disabled={@rescrape_running || @rescrape_missing_count == 0}
+                class={"w-full px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @rescrape_running || @rescrape_missing_count == 0, do: "border-base-content/30 opacity-50", else: "border-accent text-accent hover:bg-accent hover:text-accent-content"}"}
               >
-                <%= if @rescrape_running, do: "⏳ Re-scraping...", else: "Re-scrape Missing Prices" %>
+                <%= if @rescrape_running, do: "⏳ Re-scraping...", else: "Re-scrape (50)" %>
               </button>
             </div>
           </div>
@@ -424,36 +464,6 @@ defmodule RzeczywiscieWeb.AdminLive do
             </div>
           </div>
 
-          <!-- Backfill Districts -->
-          <div class="bg-base-100 border-2 border-base-content">
-            <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
-              <h3 class="text-sm font-bold uppercase tracking-wide">📍 Backfill Districts</h3>
-            </div>
-            <div class="p-4">
-              <p class="text-xs opacity-60 mb-3">
-                Re-scrape properties to extract missing district data from listing pages.
-              </p>
-
-              <div class="mb-3 px-2 py-1 bg-warning/10 border border-warning/30 text-xs">
-                <span class="font-bold text-warning"><%= @missing_districts_count %></span>
-                <span class="opacity-60">properties missing district</span>
-              </div>
-
-              <%= if @backfill_districts_result do %>
-                <div class="mb-3 px-3 py-2 text-xs font-bold bg-success/20 text-success border border-success">
-                  ✓ <%= @backfill_districts_result %>
-                </div>
-              <% end %>
-
-              <button
-                phx-click="backfill_districts"
-                disabled={@backfill_districts_running || @missing_districts_count == 0}
-                class={"w-full px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @backfill_districts_running || @missing_districts_count == 0, do: "border-base-content/30 opacity-50", else: "border-accent text-accent hover:bg-accent hover:text-accent-content"}"}
-              >
-                <%= if @backfill_districts_running, do: "⏳ Running (up to 50)...", else: "Backfill Districts (50)" %>
-              </button>
-            </div>
-          </div>
         </div>
 
         <!-- Data Quality Exports -->
@@ -640,17 +650,14 @@ defmodule RzeczywiscieWeb.AdminLive do
   end
 
   @impl true
-  def handle_event("backfill_districts", _params, socket) do
-    Logger.info("Backfilling missing districts from admin panel")
-
-    socket = assign(socket, :backfill_districts_running, true)
-
-    parent = self()
-    Task.start(fn ->
-      alias Rzeczywiscie.Scrapers.PropertyRescraper
-      result = PropertyRescraper.rescrape_missing(missing: :district, limit: 50, delay: 2000)
-      send(parent, {:backfill_districts_complete, result})
-    end)
+  def handle_event("set_rescrape_target", %{"target" => target}, socket) do
+    target_atom = String.to_existing_atom(target)
+    
+    socket =
+      socket
+      |> assign(:rescrape_target, target_atom)
+      |> assign(:rescrape_missing_count, get_missing_count(target_atom))
+      |> assign(:rescrape_result, nil)
 
     {:noreply, socket}
   end
@@ -717,13 +724,14 @@ defmodule RzeczywiscieWeb.AdminLive do
 
   @impl true
   def handle_event("run_rescrape", _params, socket) do
-    Logger.info("Starting re-scrape from admin panel")
+    target = socket.assigns.rescrape_target
+    Logger.info("Starting re-scrape for #{target} from admin panel")
 
     socket = assign(socket, :rescrape_running, true)
 
     parent = self()
     Task.start(fn ->
-      result = run_rescrape()
+      result = run_rescrape(target)
       send(parent, {:rescrape_complete, result})
     end)
 
@@ -799,24 +807,6 @@ defmodule RzeczywiscieWeb.AdminLive do
     {:noreply, socket}
   end
 
-  @impl true
-  def handle_info({:backfill_districts_complete, result}, socket) do
-    msg = case result do
-      {:ok, %{total: total, updated: updated, failed: failed}} ->
-        "Processed #{total}: #{updated} updated, #{failed} failed"
-      _ ->
-        "Completed"
-    end
-    
-    socket =
-      socket
-      |> assign(:backfill_districts_running, false)
-      |> assign(:backfill_districts_result, msg)
-      |> assign(:missing_districts_count, get_missing_districts_count())
-      |> assign(:db_stats, get_db_stats())
-
-    {:noreply, socket}
-  end
 
   @impl true
   def handle_info({:dedup_complete, result}, socket) do
@@ -862,6 +852,7 @@ defmodule RzeczywiscieWeb.AdminLive do
       socket
       |> assign(:rescrape_running, false)
       |> assign(:rescrape_result, result)
+      |> assign(:rescrape_missing_count, get_missing_count(socket.assigns.rescrape_target))
       |> assign(:db_stats, get_db_stats())
 
     {:noreply, socket}
@@ -926,7 +917,28 @@ defmodule RzeczywiscieWeb.AdminLive do
     }
   end
 
-  defp get_missing_districts_count do
+  defp get_missing_count(:price) do
+    Repo.aggregate(
+      from(p in Property, where: p.active == true and is_nil(p.price)),
+      :count, :id
+    )
+  end
+
+  defp get_missing_count(:area) do
+    Repo.aggregate(
+      from(p in Property, where: p.active == true and is_nil(p.area_sqm)),
+      :count, :id
+    )
+  end
+
+  defp get_missing_count(:rooms) do
+    Repo.aggregate(
+      from(p in Property, where: p.active == true and is_nil(p.rooms)),
+      :count, :id
+    )
+  end
+
+  defp get_missing_count(:district) do
     Repo.aggregate(
       from(p in Property, where: p.active == true and (is_nil(p.district) or p.district == "")),
       :count, :id
@@ -1249,14 +1261,14 @@ defmodule RzeczywiscieWeb.AdminLive do
     "Marked #{count} properties as inactive"
   end
 
-  defp run_rescrape do
+  defp run_rescrape(target) do
     alias Rzeczywiscie.Scrapers.PropertyRescraper
 
-    Logger.info("Running property re-scrape...")
+    Logger.info("Running property re-scrape for #{target}...")
 
-    case PropertyRescraper.rescrape_missing(limit: 50, delay: 2000, missing: :price) do
+    case PropertyRescraper.rescrape_missing(limit: 50, delay: 2000, missing: target) do
       {:ok, %{total: total, updated: updated, failed: failed}} ->
-        result = "Re-scraped #{total} properties: #{updated} updated, #{failed} failed"
+        result = "#{target}: #{total} processed, #{updated} updated, #{failed} failed"
         Logger.info("✓ Re-scrape completed: #{result}")
         result
 
