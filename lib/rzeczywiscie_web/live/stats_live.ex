@@ -363,80 +363,37 @@ defmodule RzeczywiscieWeb.StatsLive do
           <% end %>
         </div>
 
-        <!-- Sources & Types Row -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        <!-- Sources & Cities Row (condensed) -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           <!-- Sources -->
           <div class="bg-base-100 border-2 border-base-content">
             <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
-              <h2 class="text-sm font-bold uppercase tracking-wide">Sources</h2>
+              <h2 class="text-sm font-bold uppercase tracking-wide">📡 Sources</h2>
             </div>
-            <div class="divide-y divide-base-content/20">
+            <div class="p-4 flex gap-4">
               <%= for {source, count} <- @stats.by_source do %>
-                <div class="flex justify-between items-center px-4 py-3">
-                  <span class="font-bold uppercase"><%= source %></span>
-                  <div class="text-right">
-                    <span class="font-black text-lg"><%= count %></span>
-                    <span class="text-xs opacity-50 ml-2"><%= Float.round(count / max(@stats.active_properties, 1) * 100, 1) %>%</span>
-                  </div>
+                <div class="flex-1 text-center">
+                  <div class="font-black text-2xl"><%= count %></div>
+                  <div class="text-xs font-bold uppercase opacity-60"><%= source %></div>
+                  <div class="text-[10px] opacity-40"><%= Float.round(count / max(@stats.active_properties, 1) * 100, 1) %>%</div>
                 </div>
               <% end %>
             </div>
           </div>
 
-          <!-- Transaction Types -->
+          <!-- Top Cities (condensed) -->
           <div class="bg-base-100 border-2 border-base-content">
             <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
-              <h2 class="text-sm font-bold uppercase tracking-wide">Transaction Types</h2>
+              <h2 class="text-sm font-bold uppercase tracking-wide">🏙️ Top Cities</h2>
             </div>
-            <div class="divide-y divide-base-content/20">
-              <%= for {type, count} <- @stats.by_transaction_type do %>
-                <div class="flex justify-between items-center px-4 py-3">
-                  <span class={[
-                    "font-bold",
-                    type == "sprzedaż" && "text-info",
-                    type == "wynajem" && "text-warning",
-                    is_nil(type) && "opacity-50"
-                  ]}><%= type || "Unknown" %></span>
-                  <div class="text-right">
-                    <span class="font-black text-lg"><%= count %></span>
-                    <span class="text-xs opacity-50 ml-2"><%= Float.round(count / max(@stats.active_properties, 1) * 100, 1) %>%</span>
-                  </div>
+            <div class="p-4 flex gap-3 overflow-x-auto">
+              <%= for {{city, count}, index} <- Enum.with_index(Enum.take(@stats.top_cities, 5)) do %>
+                <div class={"text-center min-w-[60px] #{if index == 0, do: "text-primary"}"}>
+                  <div class="font-black text-xl"><%= count %></div>
+                  <div class="text-[10px] font-bold uppercase opacity-60 truncate"><%= city || "?" %></div>
                 </div>
               <% end %>
             </div>
-          </div>
-
-          <!-- Property Types -->
-          <div class="bg-base-100 border-2 border-base-content">
-            <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
-              <h2 class="text-sm font-bold uppercase tracking-wide">Property Types</h2>
-            </div>
-            <div class="divide-y divide-base-content/20">
-              <%= for {type, count} <- @stats.by_property_type do %>
-                <div class="flex justify-between items-center px-4 py-3">
-                  <span class={"font-bold #{if is_nil(type), do: "opacity-50"}"}><%= type || "Unknown" %></span>
-                  <div class="text-right">
-                    <span class="font-black text-lg"><%= count %></span>
-                    <span class="text-xs opacity-50 ml-2"><%= Float.round(count / max(@stats.active_properties, 1) * 100, 1) %>%</span>
-                  </div>
-                </div>
-              <% end %>
-            </div>
-          </div>
-        </div>
-
-        <!-- Top Cities -->
-        <div class="bg-base-100 border-2 border-base-content mb-6">
-          <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
-            <h2 class="text-sm font-bold uppercase tracking-wide">Top 10 Cities</h2>
-          </div>
-          <div class="grid grid-cols-2 md:grid-cols-5 divide-x divide-y divide-base-content/20">
-            <%= for {{city, count}, index} <- Enum.with_index(@stats.top_cities) do %>
-              <div class={"p-3 #{if index == 0, do: "bg-primary/10"}"}>
-                <div class="font-black text-xl"><%= count %></div>
-                <div class="text-xs font-bold uppercase tracking-wide opacity-60 truncate"><%= city || "Unknown" %></div>
-              </div>
-            <% end %>
           </div>
         </div>
 
@@ -528,32 +485,32 @@ defmodule RzeczywiscieWeb.StatsLive do
           </div>
         </div>
 
-        <!-- Recent Activity -->
+        <!-- Recent Activity (condensed bar view) -->
         <div class="bg-base-100 border-2 border-base-content mb-6">
           <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
-            <h2 class="text-sm font-bold uppercase tracking-wide">Recent Activity (Last 7 Days)</h2>
+            <h2 class="text-sm font-bold uppercase tracking-wide">📅 Last 7 Days</h2>
           </div>
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead class="bg-base-200 border-b border-base-content/30">
-                <tr>
-                  <th class="px-4 py-2 text-left text-[10px] font-bold uppercase tracking-wide">Date</th>
-                  <th class="px-4 py-2 text-right text-[10px] font-bold uppercase tracking-wide">Total</th>
-                  <th class="px-4 py-2 text-right text-[10px] font-bold uppercase tracking-wide">OLX</th>
-                  <th class="px-4 py-2 text-right text-[10px] font-bold uppercase tracking-wide">Otodom</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-base-content/20">
-                <%= for day <- @stats.recent_activity do %>
-                  <tr class="hover:bg-base-200/50">
-                    <td class="px-4 py-2 font-medium"><%= day.date %></td>
-                    <td class="px-4 py-2 text-right font-black"><%= day.total %></td>
-                    <td class="px-4 py-2 text-right"><%= day.olx %></td>
-                    <td class="px-4 py-2 text-right"><%= day.otodom %></td>
-                  </tr>
-                <% end %>
-              </tbody>
-            </table>
+          <div class="p-4">
+            <div class="flex items-end justify-between gap-2" style="height: 80px;">
+              <%= for day <- Enum.reverse(@stats.recent_activity) do %>
+                <% max_total = Enum.max_by(@stats.recent_activity, & &1.total).total %>
+                <% height_pct = if max_total > 0, do: day.total / max_total * 100, else: 0 %>
+                <div class="flex-1 flex flex-col items-center h-full">
+                  <div class="text-[10px] font-bold mb-1"><%= day.total %></div>
+                  <div class="flex-1 w-full flex flex-col justify-end">
+                    <div class="w-full rounded-t flex flex-col overflow-hidden" style={"height: #{trunc(height_pct * 0.6)}px; min-height: 4px;"}>
+                      <div class="bg-primary flex-1" title={"OLX: #{day.olx}"}></div>
+                      <div class="bg-secondary flex-1" title={"Otodom: #{day.otodom}"}></div>
+                    </div>
+                  </div>
+                  <div class="text-[9px] opacity-50 mt-1"><%= String.slice(day.date, 5, 5) %></div>
+                </div>
+              <% end %>
+            </div>
+            <div class="flex gap-4 mt-3 justify-center text-[10px]">
+              <span><span class="inline-block w-3 h-3 bg-primary mr-1"></span> OLX</span>
+              <span><span class="inline-block w-3 h-3 bg-secondary mr-1"></span> Otodom</span>
+            </div>
           </div>
         </div>
 
@@ -807,27 +764,6 @@ defmodule RzeczywiscieWeb.StatsLive do
           order_by: [desc: count(p.id)]
       )
 
-    # By transaction type
-    by_transaction_type =
-      Repo.all(
-        from p in Property,
-          where: p.active == true,
-          group_by: p.transaction_type,
-          select: {p.transaction_type, count(p.id)},
-          order_by: [desc: count(p.id)]
-      )
-
-    # By property type
-    by_property_type =
-      Repo.all(
-        from p in Property,
-          where: p.active == true,
-          group_by: p.property_type,
-          select: {p.property_type, count(p.id)},
-          order_by: [desc: count(p.id)]
-      )
-      |> Enum.take(10)
-
     # Top cities
     top_cities =
       Repo.all(
@@ -949,8 +885,6 @@ defmodule RzeczywiscieWeb.StatsLive do
       aqi_percentage: aqi_percentage,
       added_today: added_today,
       by_source: by_source,
-      by_transaction_type: by_transaction_type,
-      by_property_type: by_property_type,
       top_cities: top_cities,
       with_price: with_price,
       with_area: with_area,
