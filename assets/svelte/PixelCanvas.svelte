@@ -1069,15 +1069,16 @@
               {/if}
             </button>
 
-            <div class="w-px h-6 bg-neutral-200"></div>
-
-            <!-- Pixel mode buttons - always show 1x1, show others when available -->
-            <button
-              on:click={() => togglePixelMode("normal")}
-              class="w-9 h-9 font-bold text-[9px] transition-all active:scale-95 flex items-center justify-center rounded-full {pixelMode === 'normal' ? 'bg-neutral-900 text-white' : 'text-neutral-600'}"
-            >
-              1x1
-            </button>
+            <!-- Pixel mode buttons - only show if special pixels available -->
+            {#if userStats.mega_pixels_available > 0 || userStats.massive_pixels_available > 0 || Object.values(userStats.special_pixels_available || {}).some(c => c > 0)}
+              <div class="w-px h-6 bg-neutral-200"></div>
+              <button
+                on:click={() => togglePixelMode("normal")}
+                class="w-9 h-9 font-bold text-[9px] transition-all active:scale-95 flex items-center justify-center rounded-full {pixelMode === 'normal' ? 'bg-neutral-900 text-white' : 'text-neutral-600'}"
+              >
+                1x1
+              </button>
+            {/if}
 
             {#if userStats.mega_pixels_available > 0}
               <button
@@ -1109,7 +1110,9 @@
               </button>
             {/if}
 
-            <div class="w-px h-6 bg-neutral-200"></div>
+            {#if userStats.mega_pixels_available > 0 || userStats.massive_pixels_available > 0 || Object.values(userStats.special_pixels_available || {}).some(c => c > 0)}
+              <div class="w-px h-6 bg-neutral-200"></div>
+            {/if}
 
             <!-- Zoom controls -->
             <button class="w-9 h-9 text-neutral-600 active:bg-neutral-100 text-lg font-medium rounded-full" on:click={() => adjustZoom(-0.25)}>−</button>
