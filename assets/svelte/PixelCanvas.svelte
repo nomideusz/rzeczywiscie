@@ -946,6 +946,43 @@
           <p class="text-xs text-neutral-500">{stats.total_pixels.toLocaleString()} · {stats.unique_users} artists</p>
         </div>
 
+        <!-- Progress Tracking -->
+        <div class="bg-white/90 backdrop-blur rounded-xl shadow-lg px-4 py-2.5">
+          <div class="text-sm font-semibold text-neutral-900 mb-2">Progress</div>
+          
+          <!-- Mega progress -->
+          <div class="mb-2">
+            <div class="flex items-center justify-between gap-2 mb-1">
+              <span class="text-xs text-neutral-700">Mega</span>
+              {#if userStats.mega_pixels_available > 0}
+                <span class="bg-neutral-900 text-white text-[10px] font-bold px-1.5 py-0.5">
+                  {userStats.mega_pixels_available}
+                </span>
+              {/if}
+            </div>
+            <div class="relative h-1.5 bg-neutral-200 border border-neutral-300">
+              <div class="absolute inset-y-0 left-0 bg-neutral-900 transition-all duration-300" style="width: {(userStats.progress_to_mega / 15) * 100}%"></div>
+            </div>
+            <p class="text-[10px] text-neutral-500 mt-0.5">{userStats.progress_to_mega}/15</p>
+          </div>
+
+          <!-- Massive progress -->
+          <div>
+            <div class="flex items-center justify-between gap-2 mb-1">
+              <span class="text-xs text-neutral-700">Massive</span>
+              {#if userStats.massive_pixels_available > 0}
+                <span class="bg-neutral-900 text-white text-[10px] font-bold px-1.5 py-0.5">
+                  {userStats.massive_pixels_available}
+                </span>
+              {/if}
+            </div>
+            <div class="relative h-1.5 bg-neutral-200 border border-neutral-300">
+              <div class="absolute inset-y-0 left-0 bg-neutral-900 transition-all duration-300" style="width: {(userStats.progress_to_massive_bonus / 100) * 100}%"></div>
+            </div>
+            <p class="text-[10px] text-neutral-500 mt-0.5">{userStats.progress_to_massive_bonus}/100</p>
+          </div>
+        </div>
+
         <!-- Global Milestone Progress -->
         {#if milestoneProgress.next_milestone}
           <div class="bg-white/90 backdrop-blur rounded-xl shadow-lg px-4 py-2.5">
