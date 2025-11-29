@@ -686,7 +686,7 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
 
   defp extract_title_from_link(_), do: nil
 
-  defp extract_price(card, title \\ nil) do
+  defp extract_price(card, title) do
     selectors = [
       "span[data-cy='listing-item-price']",
       "p[class*='price']",

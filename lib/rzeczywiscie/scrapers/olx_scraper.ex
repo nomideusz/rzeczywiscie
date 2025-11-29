@@ -367,7 +367,7 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
     result || {:error, :no_title}
   end
 
-  defp extract_price(card, title \\ nil) do
+  defp extract_price(card, title) do
     # Try multiple selectors for price
     selectors = [
       "p[data-testid='ad-price']",
