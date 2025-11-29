@@ -197,22 +197,35 @@ defmodule Rzeczywiscie.RealEstate do
   end
 
   @doc """
+  Get a property by URL.
+  """
+  def get_property_by_url(url) do
+    Repo.get_by(Property, url: url)
+  end
+
+  @doc """
   Create a new property or update if exists.
   This is the main function called by scrapers.
+  Checks for duplicates by both source+external_id and URL to prevent duplicates.
   """
   def upsert_property(attrs) do
     require Logger
     now = DateTime.utc_now() |> DateTime.truncate(:second)
     attrs = Map.put(attrs, :last_seen_at, now)
 
-    case get_property_by_external_id(attrs.source, attrs.external_id) do
+    # Check for existing property by source+external_id OR by URL
+    existing =
+      get_property_by_external_id(attrs.source, attrs.external_id) ||
+      get_property_by_url(attrs.url)
+
+    case existing do
       nil ->
-        Logger.info("Creating new property: #{attrs.external_id}")
+        Logger.info("Creating new property: #{attrs.external_id} (URL: #{String.slice(attrs.url, 0, 50)}...)")
         create_property(attrs)
 
-      existing ->
-        Logger.info("Updating existing property: #{attrs.external_id}")
-        update_property(existing, attrs)
+      property ->
+        Logger.info("Updating existing property: ID #{property.id}, external_id: #{attrs.external_id}")
+        update_property(property, attrs)
     end
   end
 
@@ -268,6 +281,52 @@ defmodule Rzeczywiscie.RealEstate do
   """
   def delete_property(%Property{} = property) do
     Repo.delete(property)
+  end
+
+  @doc """
+  Find potential duplicate properties based on URL.
+  Returns a list of duplicate groups where each group contains properties with the same URL.
+  """
+  def find_duplicate_properties do
+    query = """
+    SELECT url, array_agg(id ORDER BY inserted_at) as property_ids, COUNT(*) as count
+    FROM properties
+    WHERE url IS NOT NULL
+    GROUP BY url
+    HAVING COUNT(*) > 1
+    ORDER BY count DESC
+    """
+
+    Ecto.Adapters.SQL.query!(Repo, query, [])
+    |> Map.get(:rows)
+    |> Enum.map(fn [url, ids, count] ->
+      %{url: url, property_ids: ids, count: count}
+    end)
+  end
+
+  @doc """
+  Remove duplicate properties, keeping only the oldest one (first inserted).
+  Returns the number of duplicates removed.
+  """
+  def remove_duplicate_properties do
+    require Logger
+    duplicates = find_duplicate_properties()
+
+    removed_count =
+      Enum.reduce(duplicates, 0, fn %{url: url, property_ids: ids}, acc ->
+        # Keep the first (oldest) property, delete the rest
+        [_keep_id | delete_ids] = ids
+
+        Logger.info("Removing #{length(delete_ids)} duplicate(s) for URL: #{String.slice(url, 0, 60)}...")
+
+        from(p in Property, where: p.id in ^delete_ids)
+        |> Repo.delete_all()
+        |> elem(0)
+        |> Kernel.+(acc)
+      end)
+
+    Logger.info("Removed #{removed_count} duplicate properties")
+    {:ok, removed_count}
   end
 
   @doc """
