@@ -227,36 +227,43 @@ defmodule Rzeczywiscie.Services.DescriptionFetcher do
 
   # Otodom description extraction
   defp extract_otodom_description(document) do
-    # Otodom stores description in specific elements
-    # Use contains (*=) selectors since exact matches fail
+    # Try multiple strategies for Otodom
+    
+    # Strategy 1: Look for specific Otodom description container and get inner text
     selectors = [
-      # Contains-based selectors (most reliable based on debug)
+      # Direct p tags within description containers
+      "[data-cy*='Description'] p",
+      "[data-cy*='description'] p",
+      # The description section itself
       "[data-cy*='Description']",
       "[data-cy*='description']",
-      "[data-testid*='description']",
-      "[data-testid*='Description']",
-      # Exact match fallbacks
-      "[data-cy='adPageAdDescription']",
-      "[data-cy='adPageDescription']",
-      # Class-based selectors
-      "div[class*='AdDescription']",
-      "div[class*='Description__Wrapper']"
+      # Try section with description class
+      "section[class*='Description'] p",
+      "div[class*='Description'] p",
+      # Fallback to broader selectors
+      "[data-testid*='description'] p",
+      "[data-testid*='description']"
     ]
     
     description = Enum.find_value(selectors, fn selector ->
       case Floki.find(document, selector) do
         [] -> nil
         elements -> 
-          # Strip style/script tags BEFORE extracting text
+          # Strip style/script/svg tags BEFORE extracting text
           clean_elements = elements
           |> Floki.filter_out("style")
           |> Floki.filter_out("script")
+          |> Floki.filter_out("svg")
+          |> Floki.filter_out("button")
           
           raw_text = clean_elements |> Floki.text() |> String.trim()
           
           # Debug: log what we found before cleaning
           if String.length(raw_text) > 20 do
             Logger.info("  Found text from #{selector}: #{String.slice(raw_text, 0, 100)}...")
+          else
+            # Log even short/empty results for debugging
+            Logger.info("  Selector #{selector} found #{length(List.wrap(elements))} elements, text length: #{String.length(raw_text)}")
           end
           
           text = clean_description(raw_text)
