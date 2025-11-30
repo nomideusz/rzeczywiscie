@@ -21,6 +21,19 @@ defmodule Rzeczywiscie.RealEstate.DealScorer do
   # These are filtered both in the query and in validation
   @excluded_types ~w(działka garaż magazyn hala blaszak boks kontener biuro lokal)
   
+  # Valid Kraków districts - properties outside these are excluded from Hot Deals
+  # This ensures we only compare properties within the same market
+  @krakow_districts [
+    "Stare Miasto", "Grzegórzki", "Prądnik Czerwony", "Prądnik Biały",
+    "Krowodrza", "Bronowice", "Zwierzyniec", "Dębniki", "Łagiewniki",
+    "Swoszowice", "Podgórze", "Bieżanów", "Prokocim", "Czyżyny",
+    "Mistrzejowice", "Bieńczyce", "Wzgórza Krzesławickie", "Nowa Huta",
+    # Alternative spellings and sub-districts
+    "Kazimierz", "Salwator", "Wola Justowska", "Ruczaj", "Pychowice",
+    "Borek Fałęcki", "Zabłocie", "Płaszów", "Rybitwy", "Łęg",
+    "Kurdwanów", "Wola Duchacka", "Kliny", "Podgórze Duchackie"
+  ]
+  
   # Cache district rankings (refreshed on demand)
   @district_cache_ttl_seconds 3600  # 1 hour
   
@@ -133,6 +146,7 @@ defmodule Rzeczywiscie.RealEstate.DealScorer do
   - :property_type - filter by type
   - :min_score - minimum score threshold (default 20)
   - :include_all_types - if true, include non-residential (default false)
+  - :krakow_only - if true (default), only include Kraków districts
   """
   def get_hot_deals(opts \\ []) do
     limit = Keyword.get(opts, :limit, 50)
@@ -140,6 +154,7 @@ defmodule Rzeczywiscie.RealEstate.DealScorer do
     property_type = Keyword.get(opts, :property_type)
     min_score = Keyword.get(opts, :min_score, 20)
     include_all_types = Keyword.get(opts, :include_all_types, false)
+    krakow_only = Keyword.get(opts, :krakow_only, true)  # Default to Kraków only
     
     # Get active properties with price and complete type info
     base_query = from p in Property,
@@ -147,6 +162,13 @@ defmodule Rzeczywiscie.RealEstate.DealScorer do
              not is_nil(p.price) and
              not is_nil(p.property_type) and
              not is_nil(p.transaction_type)
+    
+    # Filter to Kraków districts only (excludes Wieliczka, Wadowice, Skawina, etc.)
+    base_query = if krakow_only do
+      where(base_query, [p], p.district in ^@krakow_districts)
+    else
+      base_query
+    end
     
     # Apply transaction type filter
     base_query = if transaction_type do
@@ -501,8 +523,10 @@ defmodule Rzeczywiscie.RealEstate.DealScorer do
   """
   def get_hot_deals_summary do
     # Count properties with significant price drops (excluding data errors)
+    # Only count Kraków properties for consistency with Hot Deals
     cutoff = DateTime.utc_now() |> DateTime.add(-7 * 24 * 3600, :second)
     min_valid_price = Decimal.new("100")
+    krakow_districts = @krakow_districts
     
     price_drops = from(ph in PriceHistory,
       join: p in Property,
@@ -510,6 +534,7 @@ defmodule Rzeczywiscie.RealEstate.DealScorer do
       where: p.active == true and 
              not is_nil(p.price) and
              p.price >= ^min_valid_price and
+             p.district in ^krakow_districts and
              ph.price >= ^min_valid_price and
              ph.detected_at >= ^cutoff and 
              ph.change_percentage < -5 and
@@ -518,18 +543,19 @@ defmodule Rzeczywiscie.RealEstate.DealScorer do
     )
     |> Repo.one()
     
-    # Count properties with valid prices
-    below_market = from(p in Property,
+    # Count Kraków properties with valid prices (for "Total Analyzed")
+    krakow_count = from(p in Property,
       where: p.active == true and 
              not is_nil(p.price) and
-             p.price >= ^min_valid_price,
+             p.price >= ^min_valid_price and
+             p.district in ^krakow_districts,
       select: count(p.id)
     )
     |> Repo.one()
     
     %{
       recent_price_drops: price_drops || 0,
-      total_active_with_price: below_market || 0
+      total_active_with_price: krakow_count || 0
     }
   end
   
