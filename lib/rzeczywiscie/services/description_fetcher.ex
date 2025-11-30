@@ -129,14 +129,21 @@ defmodule Rzeczywiscie.Services.DescriptionFetcher do
 
   # OLX description extraction
   defp extract_olx_description(document) do
-    # OLX stores description in a div with data-cy="ad_description"
+    # OLX stores description in various elements depending on page version
     selectors = [
+      # Primary selectors
       "[data-cy='ad_description']",
+      "[data-testid='ad-description-content']",
       "[data-testid='ad-description']",
-      "div[class*='descriptionContent']",
+      # Class-based selectors
+      "div[class*='css-'][class*='description']",
+      "div[class*='descriptionContainer']",
       "div[class*='description-content']",
-      "div[class*='css-'] > div > p",
-      "section[data-testid='ad-description-section']"
+      # Section-based
+      "section[data-testid='ad-description-section'] div",
+      # Generic but scoped to main content area
+      "main div[class*='css-'] > p",
+      "article div[class*='css-'] > p"
     ]
     
     description = Enum.find_value(selectors, fn selector ->
@@ -153,20 +160,29 @@ defmodule Rzeczywiscie.Services.DescriptionFetcher do
       end
     end)
     
-    # Fallback disabled - was grabbing garbage
-    description
+    # If nothing found, try to extract from JSON-LD
+    description || extract_description_from_json_ld(document)
   end
 
   # Otodom description extraction
   defp extract_otodom_description(document) do
-    # Otodom stores description in a specific section
+    # Otodom stores description in specific elements
     selectors = [
+      # Primary selectors (most reliable)
+      "[data-cy='adPageAdDescription']",
       "[data-cy='adPageDescription']",
+      "[data-testid='ad.description']",
       "[data-testid='content.description']",
-      "div[class*='Description'] p",
-      "section[class*='description']",
-      "[class*='description-wrapper']",
-      "div[class*='css-'] section p"
+      # Section with "Opis" heading
+      "section[aria-label*='Opis'] div",
+      "section[aria-labelledby*='description'] div",
+      # Class-based selectors
+      "div[class*='AdDescription']",
+      "div[class*='ad-description']",
+      "div[class*='Description__Wrapper']",
+      # Generic but scoped
+      "main section p",
+      "article section p"
     ]
     
     description = Enum.find_value(selectors, fn selector ->
@@ -183,9 +199,37 @@ defmodule Rzeczywiscie.Services.DescriptionFetcher do
       end
     end)
     
-    # Fallback disabled - was grabbing garbage
-    description
+    # If nothing found, try to extract from JSON-LD
+    description || extract_description_from_json_ld(document)
   end
+  
+  # Extract description from JSON-LD structured data (most reliable fallback)
+  defp extract_description_from_json_ld(document) do
+    document
+    |> Floki.find("script[type='application/ld+json']")
+    |> Enum.find_value(fn script ->
+      json_text = Floki.text(script)
+      
+      case Jason.decode(json_text) do
+        {:ok, data} ->
+          # Try to find description in JSON-LD
+          desc = extract_desc_from_json(data)
+          if desc && String.length(desc) > 50 do
+            clean_description(desc)
+          else
+            nil
+          end
+        _ -> nil
+      end
+    end)
+  end
+  
+  defp extract_desc_from_json(%{"description" => desc}) when is_binary(desc) and desc != "", do: desc
+  defp extract_desc_from_json(%{"@graph" => items}) when is_list(items) do
+    Enum.find_value(items, &extract_desc_from_json/1)
+  end
+  defp extract_desc_from_json(%{"mainEntity" => entity}), do: extract_desc_from_json(entity)
+  defp extract_desc_from_json(_), do: nil
 
   # Find the largest text block on the page (likely the description)
   # DISABLED - fallback was grabbing CSS/JS content
