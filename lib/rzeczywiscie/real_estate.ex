@@ -572,6 +572,71 @@ defmodule Rzeczywiscie.RealEstate do
     |> Repo.all()
   end
 
+  # LLM Analysis functions
+
+  @doc """
+  Get properties that haven't been analyzed by LLM yet.
+  """
+  def get_properties_for_llm_analysis(limit \\ 50) do
+    from(p in Property,
+      where: p.active == true and 
+             is_nil(p.llm_analyzed_at) and
+             not is_nil(p.title) and
+             p.title != "",
+      order_by: [desc: p.inserted_at],
+      limit: ^limit
+    )
+    |> Repo.all()
+  end
+  
+  @doc """
+  Update a property with LLM analysis results.
+  """
+  def update_llm_analysis(property_id, signals) when is_map(signals) do
+    case get_property(property_id) do
+      nil -> {:error, :not_found}
+      property ->
+        alias Rzeczywiscie.Services.LLMAnalyzer
+        
+        attrs = %{
+          llm_urgency: signals.urgency || 0,
+          llm_condition: to_string(signals.condition || "unknown"),
+          llm_motivation: to_string(signals.seller_motivation || "unknown"),
+          llm_red_flags: signals.red_flags || [],
+          llm_positive_signals: signals.positive_signals || [],
+          llm_score: LLMAnalyzer.calculate_signal_score(signals),
+          llm_analyzed_at: DateTime.utc_now()
+        }
+        
+        property
+        |> Property.llm_changeset(attrs)
+        |> Repo.update()
+    end
+  end
+  
+  @doc """
+  Count properties that have been analyzed by LLM.
+  """
+  def count_llm_analyzed do
+    from(p in Property,
+      where: p.active == true and not is_nil(p.llm_analyzed_at)
+    )
+    |> Repo.aggregate(:count, :id)
+  end
+  
+  @doc """
+  Count properties pending LLM analysis.
+  """
+  def count_pending_llm_analysis do
+    from(p in Property,
+      where: p.active == true and 
+             is_nil(p.llm_analyzed_at) and
+             not is_nil(p.title) and
+             p.title != ""
+    )
+    |> Repo.aggregate(:count, :id)
+  end
+
   # Favorites functions
 
   @doc """

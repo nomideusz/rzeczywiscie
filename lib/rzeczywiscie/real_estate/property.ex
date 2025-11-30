@@ -36,6 +36,15 @@ defmodule Rzeczywiscie.RealEstate.Property do
     # Status
     field :active, :boolean, default: true
     field :last_seen_at, :utc_datetime
+    
+    # LLM analysis results
+    field :llm_urgency, :integer, default: 0
+    field :llm_condition, :string
+    field :llm_motivation, :string
+    field :llm_red_flags, {:array, :string}, default: []
+    field :llm_positive_signals, {:array, :string}, default: []
+    field :llm_score, :integer, default: 0
+    field :llm_analyzed_at, :utc_datetime
 
     timestamps(type: :utc_datetime)
   end
@@ -66,7 +75,14 @@ defmodule Rzeczywiscie.RealEstate.Property do
       :image_url,
       :raw_data,
       :active,
-      :last_seen_at
+      :last_seen_at,
+      :llm_urgency,
+      :llm_condition,
+      :llm_motivation,
+      :llm_red_flags,
+      :llm_positive_signals,
+      :llm_score,
+      :llm_analyzed_at
     ])
     |> validate_required([:source, :external_id, :title, :url])
     |> validate_inclusion(:source, ["olx", "otodom", "gratka"])
@@ -77,5 +93,24 @@ defmodule Rzeczywiscie.RealEstate.Property do
     |> validate_number(:longitude, greater_than_or_equal_to: -180, less_than_or_equal_to: 180)
     |> unique_constraint([:source, :external_id])
     |> unique_constraint(:url, name: :properties_url_index)
+  end
+  
+  @doc """
+  Changeset for updating LLM analysis results only.
+  """
+  def llm_changeset(property, attrs) do
+    property
+    |> cast(attrs, [
+      :llm_urgency,
+      :llm_condition,
+      :llm_motivation,
+      :llm_red_flags,
+      :llm_positive_signals,
+      :llm_score,
+      :llm_analyzed_at
+    ])
+    |> validate_number(:llm_urgency, greater_than_or_equal_to: 0, less_than_or_equal_to: 10)
+    |> validate_inclusion(:llm_condition, ["unknown", "needs_renovation", "to_finish", "good", "renovated", "new", nil])
+    |> validate_inclusion(:llm_motivation, ["unknown", "standard", "motivated", "very_motivated", nil])
   end
 end

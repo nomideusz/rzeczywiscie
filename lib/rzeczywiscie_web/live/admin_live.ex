@@ -25,6 +25,11 @@ defmodule RzeczywiscieWeb.AdminLive do
       |> assign(:cleanup_running, nil)  # :stale, :duplicates, :misclassified, or nil
       |> assign(:cleanup_result, nil)
       |> assign(:misclassified_preview, RealEstate.preview_misclassified_transaction_types())
+      # LLM Analysis
+      |> assign(:llm_running, false)
+      |> assign(:llm_progress, 0)
+      |> assign(:llm_result, nil)
+      |> assign(:llm_stats, get_llm_stats())
       # Stats
       |> assign(:db_stats, db_stats)
 
@@ -191,6 +196,44 @@ defmodule RzeczywiscieWeb.AdminLive do
           </div>
         </div>
 
+        <!-- LLM Analysis -->
+        <div class="bg-base-100 border-2 border-base-content mb-6">
+          <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
+            <h2 class="text-sm font-bold uppercase tracking-wide">🤖 LLM Title Analysis</h2>
+          </div>
+          <div class="p-4">
+            <p class="text-xs opacity-60 mb-3">
+              Use AI (GPT-4o-mini) to analyze property titles for urgency, condition, and motivation signals.
+              Cost: ~$0.01 per 100 properties.
+            </p>
+            <div class="grid grid-cols-2 gap-4 mb-4">
+              <div class="bg-base-200 p-3 rounded">
+                <div class="text-2xl font-black text-success"><%= @llm_stats.analyzed %></div>
+                <div class="text-xs opacity-60">Analyzed</div>
+              </div>
+              <div class="bg-base-200 p-3 rounded">
+                <div class="text-2xl font-black text-warning"><%= @llm_stats.pending %></div>
+                <div class="text-xs opacity-60">Pending</div>
+              </div>
+            </div>
+            <%= if @llm_running do %>
+              <button disabled class="px-4 py-2 text-xs font-bold uppercase tracking-wide bg-base-300 text-base-content/50 cursor-not-allowed">
+                🔄 Analyzing... (<%= @llm_progress %> done)
+              </button>
+            <% else %>
+              <button 
+                phx-click="run_llm_analysis" 
+                class="px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 border-info text-info hover:bg-info hover:text-info-content transition-colors"
+              >
+                🤖 Analyze Next 50 Properties
+              </button>
+            <% end %>
+            <%= if @llm_result do %>
+              <div class="mt-3 text-sm font-medium text-success"><%= @llm_result %></div>
+            <% end %>
+          </div>
+        </div>
+
         <!-- Data Exports -->
         <div class="bg-base-100 border-2 border-base-content">
           <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
@@ -299,6 +342,25 @@ defmodule RzeczywiscieWeb.AdminLive do
     
     {:noreply, push_event(socket, "download_csv", %{data: csv_content, filename: filename})}
   end
+  
+  @impl true
+  def handle_event("run_llm_analysis", _params, socket) do
+    Logger.info("Starting LLM analysis from admin panel")
+    
+    socket = 
+      socket
+      |> assign(:llm_running, true)
+      |> assign(:llm_progress, 0)
+      |> assign(:llm_result, nil)
+    
+    parent = self()
+    Task.start(fn ->
+      result = run_llm_analysis(parent)
+      send(parent, {:llm_complete, result})
+    end)
+    
+    {:noreply, socket}
+  end
 
   @impl true
   def handle_event("set_rescrape_target", %{"target" => target}, socket) do
@@ -343,6 +405,22 @@ defmodule RzeczywiscieWeb.AdminLive do
       |> assign(:cleanup_result, result)
       |> assign(:misclassified_preview, RealEstate.preview_misclassified_transaction_types())
       |> assign(:db_stats, get_db_stats())
+
+    {:noreply, socket}
+  end
+  
+  @impl true
+  def handle_info({:llm_progress, count}, socket) do
+    {:noreply, assign(socket, :llm_progress, count)}
+  end
+  
+  @impl true
+  def handle_info({:llm_complete, result}, socket) do
+    socket =
+      socket
+      |> assign(:llm_running, false)
+      |> assign(:llm_result, result)
+      |> assign(:llm_stats, get_llm_stats())
 
     {:noreply, socket}
   end
@@ -959,5 +1037,49 @@ defmodule RzeczywiscieWeb.AdminLive do
     end
   end
   defp escape_csv(value), do: to_string(value)
+  
+  # LLM Analysis helpers
+  
+  defp get_llm_stats do
+    %{
+      analyzed: RealEstate.count_llm_analyzed(),
+      pending: RealEstate.count_pending_llm_analysis()
+    }
+  end
+  
+  defp run_llm_analysis(parent) do
+    alias Rzeczywiscie.Services.LLMAnalyzer
+    
+    properties = RealEstate.get_properties_for_llm_analysis(50)
+    total = length(properties)
+    
+    if total == 0 do
+      "No properties pending analysis"
+    else
+      Logger.info("Analyzing #{total} properties with LLM...")
+      
+      results = properties
+      |> Enum.with_index(1)
+      |> Enum.map(fn {property, idx} ->
+        # Update progress
+        send(parent, {:llm_progress, idx})
+        
+        case LLMAnalyzer.analyze_title(property.title) do
+          {:ok, signals} ->
+            case RealEstate.update_llm_analysis(property.id, signals) do
+              {:ok, _} -> :ok
+              {:error, _} -> :error
+            end
+            
+          {:error, reason} ->
+            Logger.warning("LLM analysis failed for #{property.id}: #{inspect(reason)}")
+            :error
+        end
+      end)
+      
+      successful = Enum.count(results, &(&1 == :ok))
+      "Analyzed #{successful}/#{total} properties"
+    end
+  end
 
 end

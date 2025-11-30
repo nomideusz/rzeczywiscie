@@ -24,6 +24,10 @@ end
 config :rzeczywiscie,
   google_maps_api_key: System.get_env("GOOGLE_MAPS_API_KEY", "")
 
+# Configure OpenAI API key for LLM-based property analysis
+config :rzeczywiscie,
+  openai_api_key: System.get_env("OPENAI_API_KEY", "")
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||

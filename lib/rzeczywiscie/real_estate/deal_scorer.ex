@@ -59,13 +59,17 @@ defmodule Rzeczywiscie.RealEstate.DealScorer do
       context = market_context || get_market_context(property)
       district_info = get_district_quality(property.district, property.transaction_type)
       
+      # Get LLM score if available (stored in property from previous analysis)
+      llm_score = property.llm_score || 0
+      
       scores = %{
         price_vs_avg: score_price_vs_avg(property, context),
         price_per_sqm: score_price_per_sqm(property, context),
         price_drop: score_price_drop(property),
         urgency_keywords: score_urgency_keywords(property),
         days_on_market: score_days_on_market(property),
-        district_quality: score_district_deal(property, context, district_info)
+        district_quality: score_district_deal(property, context, district_info),
+        llm_analysis: llm_score
       }
       
       total = Enum.reduce(scores, 0, fn {_k, v}, acc -> acc + v end)
