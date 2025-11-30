@@ -274,8 +274,9 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
     external_id = extract_id_from_url(url)
 
     address = listing["address"] || %{}
-    floor_size = listing["floorSize"] || listing["size"] || %{}
-    price = parse_json_price(listing["price"] || get_in(listing, ["offers", "price"]))
+    
+    # Try multiple price extraction strategies
+    price = extract_price_from_offer(listing)
 
     # Validate transaction type based on price
     validated_transaction_type = validate_transaction_type_by_price(transaction_type, price)
@@ -297,7 +298,7 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
       url: ensure_absolute_url(url),
       price: price,
       currency: listing["priceCurrency"] || "PLN",
-      area_sqm: parse_json_number(floor_size["value"] || floor_size),
+      area_sqm: extract_area_from_offer(listing),
       rooms: parse_json_integer(listing["numberOfRooms"]),
       transaction_type: validated_transaction_type,
       property_type: extract_property_type_from_text(title <> " " <> url),
@@ -320,13 +321,14 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
   defp parse_json_offer(offer, transaction_type) do
     item = offer["itemOffered"] || %{}
     address = item["address"] || %{}
-    floor_size = item["floorSize"] || %{}
 
     # Extract ID from URL
     url = offer["url"] || ""
     title = String.trim(offer["name"] || "")
     external_id = extract_id_from_url(url)
-    price = parse_json_price(offer["price"])
+    
+    # Try multiple price extraction strategies
+    price = extract_price_from_offer(offer)
 
     # Validate transaction type based on price
     validated_transaction_type = validate_transaction_type_by_price(transaction_type, price)
@@ -348,7 +350,7 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
       url: ensure_absolute_url(url),
       price: price,
       currency: offer["priceCurrency"] || "PLN",
-      area_sqm: parse_json_number(floor_size["value"]),
+      area_sqm: extract_area_from_offer(offer),
       rooms: parse_json_integer(item["numberOfRooms"]),
       transaction_type: validated_transaction_type,
       property_type: extract_property_type_from_text(title <> " " <> url),
@@ -364,11 +366,62 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
     }
   end
 
+  # Extract price from JSON-LD offer with fallbacks for different structures
+  defp extract_price_from_offer(offer) when is_map(offer) do
+    # Try multiple locations where price might be stored
+    price_value = 
+      offer["price"] || 
+      get_in(offer, ["priceSpecification", "price"]) ||
+      get_in(offer, ["priceSpecification", "priceValue"]) ||
+      get_in(offer, ["offers", "price"]) ||
+      get_in(offer, ["itemOffered", "price"]) ||
+      get_in(offer, ["itemOffered", "offers", "price"])
+    
+    if price_value do
+      parse_json_price(price_value)
+    else
+      # Last resort: look in item offered for any price-like field
+      item = offer["itemOffered"] || %{}
+      parse_json_price(item["price"])
+    end
+  end
+  defp extract_price_from_offer(_), do: nil
+
+  # Extract area from JSON-LD offer with fallbacks for different structures
+  defp extract_area_from_offer(offer) when is_map(offer) do
+    item = offer["itemOffered"] || %{}
+    
+    # Try multiple locations where area/floorSize might be stored
+    floor_size = 
+      item["floorSize"] ||
+      item["size"] ||
+      offer["floorSize"] ||
+      offer["size"] ||
+      get_in(item, ["floorSize", "value"]) ||
+      get_in(offer, ["floorSize", "value"])
+    
+    parse_json_number(floor_size)
+  end
+  defp extract_area_from_offer(_), do: nil
+
   defp parse_json_price(price) when is_float(price) do
     Decimal.from_float(price)
   end
   defp parse_json_price(price) when is_integer(price) do
     Decimal.new(price)
+  end
+  defp parse_json_price(price) when is_binary(price) do
+    # Sometimes price comes as a string, try to parse it
+    clean_price = 
+      price
+      |> String.replace(~r/\s+/, "")
+      |> String.replace(",", ".")
+      |> String.replace(~r/[^\d.]/, "")
+    
+    case Decimal.parse(clean_price) do
+      {decimal, _} -> decimal
+      :error -> nil
+    end
   end
   defp parse_json_price(_), do: nil
 
