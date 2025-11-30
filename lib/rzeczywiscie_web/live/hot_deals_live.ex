@@ -262,25 +262,20 @@ defmodule RzeczywiscieWeb.HotDealsLive do
                               <% end %>
                             </div>
                             
-                            <!-- District Grade Badge -->
-                            <%= if score_data[:district_info] && score_data.district_info do %>
-                              <div class="mt-2 flex items-center gap-2 text-xs">
-                                <span class={"px-2 py-0.5 font-bold rounded #{district_grade_class(score_data.district_info.grade)}"}>
-                                  <%= score_data.district_info.grade %>
-                                </span>
-                                <span class="opacity-60">
-                                  District avg: <%= format_number(score_data.district_info.avg_price_sqm) %> zł/m²
-                                </span>
-                              </div>
-                            <% end %>
-                            
-                            <!-- Context -->
+                            <!-- Market Context: Avg for same property type in same district -->
                             <%= if score_data.market_context && score_data.market_context.avg_price do %>
-                              <div class="text-xs opacity-50 mt-1">
-                                Market avg: <%= format_price(score_data.market_context.avg_price) %> zł
-                                <%= if score_data.market_context.avg_price_per_sqm do %>
-                                  (<%= format_price(score_data.market_context.avg_price_per_sqm) %>/m²)
+                              <div class="mt-2 flex items-center gap-2 text-xs">
+                                <%= if score_data[:district_info] && score_data.district_info do %>
+                                  <span class={"px-2 py-0.5 font-bold rounded #{district_grade_class(score_data.district_info.grade)}"}>
+                                    <%= score_data.district_info.grade %>
+                                  </span>
                                 <% end %>
+                                <span class="opacity-60">
+                                  Avg in <%= property.district || "area" %>: <%= format_price(score_data.market_context.avg_price) %> zł
+                                  <%= if score_data.market_context.avg_price_per_sqm do %>
+                                    (<%= format_number(score_data.market_context.avg_price_per_sqm) %> zł/m²)
+                                  <% end %>
+                                </span>
                               </div>
                             <% end %>
                           </div>

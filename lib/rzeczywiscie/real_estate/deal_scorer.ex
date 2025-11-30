@@ -235,6 +235,7 @@ defmodule Rzeczywiscie.RealEstate.DealScorer do
   """
   def get_price_drops(days \\ 7, limit \\ 20) do
     cutoff = DateTime.utc_now() |> DateTime.add(-days * 24 * 3600, :second)
+    krakow_districts = @krakow_districts
     
     # Use proper minimum prices by transaction type
     # For price drops, we need current price to be reasonable
@@ -248,6 +249,7 @@ defmodule Rzeczywiscie.RealEstate.DealScorer do
       where: p.active == true and 
              not is_nil(p.price) and
              not is_nil(p.transaction_type) and
+             p.district in ^krakow_districts and  # Only Kraków properties
              # Current price must meet minimum for transaction type
              ((p.transaction_type == "wynajem" and p.price >= ^min_rent_price) or
               (p.transaction_type == "sprzedaż" and p.price >= ^min_sale_price) or
@@ -653,53 +655,52 @@ defmodule Rzeczywiscie.RealEstate.DealScorer do
     Map.get(rankings, district)
   end
   
-  # Score based on district quality and value.
-  # A property priced below average in a high-quality district is a great deal.
+  # Score based on district quality (location desirability).
+  # Uses market_context (same property type in same district) for fair comparison.
+  # District grade (A+/B/C) represents overall location quality.
   # 
   # Scoring logic (0-15 points):
-  # - Top district (A+/A) + below avg price/m² = 15 pts
-  # - Top district (A+/A) + at avg price = 10 pts
-  # - Mid district (B+/B) + below avg price/m² = 10 pts
-  # - Mid district (B+/B) + at avg price = 5 pts
-  # - Lower district (C+/C) + significantly below avg = 5 pts
-  # - Lower district + avg or above = 0 pts
+  # - Premium district (A+/A) = bonus for being in desirable area
+  # - Mid district (B+/B) = smaller bonus
+  # - Lower district (C+/C) = no bonus (but no penalty either)
   defp score_district_deal(%Property{}, _context, nil), do: 0
+  defp score_district_deal(%Property{}, nil, _district_info), do: 0
   defp score_district_deal(%Property{price: nil}, _context, _district_info), do: 0
   defp score_district_deal(%Property{area_sqm: nil}, _context, _district_info), do: 0
-  defp score_district_deal(%Property{price: price, area_sqm: area}, _context, district_info) do
-    price_sqm = Decimal.to_float(price) / Decimal.to_float(area)
-    district_avg = district_info.avg_price_sqm || 0
+  defp score_district_deal(%Property{price: price, area_sqm: area}, context, district_info) do
+    # Use market_context avg (same property type) for comparison, not district-wide avg
+    market_avg_sqm = context.avg_price_per_sqm || 0
     grade = district_info.grade
     
-    # Calculate how this property compares to district average
-    if district_avg > 0 do
-      diff_pct = (district_avg - price_sqm) / district_avg * 100
+    if market_avg_sqm > 0 do
+      price_sqm = Decimal.to_float(price) / Decimal.to_float(area)
+      diff_pct = (market_avg_sqm - price_sqm) / market_avg_sqm * 100
       
+      # Score based on: 1) district quality, 2) how much below market avg
       case grade do
         g when g in ["A+", "A"] ->
-          # Premium district - any below-average is valuable
+          # Premium district - being below market in a good area is valuable
           cond do
-            diff_pct >= 20 -> 15  # 20%+ below premium district avg = amazing
-            diff_pct >= 10 -> 12
-            diff_pct >= 0 -> 10   # At or below avg in premium = good
-            diff_pct >= -10 -> 5  # Slightly above avg in premium = ok
-            true -> 0
+            diff_pct >= 15 -> 15  # 15%+ below market in premium area = amazing
+            diff_pct >= 5 -> 12
+            diff_pct >= 0 -> 8    # At market in premium = still good location
+            true -> 3             # Above market but premium location
           end
           
         g when g in ["B+", "B"] ->
-          # Mid-tier district - need bigger discount
+          # Mid-tier district
           cond do
-            diff_pct >= 25 -> 10  # 25%+ below mid district avg
-            diff_pct >= 15 -> 8
-            diff_pct >= 5 -> 5
+            diff_pct >= 20 -> 10  # Need bigger discount in mid-tier
+            diff_pct >= 10 -> 7
+            diff_pct >= 0 -> 4
             true -> 0
           end
           
         _ ->
-          # Lower district - need significant discount to be a deal
+          # Lower district - location isn't a selling point
           cond do
-            diff_pct >= 30 -> 5  # 30%+ below avg
-            diff_pct >= 20 -> 3
+            diff_pct >= 25 -> 5  # Very cheap in less desirable area
+            diff_pct >= 15 -> 3
             true -> 0
           end
       end
