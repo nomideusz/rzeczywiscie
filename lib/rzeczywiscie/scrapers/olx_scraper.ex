@@ -250,6 +250,11 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
       # Validate/correct based on price
       validated_transaction_type = validate_transaction_type(initial_transaction_type, price)
 
+      # Extract district first, then use it to infer city if needed
+      district = extract_district(card)
+      raw_city = extract_city(card)
+      city = ExtractionHelpers.infer_city(raw_city, district)
+
       %{
         source: "olx",
         external_id: external_id || generate_id_from_url(url),
@@ -261,8 +266,8 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
         rooms: extract_rooms(card, title),
         transaction_type: validated_transaction_type,
         property_type: extract_property_type(search_text),
-        city: extract_city(card),
-        district: extract_district(card),
+        city: city,
+        district: district,
         voivodeship: "małopolskie",
         image_url: extract_image(card),
         description: description,

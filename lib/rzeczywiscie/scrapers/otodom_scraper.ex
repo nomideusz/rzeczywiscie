@@ -282,6 +282,10 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
 
     # Try to extract district from address or URL
     district = extract_district_from_address(address) || extract_district_from_url(url)
+    
+    # Extract city with fallbacks: JSON address -> URL -> title -> infer from district
+    raw_city = address["addressLocality"] || extract_city_from_url(url) || extract_city_from_title(title)
+    city = ExtractionHelpers.infer_city(raw_city, district)
 
     %{
       source: "otodom",
@@ -294,7 +298,7 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
       rooms: parse_json_integer(listing["numberOfRooms"]),
       transaction_type: validated_transaction_type,
       property_type: extract_property_type_from_text(title <> " " <> url),
-      city: address["addressLocality"],
+      city: city,
       district: district,
       voivodeship: address["addressRegion"] || "małopolskie",
       image_url: get_first_image(listing["image"]),
@@ -325,6 +329,10 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
 
     # Try to extract district from address or URL
     district = extract_district_from_address(address) || extract_district_from_url(url)
+    
+    # Extract city with fallbacks: JSON address -> URL -> title -> infer from district
+    raw_city = address["addressLocality"] || extract_city_from_url(url) || extract_city_from_title(title)
+    city = ExtractionHelpers.infer_city(raw_city, district)
 
     %{
       source: "otodom",
@@ -337,7 +345,7 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
       rooms: parse_json_integer(item["numberOfRooms"]),
       transaction_type: validated_transaction_type,
       property_type: extract_property_type_from_text(title <> " " <> url),
-      city: address["addressLocality"],
+      city: city,
       district: district,
       voivodeship: address["addressRegion"] || "małopolskie",
       image_url: offer["image"],
@@ -541,6 +549,10 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
 
       # Extract district from URL or card
       district = extract_district_from_url(full_url) || extract_district_from_card(card)
+      
+      # Extract city - try card first, then URL, then infer from district
+      raw_city = extract_city(card) || extract_city_from_url(full_url) || extract_city_from_title(title)
+      city = ExtractionHelpers.infer_city(raw_city, district)
 
       %{
         source: "otodom",
@@ -553,7 +565,7 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
         rooms: extract_rooms(card, title),
         transaction_type: validated_transaction_type,
         property_type: property_type,
-        city: extract_city(card),
+        city: city,
         district: district,
         voivodeship: "małopolskie",
         image_url: extract_image(card),
@@ -844,6 +856,55 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
       end
     end)
   end
+  
+  # Extract city from URL
+  # URL format: /pl/oferta/mieszkanie-sprzedaz-krakow-krowodrza-...
+  defp extract_city_from_url(nil), do: nil
+  defp extract_city_from_url(url) when is_binary(url) do
+    url_lower = String.downcase(url)
+    
+    cond do
+      String.contains?(url_lower, "-krakow-") or String.contains?(url_lower, "/krakow/") ->
+        "Kraków"
+      String.contains?(url_lower, "-wieliczka-") or String.contains?(url_lower, "/wieliczka/") ->
+        "Wieliczka"
+      String.contains?(url_lower, "-niepolomice-") or String.contains?(url_lower, "/niepolomice/") ->
+        "Niepołomice"
+      String.contains?(url_lower, "-skawina-") or String.contains?(url_lower, "/skawina/") ->
+        "Skawina"
+      String.contains?(url_lower, "-tarnow-") or String.contains?(url_lower, "/tarnow/") ->
+        "Tarnów"
+      String.contains?(url_lower, "-nowy-sacz-") or String.contains?(url_lower, "/nowy-sacz/") ->
+        "Nowy Sącz"
+      true ->
+        nil
+    end
+  end
+  defp extract_city_from_url(_), do: nil
+  
+  # Extract city from title
+  defp extract_city_from_title(nil), do: nil
+  defp extract_city_from_title(title) when is_binary(title) do
+    title_lower = String.downcase(title)
+    
+    cond do
+      String.contains?(title_lower, "kraków") or String.contains?(title_lower, "krakow") ->
+        "Kraków"
+      String.contains?(title_lower, "wieliczka") ->
+        "Wieliczka"
+      String.contains?(title_lower, "niepołomice") or String.contains?(title_lower, "niepolomice") ->
+        "Niepołomice"
+      String.contains?(title_lower, "skawina") ->
+        "Skawina"
+      String.contains?(title_lower, "tarnów") or String.contains?(title_lower, "tarnow") ->
+        "Tarnów"
+      String.contains?(title_lower, "nowy sącz") or String.contains?(title_lower, "nowy sacz") ->
+        "Nowy Sącz"
+      true ->
+        nil
+    end
+  end
+  defp extract_city_from_title(_), do: nil
 
   # Convert URL-formatted district name to display format
   defp format_district_name(url_district) do

@@ -13,6 +13,53 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
   # We use 100 as base minimum since we may not know transaction type at parse time
   @min_price_pln 100
   @max_price_pln 99_999_999
+  
+  # Kraków districts - used to infer city from district
+  @krakow_districts [
+    "Stare Miasto", "Grzegórzki", "Prądnik Czerwony", "Prądnik Biały",
+    "Krowodrza", "Bronowice", "Zwierzyniec", "Dębniki", "Łagiewniki",
+    "Swoszowice", "Podgórze", "Bieżanów", "Prokocim", "Czyżyny",
+    "Mistrzejowice", "Bieńczyce", "Wzgórza Krzesławickie", "Nowa Huta",
+    # Sub-districts and alternative spellings
+    "Kazimierz", "Salwator", "Wola Justowska", "Ruczaj", "Pychowice",
+    "Borek Fałęcki", "Zabłocie", "Płaszów", "Rybitwy", "Łęg",
+    "Kurdwanów", "Wola Duchacka", "Kliny", "Podgórze Duchackie",
+    "Azory", "Olsza", "Dąbie", "Lubicz", "Wielopole", "Stradom"
+  ]
+  
+  @doc """
+  Infer city from district name. If district is a known Kraków district, return "Kraków".
+  Returns the original city if provided, otherwise attempts to infer from district.
+  """
+  def infer_city(city, district) do
+    # If city is already set and non-empty, use it
+    if city && city != "" do
+      city
+    else
+      # Try to infer city from district
+      infer_city_from_district(district)
+    end
+  end
+  
+  @doc """
+  Check if a district is a Kraków district and return "Kraków" if so.
+  """
+  def infer_city_from_district(nil), do: nil
+  def infer_city_from_district(""), do: nil
+  def infer_city_from_district(district) when is_binary(district) do
+    district_clean = String.trim(district)
+    
+    # Check if district matches any known Kraków district
+    if Enum.any?(@krakow_districts, fn kd -> 
+      String.downcase(kd) == String.downcase(district_clean) ||
+      String.contains?(String.downcase(district_clean), String.downcase(kd))
+    end) do
+      "Kraków"
+    else
+      nil
+    end
+  end
+  def infer_city_from_district(_), do: nil
 
   @doc """
   Parse price text to Decimal.
