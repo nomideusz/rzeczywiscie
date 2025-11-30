@@ -279,30 +279,42 @@ defmodule Rzeczywiscie.Services.DescriptionFetcher do
   
   # Extract description from JSON-LD structured data (most reliable fallback)
   defp extract_description_from_json_ld(document) do
-    document
-    |> Floki.find("script[type='application/ld+json']")
-    |> Enum.find_value(fn script ->
-      json_text = Floki.text(script)
+    scripts = Floki.find(document, "script[type='application/ld+json']")
+    
+    Enum.find_value(scripts, fn script ->
+      json_text = Floki.text(script) |> String.trim()
       
+      # Try to parse JSON
       case Jason.decode(json_text) do
         {:ok, data} ->
           # Try to find description in JSON-LD
           desc = extract_desc_from_json(data)
           if desc && String.length(desc) > 50 do
+            Logger.info("  ✓ Found description in JSON-LD (#{String.length(desc)} chars)")
             clean_description(desc)
           else
             nil
           end
-        _ -> nil
+        {:error, error} ->
+          # Log first 200 chars of failed JSON for debugging
+          Logger.debug("  JSON-LD parse error: #{inspect(error)}, content: #{String.slice(json_text, 0, 200)}...")
+          nil
       end
     end)
   end
   
+  # Try various JSON-LD patterns for finding description
   defp extract_desc_from_json(%{"description" => desc}) when is_binary(desc) and desc != "", do: desc
+  defp extract_desc_from_json(%{"text" => text}) when is_binary(text) and text != "", do: text
+  defp extract_desc_from_json(%{"articleBody" => body}) when is_binary(body) and body != "", do: body
   defp extract_desc_from_json(%{"@graph" => items}) when is_list(items) do
     Enum.find_value(items, &extract_desc_from_json/1)
   end
   defp extract_desc_from_json(%{"mainEntity" => entity}), do: extract_desc_from_json(entity)
+  defp extract_desc_from_json(%{"about" => about}), do: extract_desc_from_json(about)
+  # Handle nested offers/products (common in real estate)
+  defp extract_desc_from_json(%{"offers" => offers}) when is_map(offers), do: extract_desc_from_json(offers)
+  defp extract_desc_from_json(%{"offers" => [first | _]}), do: extract_desc_from_json(first)
   defp extract_desc_from_json(_), do: nil
 
   # Find the largest text block on the page (likely the description)
