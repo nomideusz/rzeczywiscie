@@ -255,12 +255,19 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
       {"Content-Type", "application/json"}
     ]
     
+    Logger.info("  Calling OpenAI API...")
+    
     case Req.post(@openai_url, json: body, headers: headers, receive_timeout: 30_000) do
       {:ok, %{status: 200, body: response}} ->
+        Logger.info("  ✓ OpenAI response received")
         parse_response(response)
         
+      {:ok, %{status: 401}} ->
+        Logger.error("OpenAI API: Invalid API key (401 Unauthorized)")
+        {:error, :invalid_api_key}
+        
       {:ok, %{status: 429}} ->
-        Logger.warning("OpenAI rate limit hit")
+        Logger.warning("OpenAI rate limit hit (429)")
         {:error, :rate_limited}
         
       {:ok, %{status: status, body: body}} ->

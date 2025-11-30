@@ -1442,6 +1442,7 @@ defmodule RzeczywiscieWeb.AdminLive do
       |> Enum.map(fn {property, idx} ->
         # Update progress
         send(parent, {:llm_progress, idx})
+        Logger.info("[#{idx}/#{total}] Analyzing property ##{property.id}...")
         
         # Analyze full property (prefers description if available)
         case LLMAnalyzer.analyze_property(property) do
