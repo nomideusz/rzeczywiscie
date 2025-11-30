@@ -416,25 +416,76 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
       "div[data-cy='ad_description']",
       "div.css-1o924a9",  # OLX description container class
       "div.css-bgzo2k",   # Alternative class
-      "div[class*='description']"
+      "div[class*='description']",
+      # New selectors for updated OLX layout
+      "div[data-testid='ad-description-container']",
+      "div.css-g5mtbi-Text",  # Possible new description class
+      "div[class*='Ad__content']"
     ]
 
     description =
       Enum.reduce_while(selectors, nil, fn selector, _acc ->
+        elements = Floki.find(document, selector)
         text =
-          document
-          |> Floki.find(selector)
+          elements
           |> Floki.text()
           |> String.trim()
 
         if text != "" and String.length(text) > 10 do
+          Logger.debug("OLX description found with selector: #{selector}")
           {:halt, text}
         else
+          if length(elements) > 0 do
+            Logger.debug("OLX selector '#{selector}' found #{length(elements)} elements but no text")
+          end
           {:cont, nil}
         end
       end)
 
+    # If no description found, log available data-cy and data-testid attributes for debugging
+    if is_nil(description) do
+      debug_olx_structure(document)
+    end
+
     description
+  end
+  
+  # Debug helper to identify what selectors are available on OLX pages
+  defp debug_olx_structure(document) do
+    # Find elements with data-cy or data-testid
+    data_cy_elements = Floki.find(document, "[data-cy]")
+    data_testid_elements = Floki.find(document, "[data-testid]")
+    
+    data_cy_values = 
+      data_cy_elements
+      |> Enum.map(fn {_tag, attrs, _} ->
+        Enum.find_value(attrs, fn
+          {"data-cy", value} -> value
+          _ -> nil
+        end)
+      end)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
+      |> Enum.take(20)
+    
+    data_testid_values = 
+      data_testid_elements
+      |> Enum.map(fn {_tag, attrs, _} ->
+        Enum.find_value(attrs, fn
+          {"data-testid", value} -> value
+          _ -> nil
+        end)
+      end)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
+      |> Enum.take(20)
+    
+    Logger.debug("OLX page has data-cy: #{inspect(data_cy_values)}")
+    Logger.debug("OLX page has data-testid: #{inspect(data_testid_values)}")
+    
+    # Also check for divs with description-like classes
+    description_divs = Floki.find(document, "div[class*='escription'], div[class*='Content'], div[class*='content']")
+    Logger.debug("OLX page has #{length(description_divs)} divs with description/content in class")
   end
 
   # Extract description from Otodom document
@@ -456,22 +507,36 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
       "section[aria-label='Opis']",
       "div[class*='description']",
       "div.css-1wekrze",  # Otodom description class
-      "div.css-1k7yu81"   # Alternative class
+      "div.css-1k7yu81",   # Alternative class
+      # New selectors for updated Otodom layout
+      "div[data-testid='ad-description']",
+      "section[data-testid='ad-description-section']"
     ]
 
-    Enum.reduce_while(selectors, nil, fn selector, _acc ->
+    description = Enum.reduce_while(selectors, nil, fn selector, _acc ->
+      elements = Floki.find(document, selector)
       text =
-        document
-        |> Floki.find(selector)
+        elements
         |> Floki.text()
         |> String.trim()
 
       if text != "" and String.length(text) > 10 do
+        Logger.debug("Otodom description found with selector: #{selector}")
         {:halt, text}
       else
+        if length(elements) > 0 do
+          Logger.debug("Otodom selector '#{selector}' found #{length(elements)} elements but no text")
+        end
         {:cont, nil}
       end
     end)
+    
+    # If no description found via selectors, log what's available
+    if is_nil(description) do
+      Logger.debug("No Otodom description found with standard selectors")
+    end
+    
+    description
   end
 
   defp try_otodom_json_ld_description(document) do
