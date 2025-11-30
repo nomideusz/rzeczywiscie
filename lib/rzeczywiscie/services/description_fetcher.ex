@@ -148,12 +148,13 @@ defmodule Rzeczywiscie.Services.DescriptionFetcher do
           |> String.trim()
           |> clean_description()
           
-          if String.length(text) > 50, do: text, else: nil
+          # clean_description can return nil for invalid content
+          if text && String.length(text) > 50, do: text, else: nil
       end
     end)
     
-    # Fallback: try to find any large text block
-    description || find_largest_text_block(document)
+    # Fallback disabled - was grabbing garbage
+    description
   end
 
   # Otodom description extraction
@@ -177,12 +178,13 @@ defmodule Rzeczywiscie.Services.DescriptionFetcher do
           |> String.trim()
           |> clean_description()
           
-          if String.length(text) > 50, do: text, else: nil
+          # clean_description can return nil for invalid content
+          if text && String.length(text) > 50, do: text, else: nil
       end
     end)
     
-    # Fallback: try to find any large text block
-    description || find_largest_text_block(document)
+    # Fallback disabled - was grabbing garbage
+    description
   end
 
   # Find the largest text block on the page (likely the description)
