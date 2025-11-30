@@ -1444,10 +1444,15 @@ defmodule RzeczywiscieWeb.AdminLive do
         # Update progress
         send(parent, {:llm_progress, idx})
         Logger.info("[#{idx}/#{total}] Analyzing property ##{property.id}...")
-        
-        # Analyze full property (prefers description if available)
-        case LLMAnalyzer.analyze_property(property) do
-          {:ok, signals} ->
+
+        # Wrap in a Task with timeout to prevent hanging
+        task = Task.async(fn ->
+          LLMAnalyzer.analyze_property(property)
+        end)
+
+        # 35-second timeout (slightly more than API timeout)
+        result = case Task.yield(task, 35_000) || Task.shutdown(task) do
+          {:ok, {:ok, signals}} ->
             # Convert atom keys to string for llm_condition and llm_motivation
             updates = %{
               llm_urgency: signals.urgency,
@@ -1458,23 +1463,40 @@ defmodule RzeczywiscieWeb.AdminLive do
               llm_score: LLMAnalyzer.calculate_signal_score(signals),
               llm_analyzed_at: DateTime.utc_now()
             }
-            
+
             case RealEstate.update_property(property, updates) do
-              {:ok, _} -> :ok
-              {:error, _} -> :error
+              {:ok, _} ->
+                Logger.info("  ✓ Property ##{property.id} analyzed successfully")
+                :ok
+              {:error, changeset} ->
+                Logger.error("  ✗ Failed to save analysis for ##{property.id}: #{inspect(changeset.errors)}")
+                :error
             end
-            
-          {:error, reason} ->
-            Logger.warning("LLM analysis failed for #{property.id}: #{inspect(reason)}")
+
+          {:ok, {:error, reason}} ->
+            Logger.warning("  ✗ LLM analysis failed for #{property.id}: #{inspect(reason)}")
             :error
+
+          nil ->
+            Logger.error("  ✗ Timeout analyzing property ##{property.id} after 35 seconds")
+            :timeout
         end
-        
+
         # Small delay to respect rate limits
         Process.sleep(500)
+
+        result
       end)
       
       successful = Enum.count(results, &(&1 == :ok))
-      "LLM analyzed #{successful}/#{total} descriptions"
+      failed = Enum.count(results, &(&1 == :error))
+      timeouts = Enum.count(results, &(&1 == :timeout))
+
+      if timeouts > 0 do
+        "LLM analyzed #{successful}/#{total} (#{failed} failed, #{timeouts} timeouts - check API key or network)"
+      else
+        "LLM analyzed #{successful}/#{total} (#{failed} failed)"
+      end
       end
     end
   end
