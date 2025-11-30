@@ -276,22 +276,25 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
     address = listing["address"] || %{}
     floor_size = listing["floorSize"] || listing["size"] || %{}
     price = parse_json_price(listing["price"] || get_in(listing, ["offers", "price"]))
-    
+
     # Validate transaction type based on price
     validated_transaction_type = validate_transaction_type_by_price(transaction_type, price)
 
     # Try to extract district from address or URL
     district = extract_district_from_address(address) || extract_district_from_url(url)
-    
+
     # Extract city with fallbacks: JSON address -> URL -> title -> infer from district
     raw_city = address["addressLocality"] || extract_city_from_url(url) || extract_city_from_title(title)
     city = ExtractionHelpers.infer_city(raw_city, district)
+
+    # Fetch full description from listing page
+    description = fetch_full_description(ensure_absolute_url(url))
 
     %{
       source: "otodom",
       external_id: external_id || generate_id_from_url(url),
       title: title,
-      url: url,
+      url: ensure_absolute_url(url),
       price: price,
       currency: listing["priceCurrency"] || "PLN",
       area_sqm: parse_json_number(floor_size["value"] || floor_size),
@@ -302,6 +305,7 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
       district: district,
       voivodeship: address["addressRegion"] || "małopolskie",
       image_url: get_first_image(listing["image"]),
+      description: description,
       raw_data: %{
         scraped_at: DateTime.utc_now() |> DateTime.to_iso8601(),
         from_json_ld: true
@@ -323,22 +327,25 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
     title = String.trim(offer["name"] || "")
     external_id = extract_id_from_url(url)
     price = parse_json_price(offer["price"])
-    
+
     # Validate transaction type based on price
     validated_transaction_type = validate_transaction_type_by_price(transaction_type, price)
 
     # Try to extract district from address or URL
     district = extract_district_from_address(address) || extract_district_from_url(url)
-    
+
     # Extract city with fallbacks: JSON address -> URL -> title -> infer from district
     raw_city = address["addressLocality"] || extract_city_from_url(url) || extract_city_from_title(title)
     city = ExtractionHelpers.infer_city(raw_city, district)
+
+    # Fetch full description from listing page
+    description = fetch_full_description(ensure_absolute_url(url))
 
     %{
       source: "otodom",
       external_id: external_id || generate_id_from_url(url),
       title: title,
-      url: url,
+      url: ensure_absolute_url(url),
       price: price,
       currency: offer["priceCurrency"] || "PLN",
       area_sqm: parse_json_number(floor_size["value"]),
@@ -349,6 +356,7 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
       district: district,
       voivodeship: address["addressRegion"] || "małopolskie",
       image_url: offer["image"],
+      description: description,
       raw_data: %{
         scraped_at: DateTime.utc_now() |> DateTime.to_iso8601(),
         from_json_ld: true
@@ -533,9 +541,9 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
 
       # Extract property type from URL or title
       property_type = extract_property_type(full_url, title)
-      
+
       price = extract_price(card, title)
-      
+
       # Validate transaction_type or extract from URL/title if needed
       initial_transaction_type = if transaction_type in ["sprzedaż", "wynajem"] do
         transaction_type
@@ -543,16 +551,19 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
         # Fallback: try to extract from URL/title
         extract_transaction_type_from_text(full_url <> " " <> title) || transaction_type
       end
-      
+
       # Validate based on price (catches misclassified listings)
       validated_transaction_type = validate_transaction_type_by_price(initial_transaction_type, price)
 
       # Extract district from URL or card
       district = extract_district_from_url(full_url) || extract_district_from_card(card)
-      
+
       # Extract city - try card first, then URL, then infer from district
       raw_city = extract_city(card) || extract_city_from_url(full_url) || extract_city_from_title(title)
       city = ExtractionHelpers.infer_city(raw_city, district)
+
+      # Fetch full description from listing page
+      description = fetch_full_description(full_url)
 
       %{
         source: "otodom",
@@ -569,6 +580,7 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
         district: district,
         voivodeship: "małopolskie",
         image_url: extract_image(card),
+        description: description,
         raw_data: %{
           scraped_at: DateTime.utc_now() |> DateTime.to_iso8601()
         }
@@ -1231,7 +1243,7 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
       String.contains?(text_lower, "powierzchnia biurowa") -> "lokal użytkowy"
       String.contains?(text_lower, "powierzchnia handlowa") -> "lokal użytkowy"
       String.contains?(text_lower, "powierzchnia magazynowa") -> "lokal użytkowy"
-      
+
       # AGGRESSIVE FALLBACK: If still no match and it's Otodom
       # Default to mieszkanie - most common property type
       String.contains?(text_lower, "otodom.pl") and
@@ -1240,9 +1252,29 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
         "mieszkanie"
 
       # FINAL FALLBACK: Default to mieszkanie for any unmatched property
-      true -> 
+      true ->
         Logger.debug("Otodom: extract_property_type_from_text defaulting to mieszkanie")
         "mieszkanie"
+    end
+  end
+
+  # Fetch full description from individual listing page
+  defp fetch_full_description(url) do
+    # Add delay before fetching to be respectful
+    Process.sleep(1000)
+
+    case ExtractionHelpers.fetch_otodom_description(url) do
+      {:ok, description} when is_binary(description) and description != "" ->
+        # Limit description length to avoid database issues
+        String.slice(description, 0, 5000)
+
+      {:ok, nil} ->
+        Logger.debug("No description found for #{url}")
+        nil
+
+      {:error, reason} ->
+        Logger.debug("Failed to fetch description for #{url}: #{inspect(reason)}")
+        nil
     end
   end
 
