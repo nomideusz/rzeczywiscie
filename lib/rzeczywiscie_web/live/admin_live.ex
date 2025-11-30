@@ -30,6 +30,7 @@ defmodule RzeczywiscieWeb.AdminLive do
       |> assign(:llm_progress, 0)
       |> assign(:llm_result, nil)
       |> assign(:llm_stats, get_llm_stats())
+      |> assign(:selected_llm_property, nil)  # For viewing LLM analysis details
       # Stats
       |> assign(:db_stats, db_stats)
 
@@ -355,6 +356,9 @@ defmodule RzeczywiscieWeb.AdminLive do
                           <% end %>
                         </div>
                       </div>
+                      <button phx-click="view_llm_details" phx-value-id={prop.id} class="px-2 py-1 text-[10px] font-bold uppercase border border-info text-info hover:bg-info hover:text-info-content transition-colors shrink-0">
+                        View
+                      </button>
                       <a href={prop.url} target="_blank" class="text-info hover:underline shrink-0">↗</a>
                     </div>
                   <% end %>
@@ -430,6 +434,109 @@ defmodule RzeczywiscieWeb.AdminLive do
         </div>
       </div>
     </div>
+
+    <%!-- LLM Analysis Details Modal --%>
+    <%= if @selected_llm_property do %>
+      <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/70" phx-click="close_llm_modal">
+        <div class="bg-base-100 border-4 border-base-content max-w-3xl w-full max-h-[90vh] overflow-y-auto m-4" phx-click="ignore">
+          <!-- Modal Header -->
+          <div class="sticky top-0 bg-base-200 border-b-2 border-base-content px-4 py-3 flex items-center justify-between">
+            <h2 class="text-sm font-bold uppercase tracking-wide">🤖 LLM Analysis Results</h2>
+            <button phx-click="close_llm_modal" class="px-3 py-1 text-xs font-bold uppercase border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">
+              Close
+            </button>
+          </div>
+
+          <!-- Modal Content -->
+          <div class="p-6 space-y-6">
+            <!-- Title & Basic Info -->
+            <div>
+              <h3 class="font-bold text-lg mb-2"><%= @selected_llm_property.title %></h3>
+              <div class="text-sm opacity-70 space-y-1">
+                <p><strong>ID:</strong> #<%= @selected_llm_property.id %> · <strong>Source:</strong> <%= @selected_llm_property.source %></p>
+                <p><strong>Price:</strong> <%= @selected_llm_property.price %> <%= @selected_llm_property.currency %> · <strong>Area:</strong> <%= @selected_llm_property.area_sqm %> m²</p>
+                <p><strong>Analyzed:</strong> <%= if @selected_llm_property.llm_analyzed_at, do: Calendar.strftime(@selected_llm_property.llm_analyzed_at, "%Y-%m-%d %H:%M"), else: "Never" %></p>
+                <a href={@selected_llm_property.url} target="_blank" class="text-info hover:underline">Open Listing ↗</a>
+              </div>
+            </div>
+
+            <!-- LLM Scores Grid -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div class="bg-primary/20 border-2 border-primary p-3">
+                <div class="text-3xl font-black text-primary"><%= @selected_llm_property.llm_score || 0 %></div>
+                <div class="text-[10px] font-bold uppercase tracking-wide opacity-70">LLM Score</div>
+              </div>
+              <div class={"p-3 border-2 " <> if(@selected_llm_property.llm_urgency && @selected_llm_property.llm_urgency >= 7, do: "bg-error/20 border-error", else: if(@selected_llm_property.llm_urgency && @selected_llm_property.llm_urgency >= 4, do: "bg-warning/20 border-warning", else: "bg-base-200 border-base-content/30"))}>
+                <div class={"text-3xl font-black " <> if(@selected_llm_property.llm_urgency && @selected_llm_property.llm_urgency >= 7, do: "text-error", else: if(@selected_llm_property.llm_urgency && @selected_llm_property.llm_urgency >= 4, do: "text-warning", else: ""))}>
+                  <%= @selected_llm_property.llm_urgency || 0 %>/10
+                </div>
+                <div class="text-[10px] font-bold uppercase tracking-wide opacity-70">Urgency</div>
+              </div>
+              <div class="bg-base-200 border-2 border-base-content/30 p-3">
+                <div class="text-lg font-black uppercase">
+                  <%= @selected_llm_property.llm_condition || "unknown" %>
+                </div>
+                <div class="text-[10px] font-bold uppercase tracking-wide opacity-70">Condition</div>
+              </div>
+              <div class="bg-base-200 border-2 border-base-content/30 p-3">
+                <div class="text-lg font-black uppercase">
+                  <%= @selected_llm_property.llm_motivation || "unknown" %>
+                </div>
+                <div class="text-[10px] font-bold uppercase tracking-wide opacity-70">Motivation</div>
+              </div>
+            </div>
+
+            <!-- Positive Signals -->
+            <%= if @selected_llm_property.llm_positive_signals && length(@selected_llm_property.llm_positive_signals) > 0 do %>
+              <div>
+                <h4 class="text-sm font-bold uppercase mb-2 flex items-center gap-2">
+                  <span>✨ Positive Signals</span>
+                  <span class="px-2 py-1 text-xs bg-success text-success-content"><%= length(@selected_llm_property.llm_positive_signals) %></span>
+                </h4>
+                <div class="flex flex-wrap gap-2">
+                  <%= for signal <- @selected_llm_property.llm_positive_signals do %>
+                    <span class="px-3 py-2 text-sm bg-success/20 text-success border border-success/50 font-medium">
+                      <%= signal %>
+                    </span>
+                  <% end %>
+                </div>
+              </div>
+            <% end %>
+
+            <!-- Red Flags -->
+            <%= if @selected_llm_property.llm_red_flags && length(@selected_llm_property.llm_red_flags) > 0 do %>
+              <div>
+                <h4 class="text-sm font-bold uppercase mb-2 flex items-center gap-2">
+                  <span>🚩 Red Flags</span>
+                  <span class="px-2 py-1 text-xs bg-error text-error-content"><%= length(@selected_llm_property.llm_red_flags) %></span>
+                </h4>
+                <div class="flex flex-wrap gap-2">
+                  <%= for flag <- @selected_llm_property.llm_red_flags do %>
+                    <span class="px-3 py-2 text-sm bg-error/20 text-error border border-error/50 font-medium">
+                      <%= flag %>
+                    </span>
+                  <% end %>
+                </div>
+              </div>
+            <% end %>
+
+            <!-- Description -->
+            <%= if @selected_llm_property.description do %>
+              <div>
+                <h4 class="text-sm font-bold uppercase mb-2">📝 Description (<%= String.length(@selected_llm_property.description) %> chars)</h4>
+                <div class="bg-base-200 border border-base-content/20 p-4 text-sm max-h-64 overflow-y-auto">
+                  <%= @selected_llm_property.description %>
+                </div>
+              </div>
+            <% else %>
+              <div class="bg-warning/20 border border-warning/50 p-4 text-sm">
+                ⚠️ No description available
+              </div>
+            <% end %>
+          </div>
+        </div>
+      </div>
+    <% end %>
     </.app>
     """
   end
@@ -564,6 +671,17 @@ defmodule RzeczywiscieWeb.AdminLive do
     end)
     
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("view_llm_details", %{"id" => id}, socket) do
+    property = RealEstate.get_property(String.to_integer(id))
+    {:noreply, assign(socket, :selected_llm_property, property)}
+  end
+
+  @impl true
+  def handle_event("close_llm_modal", _params, socket) do
+    {:noreply, assign(socket, :selected_llm_property, nil)}
   end
 
   @impl true
