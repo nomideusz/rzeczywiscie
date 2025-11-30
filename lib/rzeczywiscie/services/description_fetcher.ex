@@ -181,30 +181,35 @@ defmodule Rzeczywiscie.Services.DescriptionFetcher do
   # OLX description extraction
   defp extract_olx_description(document) do
     # OLX stores description in various elements depending on page version
+    # Use contains (*=) selectors since exact matches fail
     selectors = [
-      # Primary selectors
+      # Contains-based selectors (most reliable)
+      "[data-cy*='description']",
+      "[data-cy*='Description']",
+      "[data-testid*='description']",
+      "[data-testid*='Description']",
+      # Exact match fallbacks
       "[data-cy='ad_description']",
       "[data-testid='ad-description-content']",
-      "[data-testid='ad-description']",
       # Class-based selectors
-      "div[class*='css-'][class*='description']",
       "div[class*='descriptionContainer']",
       "div[class*='description-content']",
       # Section-based
-      "section[data-testid='ad-description-section'] div",
-      # Generic but scoped to main content area
-      "main div[class*='css-'] > p",
-      "article div[class*='css-'] > p"
+      "section[data-testid*='description'] div"
     ]
     
     description = Enum.find_value(selectors, fn selector ->
       case Floki.find(document, selector) do
         [] -> nil
         elements -> 
-          text = elements
-          |> Floki.text()
-          |> String.trim()
-          |> clean_description()
+          raw_text = elements |> Floki.text() |> String.trim()
+          
+          # Debug: log what we found before cleaning
+          if String.length(raw_text) > 20 do
+            Logger.info("  Found text from #{selector}: #{String.slice(raw_text, 0, 100)}...")
+          end
+          
+          text = clean_description(raw_text)
           
           # clean_description can return nil for invalid content
           if text && String.length(text) > 50, do: text, else: nil
@@ -218,32 +223,33 @@ defmodule Rzeczywiscie.Services.DescriptionFetcher do
   # Otodom description extraction
   defp extract_otodom_description(document) do
     # Otodom stores description in specific elements
+    # Use contains (*=) selectors since exact matches fail
     selectors = [
-      # Primary selectors (most reliable)
+      # Contains-based selectors (most reliable based on debug)
+      "[data-cy*='Description']",
+      "[data-cy*='description']",
+      "[data-testid*='description']",
+      "[data-testid*='Description']",
+      # Exact match fallbacks
       "[data-cy='adPageAdDescription']",
       "[data-cy='adPageDescription']",
-      "[data-testid='ad.description']",
-      "[data-testid='content.description']",
-      # Section with "Opis" heading
-      "section[aria-label*='Opis'] div",
-      "section[aria-labelledby*='description'] div",
       # Class-based selectors
       "div[class*='AdDescription']",
-      "div[class*='ad-description']",
-      "div[class*='Description__Wrapper']",
-      # Generic but scoped
-      "main section p",
-      "article section p"
+      "div[class*='Description__Wrapper']"
     ]
     
     description = Enum.find_value(selectors, fn selector ->
       case Floki.find(document, selector) do
         [] -> nil
         elements -> 
-          text = elements
-          |> Floki.text()
-          |> String.trim()
-          |> clean_description()
+          raw_text = elements |> Floki.text() |> String.trim()
+          
+          # Debug: log what we found before cleaning
+          if String.length(raw_text) > 20 do
+            Logger.info("  Found text from #{selector}: #{String.slice(raw_text, 0, 100)}...")
+          end
+          
+          text = clean_description(raw_text)
           
           # clean_description can return nil for invalid content
           if text && String.length(text) > 50, do: text, else: nil
