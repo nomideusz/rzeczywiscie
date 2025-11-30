@@ -75,18 +75,27 @@ defmodule Rzeczywiscie.Services.DescriptionFetcher do
   defp fetch_olx_description(property) do
     case fetch_page(property.url) do
       {:ok, html} ->
-        document = Floki.parse_document!(html)
-        
-        # Debug: log what we find
-        debug_page_structure(document, "OLX", property.id)
-        
-        description = extract_olx_description(document)
-        
-        if description && String.length(description) > 50 do
-          update_description(property, description)
+        # Check if listing is archived/unavailable
+        if String.contains?(html, "ogłoszenie nie istnieje") or 
+           String.contains?(html, "To ogłoszenie zostało zakończone") or
+           String.contains?(html, "Oferta nieaktualna") do
+          Logger.info("  OLX listing is archived, marking inactive")
+          RealEstate.update_property(property, %{active: false})
+          {:error, :listing_archived}
         else
-          Logger.warning("No substantial description found for OLX property ##{property.id}")
-          {:error, :no_description}
+          document = Floki.parse_document!(html)
+          
+          # Debug: log what we find
+          debug_page_structure(document, "OLX", property.id)
+          
+          description = extract_olx_description(document)
+          
+          if description && String.length(description) > 50 do
+            update_description(property, description)
+          else
+            Logger.warning("No substantial description found for OLX property ##{property.id}")
+            {:error, :no_description}
+          end
         end
 
       {:error, reason} ->
@@ -98,18 +107,27 @@ defmodule Rzeczywiscie.Services.DescriptionFetcher do
   defp fetch_otodom_description(property) do
     case fetch_page(property.url) do
       {:ok, html} ->
-        document = Floki.parse_document!(html)
-        
-        # Debug: log what we find
-        debug_page_structure(document, "Otodom", property.id)
-        
-        description = extract_otodom_description(document)
-        
-        if description && String.length(description) > 50 do
-          update_description(property, description)
+        # Check if listing is archived/unavailable
+        if String.contains?(html, "ogłoszenie jest już niedostępne") or 
+           String.contains?(html, "Oferta nieaktualna") do
+          Logger.info("  Otodom listing is archived, marking inactive")
+          # Mark property as inactive
+          RealEstate.update_property(property, %{active: false})
+          {:error, :listing_archived}
         else
-          Logger.warning("No substantial description found for Otodom property ##{property.id}")
-          {:error, :no_description}
+          document = Floki.parse_document!(html)
+          
+          # Debug: log what we find
+          debug_page_structure(document, "Otodom", property.id)
+          
+          description = extract_otodom_description(document)
+          
+          if description && String.length(description) > 50 do
+            update_description(property, description)
+          else
+            Logger.warning("No substantial description found for Otodom property ##{property.id}")
+            {:error, :no_description}
+          end
         end
 
       {:error, reason} ->
