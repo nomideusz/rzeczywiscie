@@ -432,11 +432,11 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
           |> String.trim()
 
         if text != "" and String.length(text) > 10 do
-          Logger.debug("OLX description found with selector: #{selector}")
+          Logger.info("OLX description found with selector: #{selector}")
           {:halt, text}
         else
           if length(elements) > 0 do
-            Logger.debug("OLX selector '#{selector}' found #{length(elements)} elements but no text")
+            Logger.info("OLX selector '#{selector}' found #{length(elements)} elements but no text")
           end
           {:cont, nil}
         end
@@ -480,12 +480,12 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
       |> Enum.uniq()
       |> Enum.take(20)
     
-    Logger.debug("OLX page has data-cy: #{inspect(data_cy_values)}")
-    Logger.debug("OLX page has data-testid: #{inspect(data_testid_values)}")
+    Logger.info("OLX page has data-cy: #{inspect(data_cy_values)}")
+    Logger.info("OLX page has data-testid: #{inspect(data_testid_values)}")
     
     # Also check for divs with description-like classes
     description_divs = Floki.find(document, "div[class*='escription'], div[class*='Content'], div[class*='content']")
-    Logger.debug("OLX page has #{length(description_divs)} divs with description/content in class")
+    Logger.info("OLX page has #{length(description_divs)} divs with description/content in class")
   end
 
   # Extract description from Otodom document
@@ -521,11 +521,11 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
         |> String.trim()
 
       if text != "" and String.length(text) > 10 do
-        Logger.debug("Otodom description found with selector: #{selector}")
+        Logger.info("Otodom description found with selector: #{selector}")
         {:halt, text}
       else
         if length(elements) > 0 do
-          Logger.debug("Otodom selector '#{selector}' found #{length(elements)} elements but no text")
+          Logger.info("Otodom selector '#{selector}' found #{length(elements)} elements but no text")
         end
         {:cont, nil}
       end
@@ -533,7 +533,7 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
     
     # If no description found via selectors, log what's available
     if is_nil(description) do
-      Logger.debug("No Otodom description found with standard selectors")
+      Logger.info("No Otodom description found with standard selectors")
     end
     
     description
