@@ -186,29 +186,68 @@ defmodule Rzeczywiscie.Services.DescriptionFetcher do
   end
 
   # Find the largest text block on the page (likely the description)
-  defp find_largest_text_block(document) do
-    # Look for <p> tags with substantial content
-    paragraphs = document
-    |> Floki.find("p, div.description, div[class*='desc']")
-    |> Enum.map(fn elem -> 
-      text = Floki.text(elem) |> String.trim() |> clean_description()
-      {String.length(text), text}
-    end)
-    |> Enum.filter(fn {len, _} -> len > 100 end)
-    |> Enum.sort_by(fn {len, _} -> -len end)
-    
-    case paragraphs do
-      [{_, text} | _] -> text
-      [] -> nil
-    end
+  # DISABLED - fallback was grabbing CSS/JS content
+  defp find_largest_text_block(_document) do
+    nil
   end
 
   defp clean_description(text) do
-    text
+    cleaned = text
     |> String.replace(~r/\s+/, " ")  # Normalize whitespace
     |> String.replace(~r/[\r\n]+/, "\n")  # Normalize newlines
     |> String.trim()
     |> String.slice(0, 5000)  # Limit to 5000 chars
+    
+    # Validate the description is actual content, not CSS/JS/garbage
+    if is_valid_description?(cleaned), do: cleaned, else: nil
+  end
+  
+  # Check if text looks like a real description (not CSS, JS, or garbage)
+  defp is_valid_description?(text) when is_binary(text) do
+    cond do
+      # Too short
+      String.length(text) < 50 -> false
+      
+      # Contains CSS patterns
+      String.contains?(text, [".css-", "{color:", "{font-", "font-weight:", "text-align:", "line-height:"]) -> false
+      
+      # Contains JS patterns  
+      String.contains?(text, ["function(", "var ", "const ", "let ", "=>"]) -> false
+      
+      # Contains HTML tags or entities
+      String.match?(text, ~r/<[a-z]+|&[a-z]+;/) -> false
+      
+      # Too many special characters (likely code/garbage)
+      special_char_ratio(text) > 0.15 -> false
+      
+      # Contains mostly non-Polish characters
+      polish_char_ratio(text) < 0.7 -> false
+      
+      # Looks valid
+      true -> true
+    end
+  end
+  defp is_valid_description?(_), do: false
+  
+  # Calculate ratio of special characters ({};:=) to total length
+  defp special_char_ratio(text) do
+    special_count = text
+    |> String.graphemes()
+    |> Enum.count(&(&1 in ["{", "}", ";", ":", "=", "<", ">", "(", ")"]))
+    
+    special_count / max(String.length(text), 1)
+  end
+  
+  # Calculate ratio of Polish/Latin characters to total
+  defp polish_char_ratio(text) do
+    # Polish letters + common punctuation + spaces
+    polish_pattern = ~r/[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ0-9\s.,!?;:\-–—'"„""]/
+    
+    polish_count = text
+    |> String.graphemes()
+    |> Enum.count(&Regex.match?(polish_pattern, &1))
+    
+    polish_count / max(String.length(text), 1)
   end
 
   defp update_description(property, description) do

@@ -192,6 +192,10 @@ defmodule RzeczywiscieWeb.AdminLive do
                 class={"px-4 py-3 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @cleanup_running != nil || @db_stats.invalid_prices == 0, do: "border-base-content/30 opacity-50", else: "border-secondary text-secondary hover:bg-secondary hover:text-secondary-content"}"}>
                 <%= if @cleanup_running == :invalid_prices, do: "⏳ Running...", else: "💰 Fix #{@db_stats.invalid_prices} Bad Prices" %>
               </button>
+              <button phx-click="run_cleanup_task" phx-value-type="bad_descriptions" disabled={@cleanup_running != nil}
+                class={"px-4 py-3 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @cleanup_running != nil, do: "border-base-content/30 opacity-50", else: "border-accent text-accent hover:bg-accent hover:text-accent-content"}"}>
+                <%= if @cleanup_running == :bad_descriptions, do: "⏳ Running...", else: "📝 Clear Bad Descriptions" %>
+              </button>
             </div>
           </div>
         </div>
@@ -758,6 +762,11 @@ defmodule RzeczywiscieWeb.AdminLive do
   defp run_cleanup_task(:invalid_prices) do
     {:ok, count} = RealEstate.clear_invalid_prices()
     "Cleared #{count} invalid prices (< 100 PLN)"
+  end
+
+  defp run_cleanup_task(:bad_descriptions) do
+    {:ok, count} = RealEstate.clear_bad_descriptions()
+    "Cleared #{count} bad descriptions (CSS/garbage content)"
   end
 
   defp run_geocode_task do

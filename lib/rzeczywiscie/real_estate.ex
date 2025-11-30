@@ -374,6 +374,36 @@ defmodule Rzeczywiscie.RealEstate do
   end
 
   @doc """
+  Clear descriptions that contain CSS, JS, or other garbage content.
+  """
+  def clear_bad_descriptions do
+    # Find descriptions with CSS/JS patterns
+    bad_patterns = [".css-", "{color:", "{font-", "font-weight:", "text-align:"]
+    
+    # Get properties with bad descriptions
+    bad_props = from(p in Property,
+      where: p.active == true and not is_nil(p.description)
+    )
+    |> Repo.all()
+    |> Enum.filter(fn p ->
+      desc = p.description || ""
+      Enum.any?(bad_patterns, &String.contains?(desc, &1)) ||
+        # Too many special characters
+        String.length(String.replace(desc, ~r/[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ0-9\s.,!?;:\-–—'"„""]/u, "")) / max(String.length(desc), 1) > 0.15
+    end)
+    
+    # Clear them
+    count = Enum.reduce(bad_props, 0, fn prop, acc ->
+      case Repo.update(Property.changeset(prop, %{description: nil})) do
+        {:ok, _} -> acc + 1
+        {:error, _} -> acc
+      end
+    end)
+    
+    {:ok, count}
+  end
+
+  @doc """
   Delete a property.
   """
   def delete_property(%Property{} = property) do
