@@ -239,8 +239,11 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
       end
 
       full_url = ensure_absolute_url(url)
-      description = extract_description(card)
-      search_text = "#{title} #{description} #{full_url}"
+
+      # Description is fetched manually from Admin page only
+      description = nil
+
+      search_text = "#{title} #{full_url}"
 
       # Try to extract price from card, if fails try title as fallback
       price = extract_price(card, title)
@@ -527,14 +530,6 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
     |> Floki.find("img")
     |> Floki.attribute("src")
     |> List.first()
-  end
-
-  defp extract_description(card) do
-    card
-    |> Floki.find("p")
-    |> Enum.map(&Floki.text/1)
-    |> Enum.join(" ")
-    |> String.slice(0, 500)
   end
 
   defp extract_transaction_type(text) do

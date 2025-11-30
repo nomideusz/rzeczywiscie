@@ -334,5 +334,175 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
   end
 
   def extract_price_from_full_text(_), do: nil
+
+  @doc """
+  Fetch and extract description from OLX listing page.
+  Returns {:ok, description} or {:error, reason}.
+  """
+  def fetch_olx_description(url) when is_binary(url) do
+    case fetch_page(url) do
+      {:ok, html} ->
+        case Floki.parse_document(html) do
+          {:ok, document} ->
+            description = extract_olx_description_from_document(document)
+            {:ok, description}
+
+          {:error, reason} ->
+            Logger.warning("Failed to parse OLX page: #{inspect(reason)}")
+            {:error, :parse_error}
+        end
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  def fetch_olx_description(_), do: {:error, :invalid_url}
+
+  @doc """
+  Fetch and extract description from Otodom listing page.
+  Returns {:ok, description} or {:error, reason}.
+  """
+  def fetch_otodom_description(url) when is_binary(url) do
+    case fetch_page(url) do
+      {:ok, html} ->
+        case Floki.parse_document(html) do
+          {:ok, document} ->
+            description = extract_otodom_description_from_document(document)
+            {:ok, description}
+
+          {:error, reason} ->
+            Logger.warning("Failed to parse Otodom page: #{inspect(reason)}")
+            {:error, :parse_error}
+        end
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  def fetch_otodom_description(_), do: {:error, :invalid_url}
+
+  # Fetch a web page with proper headers
+  defp fetch_page(url) do
+    headers = [
+      {"user-agent",
+       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"},
+      {"accept",
+       "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"},
+      {"accept-language", "pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7"},
+      {"accept-encoding", "gzip, deflate, br"}
+    ]
+
+    case Req.get(url, headers: headers, receive_timeout: 15_000, max_redirects: 5) do
+      {:ok, %{status: 200, body: body}} ->
+        {:ok, body}
+
+      {:ok, %{status: status}} ->
+        Logger.warning("HTTP #{status} when fetching #{url}")
+        {:error, :http_error}
+
+      {:error, reason} ->
+        Logger.warning("Failed to fetch #{url}: #{inspect(reason)}")
+        {:error, :network_error}
+    end
+  end
+
+  # Extract description from OLX document
+  defp extract_olx_description_from_document(document) do
+    # OLX description selectors (try multiple)
+    selectors = [
+      "div[data-cy='ad_description'] div",
+      "div[data-cy='ad_description']",
+      "div.css-1o924a9",  # OLX description container class
+      "div.css-bgzo2k",   # Alternative class
+      "div[class*='description']"
+    ]
+
+    description =
+      Enum.reduce_while(selectors, nil, fn selector, _acc ->
+        text =
+          document
+          |> Floki.find(selector)
+          |> Floki.text()
+          |> String.trim()
+
+        if text != "" and String.length(text) > 10 do
+          {:halt, text}
+        else
+          {:cont, nil}
+        end
+      end)
+
+    description
+  end
+
+  # Extract description from Otodom document
+  defp extract_otodom_description_from_document(document) do
+    # Try multiple strategies for Otodom descriptions
+
+    # Strategy 1: Find description in specific div
+    description = try_otodom_description_selectors(document)
+
+    # Strategy 2: Extract from JSON-LD if available
+    description = description || try_otodom_json_ld_description(document)
+
+    description
+  end
+
+  defp try_otodom_description_selectors(document) do
+    selectors = [
+      "div[data-cy='adPageAdDescription']",
+      "section[aria-label='Opis']",
+      "div[class*='description']",
+      "div.css-1wekrze",  # Otodom description class
+      "div.css-1k7yu81"   # Alternative class
+    ]
+
+    Enum.reduce_while(selectors, nil, fn selector, _acc ->
+      text =
+        document
+        |> Floki.find(selector)
+        |> Floki.text()
+        |> String.trim()
+
+      if text != "" and String.length(text) > 10 do
+        {:halt, text}
+      else
+        {:cont, nil}
+      end
+    end)
+  end
+
+  defp try_otodom_json_ld_description(document) do
+    # Find JSON-LD script tags
+    json_ld_scripts = Floki.find(document, "script[type='application/ld+json']")
+
+    Enum.reduce_while(json_ld_scripts, nil, fn {_tag, _attrs, children}, _acc ->
+      content = case children do
+        [single_content] when is_binary(single_content) -> single_content
+        multiple -> Enum.join(multiple, "")
+      end
+
+      case Jason.decode(content) do
+        {:ok, json_data} ->
+          description = extract_description_from_json(json_data)
+          if description && String.length(description) > 10 do
+            {:halt, description}
+          else
+            {:cont, nil}
+          end
+
+        {:error, _} ->
+          {:cont, nil}
+      end
+    end)
+  end
+
+  defp extract_description_from_json(%{"description" => desc}) when is_binary(desc), do: desc
+  defp extract_description_from_json(%{"@graph" => graph}) when is_list(graph) do
+    Enum.find_value(graph, fn item -> extract_description_from_json(item) end)
+  end
+  defp extract_description_from_json(_), do: nil
 end
 
