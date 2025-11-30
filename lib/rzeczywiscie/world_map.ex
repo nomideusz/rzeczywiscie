@@ -80,6 +80,23 @@ defmodule Rzeczywiscie.WorldMap do
   end
 
   @doc """
+  Delete all pins and broadcast the deletion to all clients.
+  Returns the count of deleted pins.
+  """
+  def delete_all_pins do
+    {count, _} = Repo.delete_all(Pin)
+    
+    # Broadcast a special event to clear all pins on clients
+    Phoenix.PubSub.broadcast(
+      Rzeczywiscie.PubSub,
+      @topic,
+      :all_pins_deleted
+    )
+    
+    {:ok, count}
+  end
+
+  @doc """
   Get geolocation data from IP address.
   Uses ip-api.com free tier (45 requests per minute).
   """

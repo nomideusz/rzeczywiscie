@@ -5,6 +5,7 @@
     export let users = []
     export let pins = []
     export let googleMapsApiKey = ""
+    export let isAdmin = false
     export let live
 
     let map
@@ -85,6 +86,7 @@
 
         live.handleEvent("pin_created", handlePinCreated)
         live.handleEvent("pin_deleted", handlePinDeleted)
+        live.handleEvent("all_pins_deleted", handleAllPinsDeleted)
         live.handleEvent("presence_update", handlePresenceUpdate)
         live.handleEvent("cursor_move", handleCursorMove)
         live.handleEvent("chat_message", handleChatMessage)
@@ -339,6 +341,7 @@
 
     function handlePinCreated(pin) { pins = [pin, ...pins]; renderPins() }
     function handlePinDeleted(data) { pins = pins.filter(p => p.id !== data.id); renderPins() }
+    function handleAllPinsDeleted() { pins = []; renderPins() }
     function handlePresenceUpdate(data) { users = data.users; renderUsers() }
     
     function handleChatMessage(data) {
@@ -405,6 +408,12 @@
         map.setZoom(8)
     }
 
+    function deleteAllPins() {
+        if (confirm(`Are you sure you want to delete ALL ${pins.length} pins? This cannot be undone.`)) {
+            live.pushEvent("delete_all_pins", {}, () => {})
+        }
+    }
+
     function getFlagEmoji(code) {
         return code.toUpperCase().split('').map(c => String.fromCodePoint(c.charCodeAt(0) + 127397)).join('')
     }
@@ -466,10 +475,22 @@
                     >
                         💬 {chatMessages.length || ''}
                     </button>
+                    {#if isAdmin}
+                        <button
+                            class="px-2 py-1 text-xs font-bold uppercase tracking-wide border-2 transition-colors {pins.length > 0 ? 'border-error text-error hover:bg-error hover:text-error-content cursor-pointer' : 'border-base-content/30 text-base-content/30 cursor-not-allowed'}"
+                            onclick={deleteAllPins}
+                            disabled={pins.length === 0}
+                        >
+                            🗑️ Delete All ({pinCount})
+                        </button>
+                    {/if}
                     {#if currentUser.name}
                         <div class="hidden sm:flex items-center gap-2 px-2 py-1 border-2 border-base-content bg-base-200">
                             <div class="w-3 h-3" style="background: {currentUser.color}"></div>
                             <span class="text-xs font-bold uppercase">{currentUser.name}</span>
+                            {#if isAdmin}
+                                <span class="text-[10px] font-bold text-warning">(Admin)</span>
+                            {/if}
                         </div>
                     {/if}
                 </div>

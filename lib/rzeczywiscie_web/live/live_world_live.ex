@@ -15,7 +15,8 @@ defmodule RzeczywiscieWeb.LiveWorldLive do
           currentUser: @current_user,
           users: @users,
           pins: @pins,
-          googleMapsApiKey: @google_maps_api_key
+          googleMapsApiKey: @google_maps_api_key,
+          isAdmin: @is_admin
         }}
         socket={@socket}
       />
@@ -23,7 +24,10 @@ defmodule RzeczywiscieWeb.LiveWorldLive do
     """
   end
 
-  def mount(_params, _session, socket) do
+  def mount(params, _session, socket) do
+    # Check for admin mode via query param
+    is_admin = Map.get(params, "admin") == "true"
+    
     if connected?(socket) do
       # Subscribe to world map updates and presence
       WorldMap.subscribe()
@@ -69,14 +73,16 @@ defmodule RzeczywiscieWeb.LiveWorldLive do
        |> assign(:current_user, current_user)
        |> assign(:users, get_present_users())
        |> assign(:pins, pins)
-       |> assign(:google_maps_api_key, get_google_maps_api_key())}
+       |> assign(:google_maps_api_key, get_google_maps_api_key())
+       |> assign(:is_admin, is_admin)}
     else
       {:ok,
        socket
        |> assign(:current_user, %{})
        |> assign(:users, [])
        |> assign(:pins, [])
-       |> assign(:google_maps_api_key, "")}
+       |> assign(:google_maps_api_key, "")
+       |> assign(:is_admin, is_admin)}
     end
   end
 
@@ -108,6 +114,15 @@ defmodule RzeczywiscieWeb.LiveWorldLive do
   def handle_event("delete_pin", %{"pin_id" => pin_id}, socket) do
     WorldMap.delete_pin(pin_id)
     {:noreply, socket}
+  end
+
+  def handle_event("delete_all_pins", _params, socket) do
+    if socket.assigns.is_admin do
+      {:ok, count} = WorldMap.delete_all_pins()
+      {:noreply, put_flash(socket, :info, "Deleted #{count} pins")}
+    else
+      {:noreply, put_flash(socket, :error, "Unauthorized")}
+    end
   end
 
   def handle_event("cursor_move", %{"lat" => lat, "lng" => lng}, socket) do
@@ -174,6 +189,13 @@ defmodule RzeczywiscieWeb.LiveWorldLive do
      socket
      |> assign(:pins, pins)
      |> push_event("pin_deleted", %{id: id})}
+  end
+
+  def handle_info(:all_pins_deleted, socket) do
+    {:noreply,
+     socket
+     |> assign(:pins, [])
+     |> push_event("all_pins_deleted", %{})}
   end
 
   # Handle presence updates
