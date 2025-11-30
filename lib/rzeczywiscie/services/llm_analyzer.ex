@@ -255,27 +255,31 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
       {"Content-Type", "application/json"}
     ]
     
-    Logger.info("  Calling OpenAI API...")
-    
-    case Req.post(@openai_url, json: body, headers: headers, connect_timeout: 10_000, receive_timeout: 30_000) do
+    Logger.info("  Calling OpenAI API (#{String.slice(content, 0, 50)}...)")
+
+    case Req.post(@openai_url, json: body, headers: headers, connect_timeout: 10_000, receive_timeout: 20_000) do
       {:ok, %{status: 200, body: response}} ->
         Logger.info("  ✓ OpenAI response received")
         parse_response(response)
-        
+
       {:ok, %{status: 401}} ->
-        Logger.error("OpenAI API: Invalid API key (401 Unauthorized)")
+        Logger.error("  ✗ OpenAI API: Invalid API key (401 Unauthorized)")
         {:error, :invalid_api_key}
-        
+
       {:ok, %{status: 429}} ->
-        Logger.warning("OpenAI rate limit hit (429)")
+        Logger.warning("  ✗ OpenAI rate limit hit (429) - slow down requests")
         {:error, :rate_limited}
-        
+
       {:ok, %{status: status, body: body}} ->
-        Logger.error("OpenAI API error: #{status} - #{inspect(body)}")
+        Logger.error("  ✗ OpenAI API error #{status}: #{inspect(body)}")
         {:error, :api_error}
-        
+
+      {:error, %{reason: :timeout}} ->
+        Logger.error("  ✗ OpenAI request timed out after 20 seconds")
+        {:error, :timeout}
+
       {:error, reason} ->
-        Logger.error("OpenAI request failed: #{inspect(reason)}")
+        Logger.error("  ✗ OpenAI request failed: #{inspect(reason)}")
         {:error, :request_failed}
     end
   end
