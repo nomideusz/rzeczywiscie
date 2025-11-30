@@ -76,6 +76,10 @@ defmodule Rzeczywiscie.Services.DescriptionFetcher do
     case fetch_page(property.url) do
       {:ok, html} ->
         document = Floki.parse_document!(html)
+        
+        # Debug: log what we find
+        debug_page_structure(document, "OLX", property.id)
+        
         description = extract_olx_description(document)
         
         if description && String.length(description) > 50 do
@@ -95,6 +99,10 @@ defmodule Rzeczywiscie.Services.DescriptionFetcher do
     case fetch_page(property.url) do
       {:ok, html} ->
         document = Floki.parse_document!(html)
+        
+        # Debug: log what we find
+        debug_page_structure(document, "Otodom", property.id)
+        
         description = extract_otodom_description(document)
         
         if description && String.length(description) > 50 do
@@ -107,6 +115,49 @@ defmodule Rzeczywiscie.Services.DescriptionFetcher do
       {:error, reason} ->
         Logger.error("Failed to fetch Otodom page: #{inspect(reason)}")
         {:error, reason}
+    end
+  end
+  
+  # Debug helper to see what's on the page
+  defp debug_page_structure(document, source, property_id) do
+    # Check for JSON-LD
+    json_ld_count = document |> Floki.find("script[type='application/ld+json']") |> length()
+    
+    # Check for common description selectors
+    selectors_found = [
+      {"[data-cy*='description']", Floki.find(document, "[data-cy*='description']") |> length()},
+      {"[data-cy*='Description']", Floki.find(document, "[data-cy*='Description']") |> length()},
+      {"[data-testid*='description']", Floki.find(document, "[data-testid*='description']") |> length()},
+      {"section", Floki.find(document, "section") |> length()},
+      {"article", Floki.find(document, "article") |> length()}
+    ]
+    |> Enum.filter(fn {_, count} -> count > 0 end)
+    |> Enum.map(fn {sel, count} -> "#{sel}=#{count}" end)
+    |> Enum.join(", ")
+    
+    # Sample JSON-LD content
+    json_ld_sample = document
+    |> Floki.find("script[type='application/ld+json']")
+    |> List.first()
+    |> case do
+      nil -> "none"
+      script -> 
+        text = Floki.text(script)
+        if String.contains?(text, "description") do
+          "has 'description' field"
+        else
+          "no 'description' field (keys: #{extract_json_keys(text)})"
+        end
+    end
+    
+    Logger.info("DEBUG #{source} ##{property_id}: JSON-LD=#{json_ld_count}, selectors=[#{selectors_found}], JSON-LD content: #{json_ld_sample}")
+  end
+  
+  defp extract_json_keys(json_text) do
+    case Jason.decode(json_text) do
+      {:ok, data} when is_map(data) -> Map.keys(data) |> Enum.take(5) |> Enum.join(", ")
+      {:ok, data} when is_list(data) -> "array[#{length(data)}]"
+      _ -> "parse error"
     end
   end
 
