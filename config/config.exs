@@ -38,23 +38,25 @@ config :rzeczywiscie, Oban,
     {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 7},
     {Oban.Plugins.Cron,
      crontab: [
-       # Scrape OLX every 30 minutes
-       {"*/30 * * * *", Rzeczywiscie.Workers.OlxScraperWorker},
-       # Scrape Otodom every 30 minutes (offset by 15 minutes from OLX)
-       {"15,45 * * * *", Rzeczywiscie.Workers.OtodomScraperWorker},
+       # Scrape OLX every 4 hours with 10 pages (deeper but less frequent)
+       # Runs at: 0:00, 4:00, 8:00, 12:00, 16:00, 20:00
+       {"0 */4 * * *", Rzeczywiscie.Workers.OlxScraperWorker, args: %{"pages" => 10, "delay" => 2500}},
+       # Scrape Otodom every 4 hours with 8 pages (offset by 2 hours from OLX)
+       # Runs at: 2:00, 6:00, 10:00, 14:00, 18:00, 22:00
+       {"0 2,6,10,14,18,22 * * *", Rzeczywiscie.Workers.OtodomScraperWorker, args: %{"pages" => 8, "delay" => 3000}},
        # Track price changes every 2 hours
        {"0 */2 * * *", Rzeczywiscie.Workers.PriceTrackerWorker},
-       # Mark stale properties inactive daily at 3 AM
-       {"0 3 * * *", Rzeczywiscie.Workers.CleanupWorker},
+       # Mark stale properties inactive daily at 3 AM (96 hours = 4 days without being seen)
+       {"0 3 * * *", Rzeczywiscie.Workers.CleanupWorker, args: %{"hours" => 96}},
        # Geocode properties every hour
        {"0 * * * *", Rzeczywiscie.Workers.GeocodingWorker}
      ]},
     # Lifeline plugin helps rescue long-running jobs from timeout
-    {Oban.Plugins.Lifeline, rescue_after: :timer.minutes(10)}
+    {Oban.Plugins.Lifeline, rescue_after: :timer.minutes(30)}
   ],
   queues: [scraper: 10, default: 5],
   # Increase shutdown timeout for long-running jobs
-  shutdown_grace_period: :timer.minutes(5)
+  shutdown_grace_period: :timer.minutes(10)
 
 # Configure tailwind (the version is required)
 config :tailwind,
