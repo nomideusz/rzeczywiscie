@@ -196,55 +196,77 @@ defmodule RzeczywiscieWeb.AdminLive do
           </div>
         </div>
 
-        <!-- LLM Analysis -->
+        <!-- Property Analysis -->
         <div class="bg-base-100 border-2 border-base-content mb-6">
           <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
-            <h2 class="text-sm font-bold uppercase tracking-wide">🤖 LLM Title Analysis</h2>
+            <h2 class="text-sm font-bold uppercase tracking-wide">🔍 Property Analysis</h2>
           </div>
           <div class="p-4">
-            <p class="text-xs opacity-60 mb-3">
-              Use AI (GPT-4o-mini) to analyze property titles for urgency, condition, and motivation signals.
-              Cost: ~$0.01 per 100 properties.
-            </p>
+            <!-- Workflow explanation -->
+            <div class="mb-4 text-xs opacity-70 space-y-1">
+              <p><strong>3-step analysis workflow:</strong></p>
+              <p>1️⃣ <strong>Regex Analysis</strong> - Free, extracts signals from titles (all properties)</p>
+              <p>2️⃣ <strong>Fetch Descriptions</strong> - Gets full text from top deals' URLs</p>
+              <p>3️⃣ <strong>LLM Analysis</strong> - AI analyzes descriptions (~$0.05 for 50 properties)</p>
+            </div>
             
             <!-- Stats Overview -->
-            <div class="grid grid-cols-4 gap-3 mb-4">
+            <div class="grid grid-cols-5 gap-3 mb-4">
               <div class="bg-base-200 p-3 text-center">
                 <div class="text-2xl font-black text-success"><%= @llm_stats.analyzed %></div>
-                <div class="text-[10px] font-bold uppercase opacity-60">Analyzed</div>
+                <div class="text-[10px] font-bold uppercase opacity-60">LLM Analyzed</div>
+              </div>
+              <div class="bg-base-200 p-3 text-center">
+                <div class="text-2xl font-black text-info"><%= @llm_stats.with_descriptions %></div>
+                <div class="text-[10px] font-bold uppercase opacity-60">Have Desc</div>
               </div>
               <div class="bg-base-200 p-3 text-center">
                 <div class="text-2xl font-black text-warning"><%= @llm_stats.pending %></div>
                 <div class="text-[10px] font-bold uppercase opacity-60">Pending</div>
               </div>
               <div class="bg-base-200 p-3 text-center">
-                <div class="text-2xl font-black text-info"><%= @llm_stats.avg_score %></div>
+                <div class="text-2xl font-black text-primary"><%= @llm_stats.avg_score %></div>
                 <div class="text-[10px] font-bold uppercase opacity-60">Avg Score</div>
               </div>
               <div class="bg-base-200 p-3 text-center">
-                <div class="text-2xl font-black text-primary"><%= @llm_stats.max_score %></div>
+                <div class="text-2xl font-black"><%= @llm_stats.max_score %></div>
                 <div class="text-[10px] font-bold uppercase opacity-60">Max Score</div>
               </div>
             </div>
             
-            <!-- Action Button -->
-            <div class="mb-4">
+            <!-- Action Buttons -->
+            <div class="flex flex-wrap gap-3 mb-4">
               <%= if @llm_running do %>
                 <button disabled class="px-4 py-2 text-xs font-bold uppercase tracking-wide bg-base-300 text-base-content/50 cursor-not-allowed">
-                  🔄 Analyzing... (<%= @llm_progress %> done)
+                  🔄 Running... (<%= @llm_progress %>)
                 </button>
               <% else %>
+                <button 
+                  phx-click="run_regex_analysis" 
+                  class="px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 border-success text-success hover:bg-success hover:text-success-content transition-colors"
+                >
+                  🔍 Regex Analysis (Free)
+                </button>
+                <button 
+                  phx-click="fetch_descriptions" 
+                  class="px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 border-warning text-warning hover:bg-warning hover:text-warning-content transition-colors"
+                >
+                  📝 Fetch Descriptions (Top 50)
+                </button>
                 <button 
                   phx-click="run_llm_analysis" 
                   class="px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 border-info text-info hover:bg-info hover:text-info-content transition-colors"
                 >
-                  🤖 Analyze Next 50 Properties
+                  🤖 LLM Analysis (Top 50)
                 </button>
               <% end %>
-              <%= if @llm_result do %>
-                <span class="ml-3 text-sm font-medium text-success"><%= @llm_result %></span>
-              <% end %>
             </div>
+            
+            <%= if @llm_result do %>
+              <div class="mb-4 px-3 py-2 text-xs font-bold bg-success/20 text-success border border-success">
+                ✓ <%= @llm_result %>
+              </div>
+            <% end %>
             
             <%= if @llm_stats.analyzed > 0 do %>
               <!-- Breakdowns -->
@@ -484,8 +506,46 @@ defmodule RzeczywiscieWeb.AdminLive do
   end
   
   @impl true
+  def handle_event("run_regex_analysis", _params, socket) do
+    Logger.info("Starting regex title analysis from admin panel")
+    
+    socket = 
+      socket
+      |> assign(:llm_running, true)
+      |> assign(:llm_progress, "regex")
+      |> assign(:llm_result, nil)
+    
+    parent = self()
+    Task.start(fn ->
+      result = run_regex_analysis(parent)
+      send(parent, {:llm_complete, result})
+    end)
+    
+    {:noreply, socket}
+  end
+  
+  @impl true
+  def handle_event("fetch_descriptions", _params, socket) do
+    Logger.info("Starting description fetch from admin panel")
+    
+    socket = 
+      socket
+      |> assign(:llm_running, true)
+      |> assign(:llm_progress, "fetching")
+      |> assign(:llm_result, nil)
+    
+    parent = self()
+    Task.start(fn ->
+      result = run_description_fetch(parent)
+      send(parent, {:llm_complete, result})
+    end)
+    
+    {:noreply, socket}
+  end
+  
+  @impl true
   def handle_event("run_llm_analysis", _params, socket) do
-    Logger.info("Starting LLM analysis from admin panel")
+    Logger.info("Starting LLM description analysis from admin panel")
     
     socket = 
       socket
@@ -1184,6 +1244,14 @@ defmodule RzeczywiscieWeb.AdminLive do
     analyzed_count = RealEstate.count_llm_analyzed()
     pending_count = RealEstate.count_pending_llm_analysis()
     
+    # Count properties with descriptions
+    with_descriptions = Repo.aggregate(
+      from(p in Property, 
+        where: p.active == true and not is_nil(p.description) and fragment("length(?)", p.description) > 100
+      ),
+      :count, :id
+    )
+    
     # Get detailed breakdown if we have analyzed properties
     if analyzed_count > 0 do
       analyzed_properties = from(p in Property,
@@ -1237,6 +1305,7 @@ defmodule RzeczywiscieWeb.AdminLive do
       %{
         analyzed: analyzed_count,
         pending: pending_count,
+        with_descriptions: with_descriptions,
         conditions: conditions,
         motivations: motivations,
         urgency_dist: urgency_dist,
@@ -1251,6 +1320,7 @@ defmodule RzeczywiscieWeb.AdminLive do
       %{
         analyzed: 0,
         pending: pending_count,
+        with_descriptions: with_descriptions,
         conditions: [],
         motivations: [],
         urgency_dist: [],
@@ -1264,16 +1334,86 @@ defmodule RzeczywiscieWeb.AdminLive do
     end
   end
   
+  defp run_regex_analysis(_parent) do
+    alias Rzeczywiscie.Services.TitleAnalyzer
+    
+    # Get all active properties
+    properties = from(p in Property,
+      where: p.active == true,
+      select: %{id: p.id, title: p.title}
+    )
+    |> Repo.all()
+    
+    total = length(properties)
+    Logger.info("Running regex analysis on #{total} properties...")
+    
+    if total == 0 do
+      "No properties to analyze"
+    else
+      updated = properties
+      |> Enum.reduce(0, fn property, count ->
+        analysis = TitleAnalyzer.analyze(property.title)
+        score = TitleAnalyzer.calculate_score(analysis)
+        
+        # Only update if we found something useful
+        if analysis.urgency > 0 or analysis.condition or analysis.motivation != "standard" or 
+           length(analysis.positive_signals) > 0 or length(analysis.red_flags) > 0 do
+          
+          updates = %{
+            llm_urgency: analysis.urgency,
+            llm_condition: analysis.condition,
+            llm_motivation: analysis.motivation,
+            llm_positive_signals: analysis.positive_signals,
+            llm_red_flags: analysis.red_flags,
+            llm_score: score
+          }
+          
+          case RealEstate.update_property(Repo.get(Property, property.id), updates) do
+            {:ok, _} -> count + 1
+            {:error, _} -> count
+          end
+        else
+          count
+        end
+      end)
+      
+      "Regex analyzed #{total} properties, updated #{updated} with signals"
+    end
+  end
+  
+  defp run_description_fetch(_parent) do
+    alias Rzeczywiscie.Services.DescriptionFetcher
+    
+    Logger.info("Fetching descriptions for top deals...")
+    
+    case DescriptionFetcher.fetch_top_deals(limit: 50, delay: 2500) do
+      {:ok, %{total: total, fetched: fetched, failed: failed}} ->
+        "Fetched #{fetched}/#{total} descriptions (#{failed} failed)"
+      {:error, reason} ->
+        "Error: #{inspect(reason)}"
+    end
+  end
+  
   defp run_llm_analysis(parent) do
     alias Rzeczywiscie.Services.LLMAnalyzer
     
-    properties = RealEstate.get_properties_for_llm_analysis(50)
+    # Get properties WITH descriptions for LLM analysis (prefer description over title)
+    properties = from(p in Property,
+      where: p.active == true and 
+             not is_nil(p.description) and 
+             fragment("length(?)", p.description) > 100 and
+             is_nil(p.llm_analyzed_at),
+      order_by: [desc: p.inserted_at],
+      limit: 50
+    )
+    |> Repo.all()
+    
     total = length(properties)
     
     if total == 0 do
-      "No properties pending analysis"
+      "No properties with descriptions pending LLM analysis"
     else
-      Logger.info("Analyzing #{total} properties with LLM...")
+      Logger.info("Analyzing #{total} property descriptions with LLM...")
       
       results = properties
       |> Enum.with_index(1)
@@ -1281,9 +1421,21 @@ defmodule RzeczywiscieWeb.AdminLive do
         # Update progress
         send(parent, {:llm_progress, idx})
         
-        case LLMAnalyzer.analyze_title(property.title) do
+        # Analyze full property (prefers description if available)
+        case LLMAnalyzer.analyze_property(property) do
           {:ok, signals} ->
-            case RealEstate.update_llm_analysis(property.id, signals) do
+            # Convert atom keys to string for llm_condition and llm_motivation
+            updates = %{
+              llm_urgency: signals.urgency,
+              llm_condition: if(is_atom(signals.condition), do: Atom.to_string(signals.condition), else: signals.condition),
+              llm_motivation: if(is_atom(signals.seller_motivation), do: Atom.to_string(signals.seller_motivation), else: signals.seller_motivation),
+              llm_positive_signals: signals.positive_signals,
+              llm_red_flags: signals.red_flags,
+              llm_score: LLMAnalyzer.calculate_signal_score(signals),
+              llm_analyzed_at: DateTime.utc_now()
+            }
+            
+            case RealEstate.update_property(property, updates) do
               {:ok, _} -> :ok
               {:error, _} -> :error
             end
@@ -1292,10 +1444,13 @@ defmodule RzeczywiscieWeb.AdminLive do
             Logger.warning("LLM analysis failed for #{property.id}: #{inspect(reason)}")
             :error
         end
+        
+        # Small delay to respect rate limits
+        Process.sleep(500)
       end)
       
       successful = Enum.count(results, &(&1 == :ok))
-      "Analyzed #{successful}/#{total} properties"
+      "LLM analyzed #{successful}/#{total} descriptions"
     end
   end
 

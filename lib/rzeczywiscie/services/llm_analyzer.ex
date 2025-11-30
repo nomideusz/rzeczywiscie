@@ -1,8 +1,12 @@
 defmodule Rzeczywiscie.Services.LLMAnalyzer do
   @moduledoc """
-  LLM-based property title analysis to extract signals that regex misses.
+  LLM-based property analysis to extract signals that regex misses.
   
   Uses OpenAI GPT-4o-mini for cost-effective analysis (~$0.15/1M input tokens).
+  
+  Two modes:
+  1. Title analysis - fast, cheap, for all properties (via regex fallback)
+  2. Description analysis - deeper, for top deals only (uses LLM)
   
   Extracts signals like:
   - Urgency level (motivated seller indicators)
@@ -16,7 +20,7 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
   @openai_url "https://api.openai.com/v1/chat/completions"
   @model "gpt-4o-mini"
   
-  # System prompt for title analysis
+  # System prompt for title analysis (kept for backwards compatibility)
   @system_prompt """
   You are a Polish real estate analyst. Analyze property listing titles and extract signals.
   
@@ -50,6 +54,70 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
   - "musi się sprzedać", "likwidacja", "poniżej rynku" = very_motivated
   """
   
+  # Enhanced prompt for full description analysis
+  @description_prompt """
+  You are a Polish real estate investment analyst. Analyze this property listing description in detail.
+  
+  Extract ALL relevant signals for an investor looking for good deals.
+  
+  Respond ONLY with valid JSON in this exact format:
+  {
+    "urgency": 0-10,
+    "condition": "unknown" | "needs_renovation" | "to_finish" | "good" | "renovated" | "new",
+    "red_flags": [],
+    "positive_signals": [],
+    "seller_motivation": "unknown" | "standard" | "motivated" | "very_motivated",
+    "hidden_costs": [],
+    "negotiation_hints": [],
+    "investment_score": 0-10,
+    "summary": "1-2 sentence summary"
+  }
+  
+  Look for these signals in Polish descriptions:
+  
+  URGENCY (affects urgency score):
+  - "pilne", "pilna sprzedaż" → urgency 7-8
+  - "wyjazd za granicę", "przeprowadzka" → urgency 6-7
+  - "likwidacja", "musi się sprzedać" → urgency 9-10
+  - "okazja", "super cena" → urgency 4-5
+  
+  CONDITION (affects condition field):
+  - "do remontu", "wymaga remontu" → needs_renovation
+  - "stan deweloperski", "do wykończenia" → to_finish
+  - "po generalnym remoncie", "odnowione w 2023" → renovated
+  - "nowe budownictwo", "od dewelopera" → new
+  
+  RED FLAGS (add to red_flags array):
+  - High fees: "czynsz administracyjny", "opłaty", "fundusz remontowy"
+  - Legal: "spółdzielcze", "własnościowe", "księga wieczysta"
+  - Problems: "hałas", "ruchliwa ulica", "problem z sąsiadami"
+  - Hidden issues: "do negocjacji", "cena orientacyjna"
+  
+  POSITIVE SIGNALS (add to positive_signals array):
+  - Location: "cicha okolica", "blisko centrum", "park w pobliżu"
+  - Features: "balkon", "taras", "ogródek", "piwnica", "miejsce parkingowe"
+  - Condition: "nowe okna", "wymieniona instalacja", "klimatyzacja"
+  - Transport: "tramwaj", "autobus", "metro", "dobra komunikacja"
+  
+  HIDDEN COSTS (add to hidden_costs array):
+  - Any monthly fees mentioned (czynsz, opłaty)
+  - Renovation costs implied
+  - Parking costs
+  
+  NEGOTIATION HINTS (add to negotiation_hints array):
+  - "cena do negocjacji"
+  - "bezpośrednio" (no agent = more flexibility)
+  - Long time on market
+  - Multiple similar listings from same seller
+  
+  INVESTMENT SCORE (0-10):
+  - Consider: price vs quality, location, potential, urgency
+  - 8-10: Excellent opportunity
+  - 5-7: Good potential
+  - 3-4: Average
+  - 0-2: Risky or overpriced
+  """
+  
   @doc """
   Analyze a single property title and return extracted signals.
   Returns {:ok, signals} or {:error, reason}.
@@ -60,11 +128,59 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
     if api_key == "" do
       {:error, :api_key_not_configured}
     else
-      call_openai(title, api_key)
+      call_openai(title, api_key, @system_prompt, "Analyze this title: ")
     end
   end
   
   def analyze_title(_), do: {:error, :invalid_title}
+  
+  @doc """
+  Analyze a full property description for deeper insights.
+  More expensive but extracts much more signal than title-only analysis.
+  Returns {:ok, signals} or {:error, reason}.
+  """
+  def analyze_description(description) when is_binary(description) and byte_size(description) > 50 do
+    api_key = get_api_key()
+    
+    if api_key == "" do
+      {:error, :api_key_not_configured}
+    else
+      # Limit description to ~3000 chars to control costs
+      truncated = String.slice(description, 0, 3000)
+      call_openai(truncated, api_key, @description_prompt, "Analyze this property description:\n\n")
+    end
+  end
+  
+  def analyze_description(_), do: {:error, :description_too_short}
+  
+  @doc """
+  Analyze a property with both title and description.
+  Uses description if available (better signal), falls back to title.
+  """
+  def analyze_property(property) do
+    cond do
+      # Prefer description analysis if available
+      property.description && String.length(property.description) > 100 ->
+        case analyze_description(property.description) do
+          {:ok, signals} -> {:ok, Map.put(signals, :analysis_type, :description)}
+          {:error, _} -> fallback_to_title(property.title)
+        end
+        
+      # Fall back to title
+      property.title && String.length(property.title) > 5 ->
+        fallback_to_title(property.title)
+        
+      true ->
+        {:error, :no_content}
+    end
+  end
+  
+  defp fallback_to_title(title) do
+    case analyze_title(title) do
+      {:ok, signals} -> {:ok, Map.put(signals, :analysis_type, :title)}
+      error -> error
+    end
+  end
   
   @doc """
   Analyze multiple property titles in batch.
@@ -120,15 +236,18 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
     end
   end
   
-  defp call_openai(title, api_key) do
+  defp call_openai(content, api_key, system_prompt \\ @system_prompt, user_prefix \\ "Analyze this title: ") do
+    # Adjust max_tokens based on content length (descriptions need more)
+    max_tokens = if String.length(content) > 500, do: 800, else: 200
+    
     body = %{
       model: @model,
       messages: [
-        %{role: "system", content: @system_prompt},
-        %{role: "user", content: "Analyze this title: #{title}"}
+        %{role: "system", content: system_prompt},
+        %{role: "user", content: "#{user_prefix}#{content}"}
       ],
       temperature: 0.1,  # Low temperature for consistent results
-      max_tokens: 200
+      max_tokens: max_tokens
     }
     
     headers = [
@@ -136,7 +255,7 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
       {"Content-Type", "application/json"}
     ]
     
-    case Req.post(@openai_url, json: body, headers: headers) do
+    case Req.post(@openai_url, json: body, headers: headers, receive_timeout: 30_000) do
       {:ok, %{status: 200, body: response}} ->
         parse_response(response)
         
@@ -229,16 +348,32 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
   
   # Normalize signals to expected format with defaults
   defp normalize_signals(signals) when is_map(signals) do
-    %{
+    base = %{
       urgency: Map.get(signals, "urgency", 0),
       condition: normalize_condition(Map.get(signals, "condition", "unknown")),
       red_flags: Map.get(signals, "red_flags", []) |> List.wrap(),
       positive_signals: Map.get(signals, "positive_signals", []) |> List.wrap(),
       seller_motivation: normalize_motivation(Map.get(signals, "seller_motivation", "unknown"))
     }
+    
+    # Add description-specific fields if present
+    base
+    |> maybe_add_field(signals, "hidden_costs", :hidden_costs, [])
+    |> maybe_add_field(signals, "negotiation_hints", :negotiation_hints, [])
+    |> maybe_add_field(signals, "investment_score", :investment_score, nil)
+    |> maybe_add_field(signals, "summary", :summary, nil)
   end
   
   defp normalize_signals(_), do: default_signals()
+  
+  defp maybe_add_field(map, signals, json_key, atom_key, default) do
+    value = Map.get(signals, json_key, default)
+    if value != default do
+      Map.put(map, atom_key, if(is_list(default), do: List.wrap(value), else: value))
+    else
+      map
+    end
+  end
   
   defp default_signals do
     %{
