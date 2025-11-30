@@ -1411,23 +1411,31 @@ defmodule RzeczywiscieWeb.AdminLive do
   defp run_llm_analysis(parent) do
     alias Rzeczywiscie.Services.LLMAnalyzer
     
-    # Get properties WITH descriptions for LLM analysis (prefer description over title)
-    properties = from(p in Property,
-      where: p.active == true and 
-             not is_nil(p.description) and 
-             fragment("length(?)", p.description) > 100 and
-             is_nil(p.llm_analyzed_at),
-      order_by: [desc: p.inserted_at],
-      limit: 50
-    )
-    |> Repo.all()
-    
-    total = length(properties)
-    
-    if total == 0 do
-      "No properties with descriptions pending LLM analysis"
+    # Check if API key is configured
+    api_key = Application.get_env(:rzeczywiscie, :openai_api_key, "")
+    if api_key == "" do
+      Logger.error("OpenAI API key not configured!")
+      "ERROR: OpenAI API key not configured. Set OPENAI_API_KEY environment variable."
     else
-      Logger.info("Analyzing #{total} property descriptions with LLM...")
+      Logger.info("OpenAI API key configured (#{String.length(api_key)} chars)")
+      
+      # Get properties WITH descriptions for LLM analysis (prefer description over title)
+      properties = from(p in Property,
+        where: p.active == true and 
+               not is_nil(p.description) and 
+               fragment("length(?)", p.description) > 100 and
+               is_nil(p.llm_analyzed_at),
+        order_by: [desc: p.inserted_at],
+        limit: 50
+      )
+      |> Repo.all()
+      
+      total = length(properties)
+      
+      if total == 0 do
+        "No properties with descriptions pending LLM analysis (all already analyzed or no descriptions)"
+      else
+        Logger.info("Analyzing #{total} property descriptions with LLM...")
       
       results = properties
       |> Enum.with_index(1)
@@ -1465,6 +1473,7 @@ defmodule RzeczywiscieWeb.AdminLive do
       
       successful = Enum.count(results, &(&1 == :ok))
       "LLM analyzed #{successful}/#{total} descriptions"
+      end
     end
   end
 
