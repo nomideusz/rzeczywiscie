@@ -287,8 +287,8 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
     raw_city = address["addressLocality"] || extract_city_from_url(url) || extract_city_from_title(title)
     city = ExtractionHelpers.infer_city(raw_city, district)
 
-    # Fetch full description from listing page
-    description = fetch_full_description(ensure_absolute_url(url))
+    # Description is fetched manually from Admin page only
+    description = nil
 
     %{
       source: "otodom",
@@ -338,8 +338,8 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
     raw_city = address["addressLocality"] || extract_city_from_url(url) || extract_city_from_title(title)
     city = ExtractionHelpers.infer_city(raw_city, district)
 
-    # Fetch full description from listing page
-    description = fetch_full_description(ensure_absolute_url(url))
+    # Description is fetched manually from Admin page only
+    description = nil
 
     %{
       source: "otodom",
@@ -562,8 +562,8 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
       raw_city = extract_city(card) || extract_city_from_url(full_url) || extract_city_from_title(title)
       city = ExtractionHelpers.infer_city(raw_city, district)
 
-      # Fetch full description from listing page
-      description = fetch_full_description(full_url)
+      # Description is fetched manually from Admin page only
+      description = nil
 
       %{
         source: "otodom",
@@ -1255,26 +1255,6 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
       true ->
         Logger.debug("Otodom: extract_property_type_from_text defaulting to mieszkanie")
         "mieszkanie"
-    end
-  end
-
-  # Fetch full description from individual listing page
-  defp fetch_full_description(url) do
-    # Add delay before fetching to be respectful
-    Process.sleep(1000)
-
-    case ExtractionHelpers.fetch_otodom_description(url) do
-      {:ok, description} when is_binary(description) and description != "" ->
-        # Limit description length to avoid database issues
-        String.slice(description, 0, 5000)
-
-      {:ok, nil} ->
-        Logger.debug("No description found for #{url}")
-        nil
-
-      {:error, reason} ->
-        Logger.debug("Failed to fetch description for #{url}: #{inspect(reason)}")
-        nil
     end
   end
 

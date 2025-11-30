@@ -240,10 +240,10 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
 
       full_url = ensure_absolute_url(url)
 
-      # Fetch full description from the listing page
-      description = fetch_full_description(full_url)
+      # Description is fetched manually from Admin page only
+      description = nil
 
-      search_text = "#{title} #{description || ""} #{full_url}"
+      search_text = "#{title} #{full_url}"
 
       # Try to extract price from card, if fails try title as fallback
       price = extract_price(card, title)
@@ -530,26 +530,6 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
     |> Floki.find("img")
     |> Floki.attribute("src")
     |> List.first()
-  end
-
-  # Fetch full description from individual listing page
-  defp fetch_full_description(url) do
-    # Add delay before fetching to be respectful
-    Process.sleep(1000)
-
-    case ExtractionHelpers.fetch_olx_description(url) do
-      {:ok, description} when is_binary(description) and description != "" ->
-        # Limit description length to avoid database issues
-        String.slice(description, 0, 5000)
-
-      {:ok, nil} ->
-        Logger.debug("No description found for #{url}")
-        nil
-
-      {:error, reason} ->
-        Logger.debug("Failed to fetch description for #{url}: #{inspect(reason)}")
-        nil
-    end
   end
 
   defp extract_transaction_type(text) do
