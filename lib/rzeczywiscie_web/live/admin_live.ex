@@ -1269,16 +1269,16 @@ defmodule RzeczywiscieWeb.AdminLive do
       )
       |> Repo.all()
       
-      # Condition breakdown
+      # Condition breakdown (normalize nil to "unknown" BEFORE grouping)
       conditions = analyzed_properties
-      |> Enum.group_by(& &1.llm_condition)
-      |> Enum.map(fn {cond, props} -> {cond || "unknown", length(props)} end)
+      |> Enum.group_by(fn p -> p.llm_condition || "unknown" end)
+      |> Enum.map(fn {cond, props} -> {cond, length(props)} end)
       |> Enum.sort_by(fn {_, count} -> -count end)
       
-      # Motivation breakdown
+      # Motivation breakdown (normalize nil to "unknown" BEFORE grouping)
       motivations = analyzed_properties
-      |> Enum.group_by(& &1.llm_motivation)
-      |> Enum.map(fn {mot, props} -> {mot || "unknown", length(props)} end)
+      |> Enum.group_by(fn p -> p.llm_motivation || "unknown" end)
+      |> Enum.map(fn {mot, props} -> {mot, length(props)} end)
       |> Enum.sort_by(fn {_, count} -> -count end)
       
       # Urgency distribution (0-10)
