@@ -1433,6 +1433,7 @@ defmodule RzeczywiscieWeb.AdminLive do
       total = length(properties)
       
       if total == 0 do
+        Logger.info("No properties with descriptions pending LLM analysis")
         "No properties with descriptions pending LLM analysis (all already analyzed or no descriptions)"
       else
         Logger.info("Analyzing #{total} property descriptions with LLM...")
