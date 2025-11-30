@@ -6,6 +6,7 @@ defmodule Rzeczywiscie.RealEstate.DealScorer do
   - Recent price drops
   - Urgency keywords in title/description
   - Days on market
+  - District quality (desirability based on price/m²)
   
   Filters out non-residential property types and validates data quality.
   """
@@ -19,6 +20,9 @@ defmodule Rzeczywiscie.RealEstate.DealScorer do
   # Property types to EXCLUDE from hot deals (non-residential)
   # These are filtered both in the query and in validation
   @excluded_types ~w(działka garaż magazyn hala blaszak boks kontener biuro lokal)
+  
+  # Cache district rankings (refreshed on demand)
+  @district_cache_ttl_seconds 3600  # 1 hour
   
   # Price thresholds by transaction type (PLN)
   # Below these values, the listing is likely an error or non-standard
@@ -40,13 +44,15 @@ defmodule Rzeczywiscie.RealEstate.DealScorer do
     # Validate property data quality first
     if valid_for_scoring?(property) do
       context = market_context || get_market_context(property)
+      district_info = get_district_quality(property.district, property.transaction_type)
       
       scores = %{
         price_vs_avg: score_price_vs_avg(property, context),
         price_per_sqm: score_price_per_sqm(property, context),
         price_drop: score_price_drop(property),
         urgency_keywords: score_urgency_keywords(property),
-        days_on_market: score_days_on_market(property)
+        days_on_market: score_days_on_market(property),
+        district_quality: score_district_deal(property, context, district_info)
       }
       
       total = Enum.reduce(scores, 0, fn {_k, v}, acc -> acc + v end)
@@ -55,7 +61,8 @@ defmodule Rzeczywiscie.RealEstate.DealScorer do
         property_id: property.id,
         scores: scores,
         total_score: total,
-        market_context: context
+        market_context: context,
+        district_info: district_info
       }
     else
       nil
@@ -524,6 +531,163 @@ defmodule Rzeczywiscie.RealEstate.DealScorer do
       recent_price_drops: price_drops || 0,
       total_active_with_price: below_market || 0
     }
+  end
+  
+  # =============================================================================
+  # District Quality Scoring
+  # =============================================================================
+  
+  @doc """
+  Get district quality rankings based on average price/m².
+  Higher price/m² = more desirable district.
+  Returns a map of district -> %{rank: 1..n, grade: "A+".."C", avg_price_sqm: float}
+  """
+  def get_district_rankings(transaction_type \\ "sprzedaż") do
+    # Use ETS or Process dictionary for simple caching
+    cache_key = {:district_rankings, transaction_type}
+    
+    case Process.get(cache_key) do
+      {rankings, cached_at} when is_map(rankings) ->
+        # Check if cache is still valid (1 hour TTL)
+        age = System.system_time(:second) - cached_at
+        if age < @district_cache_ttl_seconds do
+          rankings
+        else
+          rankings = calculate_district_rankings(transaction_type)
+          Process.put(cache_key, {rankings, System.system_time(:second)})
+          rankings
+        end
+      _ ->
+        rankings = calculate_district_rankings(transaction_type)
+        Process.put(cache_key, {rankings, System.system_time(:second)})
+        rankings
+    end
+  end
+  
+  defp calculate_district_rankings(transaction_type) do
+    min_price = if transaction_type == "sprzedaż", do: @min_price_sale, else: @min_price_rent
+    
+    # Get stats per district
+    stats = from(p in Property,
+      where: p.active == true and
+             not is_nil(p.district) and
+             p.district != "" and
+             p.transaction_type == ^transaction_type and
+             not is_nil(p.price) and
+             not is_nil(p.area_sqm) and
+             p.area_sqm > 5 and
+             p.price > ^min_price,
+      group_by: p.district,
+      having: count(p.id) >= 2,  # Need at least 2 properties for meaningful average
+      select: %{
+        district: p.district,
+        count: count(p.id),
+        avg_price_sqm: avg(p.price / p.area_sqm)
+      },
+      order_by: [desc: avg(p.price / p.area_sqm)]
+    )
+    |> Repo.all()
+    
+    # Assign ranks and grades
+    total = length(stats)
+    
+    stats
+    |> Enum.with_index(1)
+    |> Enum.map(fn {%{district: district, count: count, avg_price_sqm: avg}, rank} ->
+      # Calculate percentile (1 = top, total = bottom)
+      percentile = rank / max(total, 1)
+      
+      grade = cond do
+        percentile <= 0.15 -> "A+"   # Top 15%
+        percentile <= 0.30 -> "A"    # Top 30%
+        percentile <= 0.50 -> "B+"   # Top 50%
+        percentile <= 0.70 -> "B"    # Top 70%
+        percentile <= 0.85 -> "C+"   # Top 85%
+        true -> "C"                  # Bottom 15%
+      end
+      
+      {district, %{
+        rank: rank,
+        grade: grade,
+        avg_price_sqm: avg && Decimal.to_float(avg),
+        property_count: count,
+        percentile: Float.round(percentile * 100, 1)
+      }}
+    end)
+    |> Map.new()
+  end
+  
+  @doc """
+  Get quality info for a specific district.
+  """
+  def get_district_quality(nil, _transaction_type), do: nil
+  def get_district_quality("", _transaction_type), do: nil
+  def get_district_quality(district, transaction_type) do
+    rankings = get_district_rankings(transaction_type || "sprzedaż")
+    Map.get(rankings, district)
+  end
+  
+  # Score based on district quality and value.
+  # A property priced below average in a high-quality district is a great deal.
+  # 
+  # Scoring logic (0-15 points):
+  # - Top district (A+/A) + below avg price/m² = 15 pts
+  # - Top district (A+/A) + at avg price = 10 pts
+  # - Mid district (B+/B) + below avg price/m² = 10 pts
+  # - Mid district (B+/B) + at avg price = 5 pts
+  # - Lower district (C+/C) + significantly below avg = 5 pts
+  # - Lower district + avg or above = 0 pts
+  defp score_district_deal(%Property{}, _context, nil), do: 0
+  defp score_district_deal(%Property{price: nil}, _context, _district_info), do: 0
+  defp score_district_deal(%Property{area_sqm: nil}, _context, _district_info), do: 0
+  defp score_district_deal(%Property{price: price, area_sqm: area}, _context, district_info) do
+    price_sqm = Decimal.to_float(price) / Decimal.to_float(area)
+    district_avg = district_info.avg_price_sqm || 0
+    grade = district_info.grade
+    
+    # Calculate how this property compares to district average
+    if district_avg > 0 do
+      diff_pct = (district_avg - price_sqm) / district_avg * 100
+      
+      case grade do
+        g when g in ["A+", "A"] ->
+          # Premium district - any below-average is valuable
+          cond do
+            diff_pct >= 20 -> 15  # 20%+ below premium district avg = amazing
+            diff_pct >= 10 -> 12
+            diff_pct >= 0 -> 10   # At or below avg in premium = good
+            diff_pct >= -10 -> 5  # Slightly above avg in premium = ok
+            true -> 0
+          end
+          
+        g when g in ["B+", "B"] ->
+          # Mid-tier district - need bigger discount
+          cond do
+            diff_pct >= 25 -> 10  # 25%+ below mid district avg
+            diff_pct >= 15 -> 8
+            diff_pct >= 5 -> 5
+            true -> 0
+          end
+          
+        _ ->
+          # Lower district - need significant discount to be a deal
+          cond do
+            diff_pct >= 30 -> 5  # 30%+ below avg
+            diff_pct >= 20 -> 3
+            true -> 0
+          end
+      end
+    else
+      0
+    end
+  end
+  
+  @doc """
+  Get all district statistics for display.
+  """
+  def get_all_district_stats(transaction_type \\ "sprzedaż") do
+    get_district_rankings(transaction_type)
+    |> Enum.sort_by(fn {_k, v} -> v.rank end)
   end
 end
 

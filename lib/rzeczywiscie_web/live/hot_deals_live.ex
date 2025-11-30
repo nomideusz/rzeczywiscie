@@ -278,7 +278,24 @@ defmodule RzeczywiscieWeb.HotDealsLive do
                                   📅 Long listing +<%= score_data.scores.days_on_market %>pts
                                 </span>
                               <% end %>
+                              <%= if score_data.scores.district_quality && score_data.scores.district_quality > 0 do %>
+                                <span class="px-1.5 py-0.5 text-xs bg-accent/20 text-accent border border-accent/30">
+                                  📍 District +<%= score_data.scores.district_quality %>pts
+                                </span>
+                              <% end %>
                             </div>
+                            
+                            <!-- District Grade Badge -->
+                            <%= if score_data[:district_info] && score_data.district_info do %>
+                              <div class="mt-2 flex items-center gap-2 text-xs">
+                                <span class={"px-2 py-0.5 font-bold rounded #{district_grade_class(score_data.district_info.grade)}"}>
+                                  <%= score_data.district_info.grade %>
+                                </span>
+                                <span class="opacity-60">
+                                  District avg: <%= format_number(score_data.district_info.avg_price_sqm) %> zł/m²
+                                </span>
+                              </div>
+                            <% end %>
                             
                             <!-- Context -->
                             <%= if score_data.market_context && score_data.market_context.avg_price do %>
@@ -378,9 +395,18 @@ defmodule RzeczywiscieWeb.HotDealsLive do
                     <span>📅 Long time listed</span>
                     <span class="font-bold">0-10 pts</span>
                   </div>
+                  <div class="flex justify-between">
+                    <span>📍 District quality</span>
+                    <span class="font-bold">0-15 pts</span>
+                  </div>
+                  <div class="text-[10px] opacity-60 pl-4 space-y-0.5">
+                    <div>• A+/A district below avg: 10-15</div>
+                    <div>• B+/B district below avg: 5-10</div>
+                    <div>• C+/C significant discount: 0-5</div>
+                  </div>
                   <div class="border-t border-base-content/20 pt-2 mt-2 flex justify-between font-bold">
                     <span>Max possible</span>
-                    <span>105 pts</span>
+                    <span>120 pts</span>
                   </div>
                 </div>
               </div>
@@ -424,6 +450,25 @@ defmodule RzeczywiscieWeb.HotDealsLive do
   defp score_badge_class(score) when score >= 35, do: "bg-success text-success-content border-success"
   defp score_badge_class(score) when score >= 25, do: "bg-info text-info-content border-info"
   defp score_badge_class(_), do: "bg-base-200 border-base-content/30"
+
+  defp format_number(nil), do: "—"
+  defp format_number(num) when is_float(num) do
+    num
+    |> trunc()
+    |> Integer.to_string()
+    |> String.reverse()
+    |> String.replace(~r/(\d{3})(?=\d)/, "\\1 ")
+    |> String.reverse()
+  end
+  defp format_number(num), do: to_string(num)
+  
+  defp district_grade_class("A+"), do: "bg-yellow-500 text-yellow-900"
+  defp district_grade_class("A"), do: "bg-yellow-400 text-yellow-900"
+  defp district_grade_class("B+"), do: "bg-green-500 text-green-900"
+  defp district_grade_class("B"), do: "bg-green-400 text-green-900"
+  defp district_grade_class("C+"), do: "bg-gray-400 text-gray-900"
+  defp district_grade_class("C"), do: "bg-gray-300 text-gray-800"
+  defp district_grade_class(_), do: "bg-base-300"
 
   defp source_class("otodom"), do: "bg-blue-500/20 text-blue-600 border border-blue-500/30"
   defp source_class("olx"), do: "bg-green-500/20 text-green-600 border border-green-500/30"
