@@ -625,10 +625,24 @@
                           <span class="inline-block px-1 py-0.5 text-[9px] font-black bg-success text-success-content mr-1 align-middle">NEW</span>
                         {/if}
                         {property.title}
+                        {#if property.description && property.description.length > 50}
+                          <span class="text-info ml-1" title="Has description">📝</span>
+                        {/if}
                       </div>
                       <div class="text-[11px] opacity-60 mt-0.5">
                         {property.city || '—'}{property.district ? ` · ${property.district}` : ''}{property.rooms ? ` · ${property.rooms}p` : ''}
                       </div>
+                      <!-- Description preview on hover/click -->
+                      {#if property.description && property.description.length > 50}
+                        <details class="mt-1">
+                          <summary class="text-[10px] cursor-pointer text-info hover:text-info/80 select-none">
+                            Show description ({property.description.length} chars)
+                          </summary>
+                          <div class="mt-1 p-2 bg-base-200 text-[11px] leading-relaxed max-h-32 overflow-y-auto">
+                            {property.description.slice(0, 500)}{property.description.length > 500 ? '...' : ''}
+                          </div>
+                        </details>
+                      {/if}
                     </div>
                   </div>
                 </td>
@@ -753,6 +767,9 @@
             <!-- Title -->
             <h3 class="font-bold text-lg leading-tight mb-2 line-clamp-2" title={property.title}>
               {property.title}
+              {#if property.description && property.description.length > 50}
+                <span class="text-info ml-1 text-sm" title="Has description">📝</span>
+              {/if}
             </h3>
 
             <!-- Location -->
@@ -773,6 +790,18 @@
                 {/if}
               </div>
             </div>
+
+            <!-- Description (if available) -->
+            {#if property.description && property.description.length > 50}
+              <details class="mb-3">
+                <summary class="text-xs cursor-pointer text-info hover:text-info/80 select-none font-bold">
+                  📖 Description ({property.description.length} chars)
+                </summary>
+                <div class="mt-2 p-3 bg-base-200 text-xs leading-relaxed max-h-40 overflow-y-auto">
+                  {property.description.slice(0, 800)}{property.description.length > 800 ? '...' : ''}
+                </div>
+              </details>
+            {/if}
 
             <!-- Property Type -->
             {#if property.property_type}

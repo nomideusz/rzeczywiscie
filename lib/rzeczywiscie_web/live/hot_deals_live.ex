@@ -252,7 +252,22 @@ defmodule RzeczywiscieWeb.HotDealsLive do
                               <%= if property.district do %>
                                 <span class="opacity-60"><%= property.district %></span>
                               <% end %>
+                              <%= if property.description && String.length(property.description || "") > 50 do %>
+                                <span class="text-info">📝 Has description</span>
+                              <% end %>
                             </div>
+                            
+                            <!-- Description Preview (if available) -->
+                            <%= if property.description && String.length(property.description || "") > 50 do %>
+                              <details class="mt-2">
+                                <summary class="text-xs cursor-pointer text-info hover:text-info/80 select-none">
+                                  📖 Show description (<%= String.length(property.description) %> chars)
+                                </summary>
+                                <div class="mt-2 p-3 bg-base-200 text-xs leading-relaxed max-h-48 overflow-y-auto">
+                                  <%= String.slice(property.description, 0, 1000) %><%= if String.length(property.description) > 1000, do: "..." %>
+                                </div>
+                              </details>
+                            <% end %>
                             
                             <!-- Score Breakdown -->
                             <div class="flex flex-wrap gap-1 mt-2">
