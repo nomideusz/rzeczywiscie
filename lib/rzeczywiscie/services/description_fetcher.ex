@@ -204,7 +204,7 @@ defmodule Rzeczywiscie.Services.DescriptionFetcher do
     if is_valid_description?(cleaned), do: cleaned, else: nil
   end
   
-  # Check if text looks like a real description (not CSS, JS, or garbage)
+  # Check if text looks like a real description (not CSS, JS, footer, or garbage)
   defp is_valid_description?(text) when is_binary(text) do
     cond do
       # Too short
@@ -218,6 +218,33 @@ defmodule Rzeczywiscie.Services.DescriptionFetcher do
       
       # Contains HTML tags or entities
       String.match?(text, ~r/<[a-z]+|&[a-z]+;/) -> false
+      
+      # Contains Otodom/OLX footer/navigation patterns
+      String.contains?(text, [
+        "© 2025 Otodom",
+        "© Otodom",
+        "Grupa OLX",
+        "APLIKACJE MOBILNE",
+        "DOŁĄCZ DO NAS",
+        "Chcesz mieć na oku",
+        "Włącz powiadomienia",
+        "Zaloguj się lub załóż konto",
+        "pełnej historii ogłoszenia",
+        "Ostatnia aktualizacja:",
+        "DataZmianaCena"
+      ]) -> false
+      
+      # Contains OLX specific footer patterns
+      String.contains?(text, [
+        "OLX sp. z o.o.",
+        "Regulamin",
+        "Polityka prywatności",
+        "© OLX",
+        "Informacje o ogłoszeniodawcy"
+      ]) -> false
+      
+      # Starts with metadata patterns (ID:, Data:, etc.)
+      String.match?(text, ~r/^ID:\s*\d+/) -> false
       
       # Too many special characters (likely code/garbage)
       special_char_ratio(text) > 0.15 -> false
