@@ -206,30 +206,170 @@ defmodule RzeczywiscieWeb.AdminLive do
               Use AI (GPT-4o-mini) to analyze property titles for urgency, condition, and motivation signals.
               Cost: ~$0.01 per 100 properties.
             </p>
-            <div class="grid grid-cols-2 gap-4 mb-4">
-              <div class="bg-base-200 p-3 rounded">
+            
+            <!-- Stats Overview -->
+            <div class="grid grid-cols-4 gap-3 mb-4">
+              <div class="bg-base-200 p-3 text-center">
                 <div class="text-2xl font-black text-success"><%= @llm_stats.analyzed %></div>
-                <div class="text-xs opacity-60">Analyzed</div>
+                <div class="text-[10px] font-bold uppercase opacity-60">Analyzed</div>
               </div>
-              <div class="bg-base-200 p-3 rounded">
+              <div class="bg-base-200 p-3 text-center">
                 <div class="text-2xl font-black text-warning"><%= @llm_stats.pending %></div>
-                <div class="text-xs opacity-60">Pending</div>
+                <div class="text-[10px] font-bold uppercase opacity-60">Pending</div>
+              </div>
+              <div class="bg-base-200 p-3 text-center">
+                <div class="text-2xl font-black text-info"><%= @llm_stats.avg_score %></div>
+                <div class="text-[10px] font-bold uppercase opacity-60">Avg Score</div>
+              </div>
+              <div class="bg-base-200 p-3 text-center">
+                <div class="text-2xl font-black text-primary"><%= @llm_stats.max_score %></div>
+                <div class="text-[10px] font-bold uppercase opacity-60">Max Score</div>
               </div>
             </div>
-            <%= if @llm_running do %>
-              <button disabled class="px-4 py-2 text-xs font-bold uppercase tracking-wide bg-base-300 text-base-content/50 cursor-not-allowed">
-                🔄 Analyzing... (<%= @llm_progress %> done)
-              </button>
-            <% else %>
-              <button 
-                phx-click="run_llm_analysis" 
-                class="px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 border-info text-info hover:bg-info hover:text-info-content transition-colors"
-              >
-                🤖 Analyze Next 50 Properties
-              </button>
-            <% end %>
-            <%= if @llm_result do %>
-              <div class="mt-3 text-sm font-medium text-success"><%= @llm_result %></div>
+            
+            <!-- Action Button -->
+            <div class="mb-4">
+              <%= if @llm_running do %>
+                <button disabled class="px-4 py-2 text-xs font-bold uppercase tracking-wide bg-base-300 text-base-content/50 cursor-not-allowed">
+                  🔄 Analyzing... (<%= @llm_progress %> done)
+                </button>
+              <% else %>
+                <button 
+                  phx-click="run_llm_analysis" 
+                  class="px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 border-info text-info hover:bg-info hover:text-info-content transition-colors"
+                >
+                  🤖 Analyze Next 50 Properties
+                </button>
+              <% end %>
+              <%= if @llm_result do %>
+                <span class="ml-3 text-sm font-medium text-success"><%= @llm_result %></span>
+              <% end %>
+            </div>
+            
+            <%= if @llm_stats.analyzed > 0 do %>
+              <!-- Breakdowns -->
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <!-- Condition -->
+                <div class="border border-base-content/20 p-3">
+                  <h4 class="text-xs font-bold uppercase mb-2 opacity-60">🏠 Condition</h4>
+                  <%= for {cond, count} <- @llm_stats.conditions do %>
+                    <div class="flex justify-between text-xs mb-1">
+                      <span class={[
+                        cond == "needs_renovation" && "text-error",
+                        cond == "to_finish" && "text-warning",
+                        cond == "renovated" && "text-success",
+                        cond == "new" && "text-primary"
+                      ]}><%= cond %></span>
+                      <span class="font-bold"><%= count %></span>
+                    </div>
+                  <% end %>
+                </div>
+                
+                <!-- Motivation -->
+                <div class="border border-base-content/20 p-3">
+                  <h4 class="text-xs font-bold uppercase mb-2 opacity-60">💪 Motivation</h4>
+                  <%= for {mot, count} <- @llm_stats.motivations do %>
+                    <div class="flex justify-between text-xs mb-1">
+                      <span class={[
+                        mot == "very_motivated" && "text-success font-bold",
+                        mot == "motivated" && "text-info"
+                      ]}><%= mot %></span>
+                      <span class="font-bold"><%= count %></span>
+                    </div>
+                  <% end %>
+                </div>
+                
+                <!-- Urgency -->
+                <div class="border border-base-content/20 p-3">
+                  <h4 class="text-xs font-bold uppercase mb-2 opacity-60">⚡ Urgency (0-10)</h4>
+                  <%= for {urg, count} <- @llm_stats.urgency_dist do %>
+                    <div class="flex items-center gap-2 text-xs mb-1">
+                      <span class="w-4"><%= urg %></span>
+                      <div class="flex-1 bg-base-200 h-2">
+                        <div class={"h-full #{if urg >= 7, do: "bg-error", else: if(urg >= 4, do: "bg-warning", else: "bg-base-content/30")}"} style={"width: #{min(count * 3, 100)}%"}></div>
+                      </div>
+                      <span class="font-bold w-6 text-right"><%= count %></span>
+                    </div>
+                  <% end %>
+                </div>
+              </div>
+              
+              <!-- Top Positive Signals -->
+              <%= if length(@llm_stats.positive_signals) > 0 do %>
+                <div class="border border-base-content/20 p-3 mb-4">
+                  <h4 class="text-xs font-bold uppercase mb-2 opacity-60">✨ Top Positive Signals</h4>
+                  <div class="flex flex-wrap gap-2">
+                    <%= for {signal, count} <- @llm_stats.positive_signals do %>
+                      <span class="px-2 py-1 text-xs bg-success/20 text-success border border-success/30">
+                        <%= signal %> (<%= count %>)
+                      </span>
+                    <% end %>
+                  </div>
+                </div>
+              <% end %>
+              
+              <!-- Top Scored Properties -->
+              <div class="border border-base-content/20 p-3 mb-4">
+                <h4 class="text-xs font-bold uppercase mb-2 opacity-60">🔥 Top 10 by LLM Score</h4>
+                <div class="space-y-2 max-h-64 overflow-y-auto">
+                  <%= for prop <- @llm_stats.top_properties do %>
+                    <div class="flex items-start gap-2 text-xs border-b border-base-content/10 pb-2">
+                      <span class="px-2 py-1 bg-primary text-primary-content font-bold shrink-0"><%= prop.llm_score %></span>
+                      <div class="flex-1 min-w-0">
+                        <div class="font-medium truncate"><%= String.slice(prop.title || "", 0, 50) %></div>
+                        <div class="opacity-60">
+                          <%= prop.llm_condition || "?" %> · 
+                          <%= prop.llm_motivation || "?" %> · 
+                          urgency <%= prop.llm_urgency || 0 %>/10
+                          <%= if prop.llm_red_flags && length(prop.llm_red_flags) > 0 do %>
+                            <span class="text-error">🚩</span>
+                          <% end %>
+                          <%= if prop.llm_positive_signals && length(prop.llm_positive_signals) > 0 do %>
+                            <span class="text-success">✨<%= length(prop.llm_positive_signals) %></span>
+                          <% end %>
+                        </div>
+                      </div>
+                      <a href={prop.url} target="_blank" class="text-info hover:underline shrink-0">↗</a>
+                    </div>
+                  <% end %>
+                </div>
+              </div>
+              
+              <!-- Very Motivated Sellers -->
+              <%= if length(@llm_stats.very_motivated) > 0 do %>
+                <div class="border border-success/30 bg-success/5 p-3 mb-4">
+                  <h4 class="text-xs font-bold uppercase mb-2 text-success">🎯 Very Motivated Sellers (<%= length(@llm_stats.very_motivated) %>)</h4>
+                  <div class="space-y-2">
+                    <%= for prop <- @llm_stats.very_motivated do %>
+                      <div class="flex items-center gap-2 text-xs">
+                        <span class="px-2 py-1 bg-success/20 text-success font-bold">⚡<%= prop.llm_urgency || 0 %></span>
+                        <span class="flex-1 truncate"><%= String.slice(prop.title || "", 0, 40) %>...</span>
+                        <a href={prop.url} target="_blank" class="text-info hover:underline">↗</a>
+                      </div>
+                    <% end %>
+                  </div>
+                </div>
+              <% end %>
+              
+              <!-- Properties with Red Flags -->
+              <%= if length(@llm_stats.with_red_flags) > 0 do %>
+                <div class="border border-error/30 bg-error/5 p-3">
+                  <h4 class="text-xs font-bold uppercase mb-2 text-error">🚩 Properties with Red Flags (<%= length(@llm_stats.with_red_flags) %>)</h4>
+                  <div class="space-y-2">
+                    <%= for prop <- @llm_stats.with_red_flags do %>
+                      <div class="text-xs">
+                        <div class="flex items-center gap-2">
+                          <span class="flex-1 truncate font-medium"><%= String.slice(prop.title || "", 0, 40) %>...</span>
+                          <a href={prop.url} target="_blank" class="text-info hover:underline">↗</a>
+                        </div>
+                        <div class="text-error opacity-80 mt-1">
+                          <%= Enum.join(prop.llm_red_flags, ", ") %>
+                        </div>
+                      </div>
+                    <% end %>
+                  </div>
+                </div>
+              <% end %>
             <% end %>
           </div>
         </div>
@@ -1041,10 +1181,87 @@ defmodule RzeczywiscieWeb.AdminLive do
   # LLM Analysis helpers
   
   defp get_llm_stats do
-    %{
-      analyzed: RealEstate.count_llm_analyzed(),
-      pending: RealEstate.count_pending_llm_analysis()
-    }
+    analyzed_count = RealEstate.count_llm_analyzed()
+    pending_count = RealEstate.count_pending_llm_analysis()
+    
+    # Get detailed breakdown if we have analyzed properties
+    if analyzed_count > 0 do
+      analyzed_properties = from(p in Property,
+        where: not is_nil(p.llm_analyzed_at) and p.active == true,
+        order_by: [desc: p.llm_score]
+      )
+      |> Repo.all()
+      
+      # Condition breakdown
+      conditions = analyzed_properties
+      |> Enum.group_by(& &1.llm_condition)
+      |> Enum.map(fn {cond, props} -> {cond || "unknown", length(props)} end)
+      |> Enum.sort_by(fn {_, count} -> -count end)
+      
+      # Motivation breakdown
+      motivations = analyzed_properties
+      |> Enum.group_by(& &1.llm_motivation)
+      |> Enum.map(fn {mot, props} -> {mot || "unknown", length(props)} end)
+      |> Enum.sort_by(fn {_, count} -> -count end)
+      
+      # Urgency distribution (0-10)
+      urgency_dist = analyzed_properties
+      |> Enum.group_by(& &1.llm_urgency)
+      |> Enum.map(fn {urg, props} -> {urg || 0, length(props)} end)
+      |> Enum.sort_by(fn {urg, _} -> urg end)
+      
+      # Top scored properties
+      top_properties = Enum.take(analyzed_properties, 10)
+      
+      # Properties with red flags
+      with_red_flags = analyzed_properties
+      |> Enum.filter(fn p -> p.llm_red_flags && length(p.llm_red_flags) > 0 end)
+      |> Enum.take(5)
+      
+      # Very motivated sellers
+      very_motivated = analyzed_properties
+      |> Enum.filter(& &1.llm_motivation == "very_motivated")
+      |> Enum.take(5)
+      
+      # Most common positive signals
+      positive_signals = analyzed_properties
+      |> Enum.flat_map(& &1.llm_positive_signals || [])
+      |> Enum.frequencies()
+      |> Enum.sort_by(fn {_, count} -> -count end)
+      |> Enum.take(8)
+      
+      # Score stats
+      scores = Enum.map(analyzed_properties, & &1.llm_score || 0)
+      avg_score = if length(scores) > 0, do: Enum.sum(scores) / length(scores), else: 0
+      
+      %{
+        analyzed: analyzed_count,
+        pending: pending_count,
+        conditions: conditions,
+        motivations: motivations,
+        urgency_dist: urgency_dist,
+        top_properties: top_properties,
+        with_red_flags: with_red_flags,
+        very_motivated: very_motivated,
+        positive_signals: positive_signals,
+        avg_score: Float.round(avg_score, 1),
+        max_score: if(length(scores) > 0, do: Enum.max(scores), else: 0)
+      }
+    else
+      %{
+        analyzed: 0,
+        pending: pending_count,
+        conditions: [],
+        motivations: [],
+        urgency_dist: [],
+        top_properties: [],
+        with_red_flags: [],
+        very_motivated: [],
+        positive_signals: [],
+        avg_score: 0,
+        max_score: 0
+      }
+    end
   end
   
   defp run_llm_analysis(parent) do
