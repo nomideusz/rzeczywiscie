@@ -291,11 +291,12 @@
     function getPinInfoHTML(pin) {
         const time = new Date(pin.created_at * 1000).toLocaleString()
         const isOwnPin = pin.user_name === currentUser.name && pin.user_color === currentUser.color
+        const canDelete = isOwnPin || isAdmin
         return `
             <div style="padding: 12px; min-width: 200px; max-width: 280px; font-family: system-ui;">
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
                     <div style="font-size: 28px;">${pin.emoji}</div>
-                    ${isOwnPin ? `<button onclick="window.deletePin(${pin.id})" style="background: #ef4444; color: white; border: none; padding: 4px 8px; font-size: 11px; font-weight: bold; cursor: pointer; border-radius: 2px;">Delete</button>` : ''}
+                    ${canDelete ? `<button onclick="window.deletePin(${pin.id})" style="background: #ef4444; color: white; border: none; padding: 4px 8px; font-size: 11px; font-weight: bold; cursor: pointer; border-radius: 2px;">Delete</button>` : ''}
                 </div>
                 ${pin.image_data ? `<img src="${pin.image_data}" onclick="window.openLightbox('${pin.image_data}')" style="width: 100%; max-height: 180px; object-fit: contain; background: #f5f5f5; margin-bottom: 10px; cursor: pointer;" />` : ''}
                 ${pin.message ? `<p style="margin: 0 0 10px; font-size: 13px;">${pin.message}</p>` : ''}
