@@ -153,23 +153,43 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
         properties = extract_from_json_ld(document, transaction_type)
 
         if length(properties) > 0 do
-          Logger.info("Found #{length(properties)} properties from JSON-LD data")
-          properties
+          # Count how many have full data
+          properties_with_price = Enum.count(properties, fn p -> p.price != nil end)
+          properties_with_area = Enum.count(properties, fn p -> p.area_sqm != nil end)
+          
+          Logger.info("JSON-LD extracted #{length(properties)} properties - #{properties_with_price} with price, #{properties_with_area} with area")
+          
+          # Keep properties that have at least price OR area
+          valid_properties = Enum.filter(properties, fn prop ->
+            prop.price != nil || prop.area_sqm != nil
+          end)
+          
+          if length(valid_properties) > 0 do
+            Logger.info("Using #{length(valid_properties)} properties from JSON-LD")
+            valid_properties
+          else
+            Logger.warning("All JSON-LD properties missing price AND area, falling back to HTML")
+            html_fallback_parse(document, transaction_type)
+          end
         else
           Logger.warning("No properties found in JSON-LD, falling back to HTML scraping")
-          # Fallback to HTML scraping if JSON-LD fails
-          cards = try_find_listings(document)
-          Logger.info("Found #{length(cards)} listing cards")
-
-          cards
-          |> Enum.map(&parse_listing(&1, transaction_type))
-          |> Enum.reject(&is_nil/1)
+          html_fallback_parse(document, transaction_type)
         end
 
       {:error, reason} ->
         Logger.error("Failed to parse HTML: #{inspect(reason)}")
         []
     end
+  end
+
+  # HTML fallback parser
+  defp html_fallback_parse(document, transaction_type) do
+    cards = try_find_listings(document)
+    Logger.info("Found #{length(cards)} listing cards")
+
+    cards
+    |> Enum.map(&parse_listing(&1, transaction_type))
+    |> Enum.reject(&is_nil/1)
   end
 
   defp extract_from_json_ld(document, transaction_type) do
@@ -377,13 +397,22 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
       get_in(offer, ["itemOffered", "price"]) ||
       get_in(offer, ["itemOffered", "offers", "price"])
     
-    if price_value do
+    price = if price_value do
       parse_json_price(price_value)
     else
       # Last resort: look in item offered for any price-like field
       item = offer["itemOffered"] || %{}
       parse_json_price(item["price"])
     end
+    
+    # Debug logging when price extraction fails
+    if is_nil(price) do
+      offer_type = offer["@type"]
+      available_keys = Map.keys(offer) |> Enum.take(10)
+      Logger.debug("Failed to extract price from offer type=#{inspect(offer_type)}, keys=#{inspect(available_keys)}")
+    end
+    
+    price
   end
   defp extract_price_from_offer(_), do: nil
 
@@ -400,7 +429,16 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
       get_in(item, ["floorSize", "value"]) ||
       get_in(offer, ["floorSize", "value"])
     
-    parse_json_number(floor_size)
+    area = parse_json_number(floor_size)
+    
+    # Debug logging when area extraction fails
+    if is_nil(area) do
+      offer_type = offer["@type"]
+      item_type = item["@type"]
+      Logger.debug("Failed to extract area from offer type=#{inspect(offer_type)}, item type=#{inspect(item_type)}")
+    end
+    
+    area
   end
   defp extract_area_from_offer(_), do: nil
 
