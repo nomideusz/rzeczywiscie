@@ -26,10 +26,11 @@ defmodule Rzeczywiscie.Services.DescriptionFetcher do
     # Get top deals that don't have descriptions yet
     deals = DealScorer.get_hot_deals(limit: limit * 2, min_score: min_score)
     
-    # Filter to only those without descriptions
+    # Filter to only OLX properties without descriptions (Otodom requires JS)
     deals_needing_desc = deals
     |> Enum.filter(fn {property, _score_data} -> 
-      is_nil(property.description) or String.length(property.description || "") < 100
+      property.source == "olx" and
+      (is_nil(property.description) or String.length(property.description || "") < 100)
     end)
     |> Enum.take(limit)
 
@@ -63,11 +64,17 @@ defmodule Rzeczywiscie.Services.DescriptionFetcher do
 
   @doc """
   Fetch description for a single property.
+  
+  Note: Otodom uses client-side JavaScript rendering, so descriptions
+  cannot be extracted without a headless browser. We skip Otodom for now.
   """
   def fetch_description(property) do
     case property.source do
       "olx" -> fetch_olx_description(property)
-      "otodom" -> fetch_otodom_description(property)
+      "otodom" -> 
+        # Otodom renders content via JavaScript - skip to save time
+        Logger.debug("Skipping Otodom property ##{property.id} (requires headless browser)")
+        {:error, :otodom_requires_js}
       _ -> {:error, :unsupported_source}
     end
   end
