@@ -202,7 +202,12 @@ defmodule Rzeczywiscie.Services.DescriptionFetcher do
       case Floki.find(document, selector) do
         [] -> nil
         elements -> 
-          raw_text = elements |> Floki.text() |> String.trim()
+          # Strip style/script tags BEFORE extracting text
+          clean_elements = elements
+          |> Floki.filter_out("style")
+          |> Floki.filter_out("script")
+          
+          raw_text = clean_elements |> Floki.text() |> String.trim()
           
           # Debug: log what we found before cleaning
           if String.length(raw_text) > 20 do
@@ -242,7 +247,12 @@ defmodule Rzeczywiscie.Services.DescriptionFetcher do
       case Floki.find(document, selector) do
         [] -> nil
         elements -> 
-          raw_text = elements |> Floki.text() |> String.trim()
+          # Strip style/script tags BEFORE extracting text
+          clean_elements = elements
+          |> Floki.filter_out("style")
+          |> Floki.filter_out("script")
+          
+          raw_text = clean_elements |> Floki.text() |> String.trim()
           
           # Debug: log what we found before cleaning
           if String.length(raw_text) > 20 do
