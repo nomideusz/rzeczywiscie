@@ -16,6 +16,7 @@ defmodule RzeczywiscieWeb.StatsLive do
       socket
       |> assign(:stats, calculate_stats())
       |> assign(:refreshing, false)
+      |> assign(:last_updated, DateTime.utc_now())
       |> assign(:property_types, property_types)
       |> assign(:selected_property_type, "mieszkanie")
       |> assign(:selected_transaction_type, "all")
@@ -39,13 +40,18 @@ defmodule RzeczywiscieWeb.StatsLive do
       <!-- Header -->
       <.property_page_header current_path={@current_path} title="Statistics" subtitle="Data Monitoring Dashboard">
         <:actions>
-          <button
-            phx-click="refresh_stats"
-            disabled={@refreshing}
-            class="px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors cursor-pointer"
-          >
-            <%= if @refreshing, do: "Refreshing...", else: "🔄 Refresh" %>
-          </button>
+          <div class="flex items-center gap-3">
+            <span class="text-xs opacity-50">
+              Updated <%= format_time_ago(@last_updated) %>
+            </span>
+            <button
+              phx-click="refresh_stats"
+              disabled={@refreshing}
+              class="px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors cursor-pointer"
+            >
+              <%= if @refreshing, do: "Refreshing...", else: "🔄 Refresh" %>
+            </button>
+          </div>
         </:actions>
       </.property_page_header>
 
@@ -571,6 +577,7 @@ defmodule RzeczywiscieWeb.StatsLive do
           socket.assigns.selected_property_type,
           socket.assigns.selected_transaction_type
         ))
+      |> assign(:last_updated, DateTime.utc_now())
       |> assign(:refreshing, false)
 
     {:noreply, socket}
@@ -1188,6 +1195,17 @@ defmodule RzeczywiscieWeb.StatsLive do
       trunc(max(height, min_height))
     else
       min_height
+    end
+  end
+  
+  defp format_time_ago(datetime) do
+    diff_seconds = DateTime.diff(DateTime.utc_now(), datetime)
+    
+    cond do
+      diff_seconds < 60 -> "just now"
+      diff_seconds < 3600 -> "#{div(diff_seconds, 60)}m ago"
+      diff_seconds < 86400 -> "#{div(diff_seconds, 3600)}h ago"
+      true -> "#{div(diff_seconds, 86400)}d ago"
     end
   end
 end

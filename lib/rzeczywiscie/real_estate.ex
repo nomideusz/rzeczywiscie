@@ -545,11 +545,27 @@ defmodule Rzeczywiscie.RealEstate do
   """
   def get_properties_with_price_drops(days_ago \\ 7) do
     cutoff = DateTime.utc_now() |> DateTime.add(-days_ago * 24 * 3600, :second)
+    
+    # Minimum prices to filter out garbage data
+    min_rent_price = Decimal.new("200")     # Min 200 PLN for rent
+    min_sale_price = Decimal.new("30000")   # Min 30k PLN for sale
+    min_history_price = Decimal.new("500")  # History price should be reasonable
 
     from(ph in PriceHistory,
       join: p in Property,
       on: ph.property_id == p.id,
-      where: ph.detected_at >= ^cutoff and ph.change_percentage < 0,
+      where: p.active == true and 
+             not is_nil(p.price) and
+             not is_nil(p.transaction_type) and
+             # Current price must meet minimum for transaction type
+             ((p.transaction_type == "wynajem" and p.price >= ^min_rent_price) or
+              (p.transaction_type == "sprzedaż" and p.price >= ^min_sale_price) or
+              (p.transaction_type not in ["wynajem", "sprzedaż"] and p.price >= ^min_history_price)) and
+             # History price should also be reasonable (not room counts like "2 zł")
+             ph.price >= ^min_history_price and
+             ph.detected_at >= ^cutoff and 
+             ph.change_percentage < 0 and
+             ph.change_percentage > -70,  # Filter out extreme drops (likely data errors)
       order_by: [asc: ph.change_percentage],
       select: {p, ph}
     )

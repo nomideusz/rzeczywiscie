@@ -15,6 +15,7 @@ defmodule RzeczywiscieWeb.HotDealsLive do
       |> assign(:hot_deals, [])
       |> assign(:price_drops, [])
       |> assign(:summary, %{recent_price_drops: 0, total_active_with_price: 0})
+      |> assign(:last_updated, nil)
 
     # Load data async
     if connected?(socket) do
@@ -42,6 +43,7 @@ defmodule RzeczywiscieWeb.HotDealsLive do
       |> assign(:hot_deals, hot_deals)
       |> assign(:price_drops, price_drops)
       |> assign(:summary, summary)
+      |> assign(:last_updated, DateTime.utc_now())
     }
   end
 
@@ -83,6 +85,13 @@ defmodule RzeczywiscieWeb.HotDealsLive do
     send(self(), :load_data)
     {:noreply, socket}
   end
+  
+  @impl true
+  def handle_event("refresh", _params, socket) do
+    socket = assign(socket, :loading, true)
+    send(self(), :load_data)
+    {:noreply, socket}
+  end
 
   @impl true
   def render(assigns) do
@@ -90,7 +99,24 @@ defmodule RzeczywiscieWeb.HotDealsLive do
     <.app flash={@flash} current_path={@current_path}>
     <div class="min-h-screen bg-base-200">
       <!-- Header -->
-      <.property_page_header current_path={@current_path} title="🔥 Hot Deals" subtitle="AI-scored property opportunities" />
+      <.property_page_header current_path={@current_path} title="🔥 Hot Deals" subtitle="AI-scored property opportunities">
+        <:actions>
+          <div class="flex items-center gap-3">
+            <%= if @last_updated do %>
+              <span class="text-xs opacity-50">
+                Updated <%= format_time_ago(@last_updated) %>
+              </span>
+            <% end %>
+            <button
+              phx-click="refresh"
+              disabled={@loading}
+              class="px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors cursor-pointer"
+            >
+              <%= if @loading, do: "Loading...", else: "🔄 Refresh" %>
+            </button>
+          </div>
+        </:actions>
+      </.property_page_header>
       
       <div class="container mx-auto px-4 py-6">
         <!-- Summary Cards -->
@@ -445,5 +471,17 @@ defmodule RzeczywiscieWeb.HotDealsLive do
   defp source_class("otodom"), do: "bg-blue-500/20 text-blue-600 border border-blue-500/30"
   defp source_class("olx"), do: "bg-green-500/20 text-green-600 border border-green-500/30"
   defp source_class(_), do: "bg-base-200"
+  
+  defp format_time_ago(nil), do: "—"
+  defp format_time_ago(datetime) do
+    diff_seconds = DateTime.diff(DateTime.utc_now(), datetime)
+    
+    cond do
+      diff_seconds < 60 -> "just now"
+      diff_seconds < 3600 -> "#{div(diff_seconds, 60)}m ago"
+      diff_seconds < 86400 -> "#{div(diff_seconds, 3600)}h ago"
+      true -> "#{div(diff_seconds, 86400)}d ago"
+    end
+  end
 end
 
