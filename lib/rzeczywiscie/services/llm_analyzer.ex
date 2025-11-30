@@ -257,7 +257,7 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
     
     Logger.info("  Calling OpenAI API (#{String.slice(content, 0, 50)}...)")
 
-    case Req.post(@openai_url, json: body, headers: headers, connect_timeout: 10_000, receive_timeout: 20_000) do
+    case Req.post(@openai_url, json: body, headers: headers, connect_timeout: 5_000, receive_timeout: 15_000, pool_timeout: 5_000) do
       {:ok, %{status: 200, body: response}} ->
         Logger.info("  ✓ OpenAI response received")
         parse_response(response)

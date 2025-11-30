@@ -1421,23 +1421,29 @@ defmodule RzeczywiscieWeb.AdminLive do
       
       # Get properties WITH descriptions for LLM analysis (prefer description over title)
       properties = from(p in Property,
-        where: p.active == true and 
-               not is_nil(p.description) and 
+        where: p.active == true and
+               not is_nil(p.description) and
                fragment("length(?)", p.description) > 100 and
                is_nil(p.llm_analyzed_at),
         order_by: [desc: p.inserted_at],
-        limit: 50
+        limit: 50,
+        select: %{id: p.id, title: p.title, description: p.description}
       )
       |> Repo.all()
-      
+
       total = length(properties)
-      
+
       if total == 0 do
         Logger.info("No properties with descriptions pending LLM analysis")
         "No properties with descriptions pending LLM analysis (all already analyzed or no descriptions)"
       else
         Logger.info("Analyzing #{total} property descriptions with LLM...")
-      
+        Logger.info("First property: ##{List.first(properties).id} - #{String.slice(List.first(properties).description, 0, 50)}...")
+
+        # Test API connection with a simple call first
+        test_property = List.first(properties)
+        Logger.info("Testing API connection with property ##{test_property.id}...")
+
       results = properties
       |> Enum.with_index(1)
       |> Enum.map(fn {property, idx} ->
@@ -1447,11 +1453,17 @@ defmodule RzeczywiscieWeb.AdminLive do
 
         # Wrap in a Task with timeout to prevent hanging
         task = Task.async(fn ->
-          LLMAnalyzer.analyze_property(property)
+          try do
+            LLMAnalyzer.analyze_property(property)
+          rescue
+            error ->
+              Logger.error("  ✗ Exception in LLM analysis: #{inspect(error)}")
+              {:error, :exception}
+          end
         end)
 
-        # 35-second timeout (slightly more than API timeout)
-        result = case Task.yield(task, 35_000) || Task.shutdown(task) do
+        # 25-second timeout (slightly more than API timeout)
+        result = case Task.yield(task, 25_000) || Task.shutdown(task) do
           {:ok, {:ok, signals}} ->
             # Convert atom keys to string for llm_condition and llm_motivation
             updates = %{
@@ -1478,7 +1490,7 @@ defmodule RzeczywiscieWeb.AdminLive do
             :error
 
           nil ->
-            Logger.error("  ✗ Timeout analyzing property ##{property.id} after 35 seconds")
+            Logger.error("  ✗ Timeout analyzing property ##{property.id} after 25 seconds")
             :timeout
         end
 
