@@ -1356,8 +1356,13 @@ defmodule RzeczywiscieWeb.AdminLive do
         score = TitleAnalyzer.calculate_score(analysis)
         
         # Only update if we found something useful
-        if analysis.urgency > 0 or analysis.condition or analysis.motivation != "standard" or 
-           length(analysis.positive_signals) > 0 or length(analysis.red_flags) > 0 do
+        has_signals = analysis.urgency > 0 || 
+                      analysis.condition != nil || 
+                      analysis.motivation != "standard" || 
+                      length(analysis.positive_signals) > 0 || 
+                      length(analysis.red_flags) > 0
+        
+        if has_signals do
           
           updates = %{
             llm_urgency: analysis.urgency,
