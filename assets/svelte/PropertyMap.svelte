@@ -9,6 +9,7 @@
   let map
   let markers = []
   let markersByPropertyId = {} // Map of property ID to marker
+  let markerCluster = null // MarkerClusterer instance
   let infoWindow = null
   let google
   let browser = false
@@ -160,6 +161,29 @@
       document.head.appendChild(script)
     })
   }
+  
+  // Load MarkerClusterer library
+  async function loadMarkerClusterer() {
+    return new Promise((resolve, reject) => {
+      if (window.markerClusterer) {
+        resolve(window.markerClusterer)
+        return
+      }
+      
+      const script = document.createElement('script')
+      script.src = 'https://unpkg.com/@googlemaps/markerclusterer/dist/index.min.js'
+      script.async = true
+      script.onload = () => {
+        console.log('MarkerClusterer loaded')
+        resolve(window.markerClusterer)
+      }
+      script.onerror = (e) => {
+        console.warn('Failed to load MarkerClusterer, falling back to individual markers')
+        resolve(null)
+      }
+      document.head.appendChild(script)
+    })
+  }
 
   // Initialize map (client-side only)
   onMount(async () => {
@@ -190,6 +214,9 @@
       }
 
       console.log('Google Maps loaded, creating map...')
+      
+      // Load MarkerClusterer library (non-blocking)
+      await loadMarkerClusterer()
 
       // Create map
       map = new google.maps.Map(mapContainer, {
@@ -300,10 +327,16 @@
   function updateMarkers() {
     if (!map || !google) return
 
-    // Clear existing markers
+    // Clear existing markers and cluster
     markers.forEach(marker => marker.setMap(null))
     markers = []
     markersByPropertyId = {}
+    
+    // Clear existing cluster
+    if (markerCluster) {
+      markerCluster.clearMarkers()
+      markerCluster = null
+    }
 
     // Filter properties with valid coordinates
     const validProperties = properties.filter(p => p.latitude && p.longitude)
@@ -325,7 +358,7 @@
       // Create custom marker with colored pin
       const marker = new google.maps.Marker({
         position,
-        map,
+        // Don't add to map directly - cluster will manage this
         title: property.title,
         icon: {
           path: google.maps.SymbolPath.CIRCLE,
@@ -369,6 +402,53 @@
       markersByPropertyId[property.id] = marker
       bounds.extend(position)
     })
+    
+    // Create marker cluster if library is available
+    if (window.markerClusterer && window.markerClusterer.MarkerClusterer) {
+      console.log('Creating marker cluster with', markers.length, 'markers')
+      
+      // Custom renderer for cluster icons
+      const renderer = {
+        render: ({ count, position }) => {
+          // Color based on cluster size
+          const color = count > 50 ? '#EF4444' : count > 20 ? '#F59E0B' : count > 5 ? '#3B82F6' : '#10B981'
+          const size = Math.min(50, 30 + Math.log2(count) * 5)
+          
+          return new google.maps.Marker({
+            position,
+            icon: {
+              path: google.maps.SymbolPath.CIRCLE,
+              scale: size / 2,
+              fillColor: color,
+              fillOpacity: 0.9,
+              strokeColor: '#FFFFFF',
+              strokeWeight: 3,
+            },
+            label: {
+              text: String(count),
+              color: '#FFFFFF',
+              fontSize: '12px',
+              fontWeight: 'bold',
+            },
+            zIndex: Number(google.maps.Marker.MAX_ZINDEX) + count,
+          })
+        }
+      }
+      
+      markerCluster = new window.markerClusterer.MarkerClusterer({
+        map,
+        markers,
+        renderer,
+        // Cluster settings - group markers within 60px of each other
+        algorithmOptions: {
+          maxZoom: 15, // Stop clustering at this zoom level
+        }
+      })
+    } else {
+      // Fallback: add markers directly to map (no clustering)
+      console.log('MarkerClusterer not available, using individual markers')
+      markers.forEach(marker => marker.setMap(map))
+    }
 
     // Fit map to show all markers (unless we're selecting a specific property)
     if (validProperties.length > 0 && !selectedPropertyId) {
@@ -414,6 +494,10 @@
 
   // Cleanup on destroy
   onDestroy(() => {
+    if (markerCluster) {
+      markerCluster.clearMarkers()
+      markerCluster = null
+    }
     markers.forEach(marker => marker.setMap(null))
     markers = []
   })
