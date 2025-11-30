@@ -79,6 +79,97 @@ defmodule RzeczywiscieWeb.Layouts do
     </a>
     """
   end
+  
+  @doc """
+  Renders the sub-navigation for property-related pages.
+  Used across Properties, Favorites, Stats, Hot Deals, and Admin pages.
+  """
+  attr :current_path, :string, default: nil
+  
+  def property_nav(assigns) do
+    ~H"""
+    <nav class="flex gap-1 flex-wrap">
+      <.property_nav_link href="/real-estate" current_path={@current_path}>
+        Properties
+      </.property_nav_link>
+      <.property_nav_link href="/favorites" current_path={@current_path}>
+        Favorites
+      </.property_nav_link>
+      <.property_nav_link href="/stats" current_path={@current_path}>
+        Stats
+      </.property_nav_link>
+      <.property_nav_link href="/hot-deals" current_path={@current_path} special="warning">
+        🔥 Hot Deals
+      </.property_nav_link>
+      <.property_nav_link href="/admin" current_path={@current_path}>
+        Admin
+      </.property_nav_link>
+    </nav>
+    """
+  end
+  
+  attr :href, :string, required: true
+  attr :current_path, :string, default: nil
+  attr :special, :string, default: nil
+  slot :inner_block, required: true
+  
+  defp property_nav_link(assigns) do
+    active = assigns.current_path == assigns.href or 
+             String.starts_with?(assigns.current_path || "", assigns.href)
+    assigns = assign(assigns, :active, active)
+    
+    ~H"""
+    <a
+      href={@href}
+      class={[
+        "px-3 py-2 text-xs font-bold uppercase tracking-wide transition-colors",
+        @active && "bg-base-content text-base-100",
+        not @active && @special == "warning" && "border-2 border-warning text-warning hover:bg-warning hover:text-warning-content",
+        not @active && @special != "warning" && "border-2 border-base-content hover:bg-base-content hover:text-base-100"
+      ]}
+    >
+      {render_slot(@inner_block)}
+    </a>
+    """
+  end
+  
+  @doc """
+  Renders a consistent page header for property pages.
+  Includes the sub-navigation and a title section.
+  """
+  attr :current_path, :string, default: nil
+  attr :title, :string, required: true
+  attr :subtitle, :string, default: nil
+  slot :actions
+  
+  def property_page_header(assigns) do
+    ~H"""
+    <div class="bg-base-100 border-b-4 border-base-content">
+      <div class="container mx-auto px-4 py-6">
+        <.property_nav current_path={@current_path} />
+        
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mt-4">
+          <div>
+            <h1 class="text-2xl md:text-3xl font-black uppercase tracking-tight">
+              {@title}
+            </h1>
+            <%= if @subtitle do %>
+              <p class="text-sm font-bold uppercase tracking-wide opacity-60">
+                {@subtitle}
+              </p>
+            <% end %>
+          </div>
+          
+          <%= if @actions != [] do %>
+            <div class="flex flex-wrap gap-2">
+              {render_slot(@actions)}
+            </div>
+          <% end %>
+        </div>
+      </div>
+    </div>
+    """
+  end
 
   @doc """
   Renders your app layout.

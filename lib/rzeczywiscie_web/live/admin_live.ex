@@ -37,17 +37,7 @@ defmodule RzeczywiscieWeb.AdminLive do
     <.app flash={@flash} current_path={@current_path}>
     <div class="min-h-screen bg-base-200">
       <!-- Header -->
-      <div class="bg-base-100 border-b-4 border-base-content">
-        <div class="container mx-auto px-4 py-6">
-          <nav class="flex gap-1 mb-4">
-            <a href="/real-estate" class="px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">Properties</a>
-            <a href="/favorites" class="px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">Favorites</a>
-            <a href="/stats" class="px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">Stats</a>
-            <a href="/admin" class="px-3 py-2 text-xs font-bold uppercase tracking-wide bg-base-content text-base-100">Admin</a>
-          </nav>
-          <h1 class="text-2xl md:text-3xl font-black uppercase tracking-tight">Admin Panel</h1>
-        </div>
-      </div>
+      <.property_page_header current_path={@current_path} title="Admin Panel" />
 
       <!-- Quick Stats -->
       <div class="bg-base-100 border-b-2 border-base-content">

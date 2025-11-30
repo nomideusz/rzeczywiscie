@@ -37,42 +37,17 @@ defmodule RzeczywiscieWeb.StatsLive do
     <.app flash={@flash} current_path={@current_path}>
     <div class="min-h-screen bg-base-200">
       <!-- Header -->
-      <div class="bg-base-100 border-b-4 border-base-content">
-        <div class="container mx-auto px-4 py-6">
-          <!-- Navigation -->
-          <nav class="flex gap-1 mb-4">
-            <a href="/real-estate" class="px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">
-              Properties
-            </a>
-            <a href="/favorites" class="px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">
-              Favorites
-            </a>
-            <a href="/stats" class="px-3 py-2 text-xs font-bold uppercase tracking-wide bg-base-content text-base-100">
-              Stats
-            </a>
-            <a href="/hot-deals" class="px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 border-warning text-warning hover:bg-warning hover:text-warning-content transition-colors">
-              🔥 Hot Deals
-            </a>
-            <a href="/admin" class="px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">
-              Admin
-            </a>
-          </nav>
-
-          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-              <h1 class="text-2xl md:text-3xl font-black uppercase tracking-tight">Statistics</h1>
-              <p class="text-sm font-bold uppercase tracking-wide opacity-60">Data Monitoring Dashboard</p>
-            </div>
-            <button
-              phx-click="refresh_stats"
-              class="px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors cursor-pointer"
-              disabled={@refreshing}
-            >
-              <%= if @refreshing, do: "Refreshing...", else: "Refresh Data" %>
-            </button>
-          </div>
-        </div>
-      </div>
+      <.property_page_header current_path={@current_path} title="Statistics" subtitle="Data Monitoring Dashboard">
+        <:actions>
+          <button
+            phx-click="refresh_stats"
+            disabled={@refreshing}
+            class="px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors cursor-pointer"
+          >
+            <%= if @refreshing, do: "Refreshing...", else: "🔄 Refresh" %>
+          </button>
+        </:actions>
+      </.property_page_header>
 
       <!-- Main Stats Grid -->
       <div class="bg-base-100 border-b-2 border-base-content">

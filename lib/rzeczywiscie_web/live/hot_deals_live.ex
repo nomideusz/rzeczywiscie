@@ -90,30 +90,7 @@ defmodule RzeczywiscieWeb.HotDealsLive do
     <.app flash={@flash} current_path={@current_path}>
     <div class="min-h-screen bg-base-200">
       <!-- Header -->
-      <div class="bg-base-100 border-b-4 border-base-content">
-        <div class="container mx-auto px-4 py-6">
-          <!-- Navigation -->
-          <nav class="flex gap-1 mb-4 flex-wrap">
-            <a href="/real-estate" class="px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">
-              Properties
-            </a>
-            <a href="/favorites" class="px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">
-              Favorites
-            </a>
-            <a href="/stats" class="px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">
-              Stats
-            </a>
-            <a href="/hot-deals" class="px-3 py-2 text-xs font-bold uppercase tracking-wide bg-warning text-warning-content">
-              🔥 Hot Deals
-            </a>
-          </nav>
-          
-          <div class="flex items-center gap-4">
-            <h1 class="text-4xl font-black uppercase tracking-tighter">🔥 Hot Deals</h1>
-            <span class="text-sm opacity-60">AI-scored property opportunities</span>
-          </div>
-        </div>
-      </div>
+      <.property_page_header current_path={@current_path} title="🔥 Hot Deals" subtitle="AI-scored property opportunities" />
       
       <div class="container mx-auto px-4 py-6">
         <!-- Summary Cards -->

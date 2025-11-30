@@ -26,71 +26,49 @@ defmodule RzeczywiscieWeb.FavoritesLive do
     <.app flash={@flash} current_path={@current_path}>
     <div class="min-h-screen bg-base-200">
       <!-- Header -->
-      <div class="bg-base-100 border-b-4 border-base-content">
-        <div class="container mx-auto px-4 py-6">
-          <!-- Navigation -->
-          <nav class="flex gap-1 mb-4">
-            <a href="/real-estate" class="px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">
-              Properties
-            </a>
-            <a href="/favorites" class="px-3 py-2 text-xs font-bold uppercase tracking-wide bg-base-content text-base-100">
-              Favorites
-            </a>
-            <a href="/stats" class="px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">
-              Stats
-            </a>
-            <a href="/admin" class="px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">
-              Admin
-            </a>
-          </nav>
-
-          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-              <h1 class="text-2xl md:text-3xl font-black uppercase tracking-tight">Favorites</h1>
-              <p class="text-sm font-bold uppercase tracking-wide opacity-60">
-                <%= length(@favorites) %> saved properties
-              </p>
-            </div>
-
-            <%= if length(@favorites) > 0 do %>
-              <!-- Sort Options -->
-              <div class="flex items-center gap-2">
-                <span class="text-[10px] font-bold uppercase tracking-wide opacity-50">Sort:</span>
-                <div class="flex border-2 border-base-content">
-                  <button
-                    phx-click="sort"
-                    phx-value-by="added"
-                    class={"px-3 py-1 text-xs font-bold transition-colors cursor-pointer #{if @sort_by == "added", do: "bg-base-content text-base-100", else: "hover:bg-base-200"}"}
-                  >
-                    Added
-                  </button>
-                  <button
-                    phx-click="sort"
-                    phx-value-by="price_asc"
-                    class={"px-3 py-1 text-xs font-bold border-l-2 border-base-content transition-colors cursor-pointer #{if @sort_by == "price_asc", do: "bg-base-content text-base-100", else: "hover:bg-base-200"}"}
-                  >
-                    Price ↑
-                  </button>
-                  <button
-                    phx-click="sort"
-                    phx-value-by="price_desc"
-                    class={"px-3 py-1 text-xs font-bold border-l-2 border-base-content transition-colors cursor-pointer #{if @sort_by == "price_desc", do: "bg-base-content text-base-100", else: "hover:bg-base-200"}"}
-                  >
-                    Price ↓
-                  </button>
-                  <button
-                    phx-click="sort"
-                    phx-value-by="area"
-                    class={"px-3 py-1 text-xs font-bold border-l-2 border-base-content transition-colors cursor-pointer #{if @sort_by == "area", do: "bg-base-content text-base-100", else: "hover:bg-base-200"}"}
-                  >
-                    Area
-                  </button>
-                </div>
+      <.property_page_header 
+        current_path={@current_path} 
+        title="Favorites" 
+        subtitle={"#{length(@favorites)} saved properties"}
+      >
+        <:actions>
+          <%= if length(@favorites) > 0 do %>
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] font-bold uppercase tracking-wide opacity-50">Sort:</span>
+              <div class="flex border-2 border-base-content">
+                <button
+                  phx-click="sort"
+                  phx-value-by="added"
+                  class={"px-3 py-1 text-xs font-bold transition-colors cursor-pointer #{if @sort_by == "added", do: "bg-base-content text-base-100", else: "hover:bg-base-200"}"}
+                >
+                  Added
+                </button>
+                <button
+                  phx-click="sort"
+                  phx-value-by="price_asc"
+                  class={"px-3 py-1 text-xs font-bold border-l-2 border-base-content transition-colors cursor-pointer #{if @sort_by == "price_asc", do: "bg-base-content text-base-100", else: "hover:bg-base-200"}"}
+                >
+                  Price ↑
+                </button>
+                <button
+                  phx-click="sort"
+                  phx-value-by="price_desc"
+                  class={"px-3 py-1 text-xs font-bold border-l-2 border-base-content transition-colors cursor-pointer #{if @sort_by == "price_desc", do: "bg-base-content text-base-100", else: "hover:bg-base-200"}"}
+                >
+                  Price ↓
+                </button>
+                <button
+                  phx-click="sort"
+                  phx-value-by="area"
+                  class={"px-3 py-1 text-xs font-bold border-l-2 border-base-content transition-colors cursor-pointer #{if @sort_by == "area", do: "bg-base-content text-base-100", else: "hover:bg-base-200"}"}
+                >
+                  Area
+                </button>
               </div>
-            <% end %>
-          </div>
-        </div>
-      </div>
+            </div>
+          <% end %>
+        </:actions>
+      </.property_page_header>
 
       <!-- Summary Stats -->
       <%= if length(@favorites) > 0 do %>
