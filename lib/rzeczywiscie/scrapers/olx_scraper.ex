@@ -139,9 +139,36 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
 
   # Parse a listing detail page (more reliable than search results)
   defp parse_detail_page(html, url) do
+    # Skip if response looks like CSS or garbage
+    if is_invalid_response?(html) do
+      Logger.warning("Skipping invalid response (CSS/garbage) for URL: #{String.slice(url, 0, 50)}...")
+      nil
+    else
+      parse_detail_page_safe(html, url)
+    end
+  end
+  
+  defp is_invalid_response?(html) do
+    # Check if content looks like CSS rather than HTML
+    html_preview = String.slice(html, 0, 500)
+    cond do
+      # Starts with CSS-like content
+      String.match?(html_preview, ~r/^\s*[\.\#\@\:]/m) -> true
+      # Contains lots of CSS selectors
+      String.match?(html_preview, ~r/\{[^}]*:[^}]*\}/m) and not String.contains?(html_preview, "<") -> true
+      # No HTML tags at all
+      not String.contains?(html_preview, "<") -> true
+      # Has doctype or html tag - valid HTML
+      String.match?(html_preview, ~r/<!doctype|<html/i) -> false
+      # Default: assume valid
+      true -> false
+    end
+  end
+  
+  defp parse_detail_page_safe(html, url) do
     case Floki.parse_document(html) do
       {:ok, document} ->
-        full_text = Floki.text(document)
+        full_text = Floki.text(document) |> String.slice(0, 50_000)  # Limit text size
         
         # Extract data from detail page
         title = extract_detail_title(document)
@@ -183,7 +210,8 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
           nil
         end
 
-      {:error, _} ->
+      {:error, reason} ->
+        Logger.warning("Failed to parse HTML: #{inspect(reason)}")
         nil
     end
   end
