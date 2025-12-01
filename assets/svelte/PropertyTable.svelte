@@ -105,13 +105,16 @@
     const date = new Date(dateString)
     const now = new Date()
     const diff = now - date
+    const seconds = Math.floor(diff / 1000)
     const minutes = Math.floor(diff / (1000 * 60))
     const hours = Math.floor(diff / (1000 * 60 * 60))
     const days = Math.floor(diff / (1000 * 60 * 60 * 24))
 
-    if (minutes < 60) return 'now'
-    if (hours < 24) return `${hours}h`
-    if (days < 7) return `${days}d`
+    // More granular time for recent listings
+    if (seconds < 60) return 'just now'
+    if (minutes < 60) return `${minutes}m ago`
+    if (hours < 24) return `${hours}h ago`
+    if (days < 7) return `${days}d ago`
     return date.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' })
   }
 
