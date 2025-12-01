@@ -50,13 +50,20 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
   Uses the PropertyRescraper to fetch detail pages and fill in:
   - Missing price, area, rooms, district
   - Descriptions
+  - Cities (inferred from districts)
   """
   def enrich_recent_properties(delay \\ 2000) do
     alias Rzeczywiscie.Scrapers.PropertyRescraper
+    alias Rzeczywiscie.RealEstate
     
     # Rescrape properties missing any key data
     Logger.info("Enriching properties missing price/area/rooms...")
     PropertyRescraper.rescrape_missing(missing: :all, limit: 100, delay: delay)
+    
+    # Backfill cities from district information
+    Logger.info("Backfilling cities from district data...")
+    city_count = RealEstate.backfill_cities_from_districts()
+    Logger.info("Backfilled #{city_count} cities from districts")
     
     # Fetch descriptions for properties without them
     Logger.info("Fetching descriptions for properties without them...")
@@ -347,17 +354,31 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
           
           Logger.info("JSON-LD extracted #{length(properties)} properties - #{properties_with_price} with price, #{properties_with_area} with area")
           
-          # Keep properties that have at least price OR area
-          valid_properties = Enum.filter(properties, fn prop ->
-            prop.price != nil || prop.area_sqm != nil
-          end)
+          # IMPORTANT: Prefer properties with PRICE (price is essential for investment analysis)
+          # If less than 50% have prices, JSON-LD is probably broken - fall back to HTML
+          price_ratio = properties_with_price / max(length(properties), 1)
           
-          if length(valid_properties) > 0 do
-            Logger.info("Using #{length(valid_properties)} properties from JSON-LD")
+          if price_ratio >= 0.5 do
+            # Good price extraction - keep properties with price OR area
+            valid_properties = Enum.filter(properties, fn prop ->
+              prop.price != nil || prop.area_sqm != nil
+            end)
+            Logger.info("Using #{length(valid_properties)} properties from JSON-LD (#{round(price_ratio * 100)}% with prices)")
             valid_properties
           else
-            Logger.warning("All JSON-LD properties missing price AND area, falling back to HTML")
-            html_fallback_parse(document, transaction_type)
+            # Poor price extraction from JSON-LD - try HTML fallback
+            Logger.warning("Only #{properties_with_price}/#{length(properties)} (#{round(price_ratio * 100)}%) have prices, trying HTML fallback")
+            html_properties = html_fallback_parse(document, transaction_type)
+            html_with_price = Enum.count(html_properties, fn p -> p.price != nil end)
+            
+            if html_with_price > properties_with_price do
+              Logger.info("HTML fallback found #{html_with_price} with prices - using HTML data")
+              html_properties
+            else
+              # HTML not better - use JSON-LD anyway, enrichment will fix missing data
+              Logger.info("HTML not better (#{html_with_price} prices), using JSON-LD - enrichment will fill gaps")
+              Enum.filter(properties, fn prop -> prop.price != nil || prop.area_sqm != nil end)
+            end
           end
         else
           Logger.warning("No properties found in JSON-LD, falling back to HTML scraping")
@@ -1658,3 +1679,4 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
     end
   end
 end
+

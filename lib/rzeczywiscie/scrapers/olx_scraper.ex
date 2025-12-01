@@ -63,6 +63,7 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
   Uses the PropertyRescraper to fetch detail pages and fill in:
   - Missing price, area, rooms, district
   - Descriptions
+  - Cities (inferred from districts)
   """
   def enrich_recent_properties(delay \\ 2000) do
     alias Rzeczywiscie.Scrapers.PropertyRescraper
@@ -70,6 +71,11 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
     # Rescrape properties missing any key data
     Logger.info("Enriching properties missing price/area/rooms...")
     PropertyRescraper.rescrape_missing(missing: :all, limit: 100, delay: delay)
+    
+    # Backfill cities from district information
+    Logger.info("Backfilling cities from district data...")
+    city_count = RealEstate.backfill_cities_from_districts()
+    Logger.info("Backfilled #{city_count} cities from districts")
     
     # Fetch descriptions for properties without them
     Logger.info("Fetching descriptions for properties without them...")

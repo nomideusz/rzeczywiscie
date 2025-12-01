@@ -41,13 +41,12 @@ config :rzeczywiscie, Oban,
        # Scrape OLX every 4 hours with 10 pages (regular fast scrape)
        # Runs at: 0:00, 4:00, 8:00, 12:00, 16:00, 20:00
        {"0 */4 * * *", Rzeczywiscie.Workers.OlxScraperWorker, args: %{"pages" => 10, "delay" => 2500}},
-       # Scrape Otodom every 4 hours with 8 pages (offset by 2 hours from OLX)
+       # Scrape Otodom every 4 hours WITH ENRICHMENT to ensure prices are fetched
+       # Enrichment re-scrapes detail pages for properties missing price/area
        # Runs at: 2:00, 6:00, 10:00, 14:00, 18:00, 22:00
-       {"0 2,6,10,14,18,22 * * *", Rzeczywiscie.Workers.OtodomScraperWorker, args: %{"pages" => 8, "delay" => 3000}},
-       # Daily enrichment run - scrape with enrichment once a day at 5 AM
-       # Fixes missing data + fetches descriptions
+       {"0 2,6,10,14,18,22 * * *", Rzeczywiscie.Workers.OtodomScraperWorker, args: %{"pages" => 5, "delay" => 3000, "enrich" => true}},
+       # Daily deep enrichment run at 5 AM - fetch descriptions + fill all missing data
        {"0 5 * * *", Rzeczywiscie.Workers.OlxScraperWorker, args: %{"pages" => 5, "delay" => 3000, "enrich" => true}},
-       {"30 5 * * *", Rzeczywiscie.Workers.OtodomScraperWorker, args: %{"pages" => 5, "delay" => 3000, "enrich" => true}},
        # Track price changes every 2 hours
        {"0 */2 * * *", Rzeczywiscie.Workers.PriceTrackerWorker},
        # Mark stale properties inactive daily at 3 AM (96 hours = 4 days without being seen)

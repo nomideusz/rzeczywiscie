@@ -435,6 +435,63 @@ defmodule Rzeczywiscie.RealEstate do
   end
   
   @doc """
+  Backfill missing cities from district information.
+  
+  For properties with a known Kraków district but no city, sets city to "Kraków".
+  This is useful after scraping when district was extracted from URL but city wasn't.
+  
+  Returns count of updated properties.
+  """
+  def backfill_cities_from_districts do
+    require Logger
+    alias Rzeczywiscie.Scrapers.ExtractionHelpers
+    
+    # Find properties with district but no city
+    properties = Repo.all(
+      from p in Property,
+        where: p.active == true and
+               (is_nil(p.city) or p.city == "") and
+               not is_nil(p.district) and p.district != "",
+        limit: 500
+    )
+    
+    Logger.info("Found #{length(properties)} properties with district but no city")
+    
+    updated_count = Enum.reduce(properties, 0, fn property, count ->
+      # Try to infer city from district
+      inferred_city = ExtractionHelpers.infer_city_from_district(property.district)
+      
+      if inferred_city && inferred_city != "" do
+        case Repo.update(Property.changeset(property, %{city: inferred_city})) do
+          {:ok, _} -> 
+            count + 1
+          {:error, _} -> 
+            count
+        end
+      else
+        count
+      end
+    end)
+    
+    Logger.info("Backfilled #{updated_count} cities from districts")
+    updated_count
+  end
+  
+  @doc """
+  Count properties that have district but missing city.
+  These are candidates for city backfill.
+  """
+  def count_missing_cities_with_district do
+    Repo.aggregate(
+      from(p in Property,
+        where: p.active == true and
+               (is_nil(p.city) or p.city == "") and
+               not is_nil(p.district) and p.district != ""),
+      :count, :id
+    )
+  end
+  
+  @doc """
   Preview misclassified listings without fixing them.
   Returns counts of properties that would be reclassified.
   """

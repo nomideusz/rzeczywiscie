@@ -211,6 +211,10 @@ defmodule RzeczywiscieWeb.AdminLive do
                 class={"px-4 py-3 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @cleanup_running != nil || @db_stats.missing_districts == 0, do: "border-base-content/30 opacity-50", else: "border-info text-info hover:bg-info hover:text-info-content"}"}>
                 <%= if @cleanup_running == :backfill_districts, do: "⏳ Running...", else: "📍 Fill #{@db_stats.missing_districts} Districts" %>
               </button>
+              <button phx-click="run_cleanup_task" phx-value-type="backfill_cities" disabled={@cleanup_running != nil || @db_stats.missing_cities == 0}
+                class={"px-4 py-3 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @cleanup_running != nil || @db_stats.missing_cities == 0, do: "border-base-content/30 opacity-50", else: "border-secondary text-secondary hover:bg-secondary hover:text-secondary-content"}"}>
+                <%= if @cleanup_running == :backfill_cities, do: "⏳ Running...", else: "🏙️ Fill #{@db_stats.missing_cities} Cities" %>
+              </button>
             </div>
           </div>
         </div>
@@ -942,6 +946,9 @@ defmodule RzeczywiscieWeb.AdminLive do
     
     # Count properties missing district but having it in city field
     missing_districts = RealEstate.count_missing_districts()
+    
+    # Count properties with district but missing city (can infer from district)
+    missing_cities = RealEstate.count_missing_cities_with_district()
 
     %{
       active: active,
@@ -951,7 +958,8 @@ defmodule RzeczywiscieWeb.AdminLive do
       duplicates: duplicates,
       stale: stale,
       invalid_prices: invalid_prices,
-      missing_districts: missing_districts
+      missing_districts: missing_districts,
+      missing_cities: missing_cities
     }
   end
 
@@ -1046,6 +1054,11 @@ defmodule RzeczywiscieWeb.AdminLive do
   defp run_cleanup_task(:backfill_districts) do
     count = RealEstate.backfill_districts_from_city()
     "Backfilled #{count} districts from city field"
+  end
+  
+  defp run_cleanup_task(:backfill_cities) do
+    count = RealEstate.backfill_cities_from_districts()
+    "Backfilled #{count} cities from district data"
   end
 
   defp run_geocode_task do
@@ -1762,6 +1775,22 @@ defmodule RzeczywiscieWeb.AdminLive do
         # 35-second timeout (slightly more than API timeout)
         result = case Task.yield(task, 35_000) || Task.shutdown(task) do
           {:ok, {:ok, signals}} ->
+            # Check for prefab/kit houses and add red flag if detected
+            is_prefab = LLMAnalyzer.is_prefab_house?(property.title) || 
+                        LLMAnalyzer.is_prefab_house?(property.description || "")
+            
+            # Enhance signals with prefab detection
+            signals = if is_prefab do
+              Logger.info("  ⚠️ Prefab house detected in property ##{property.id}")
+              red_flags = ["Dom prefabrykowany - produkt, nie nieruchomość" | (signals.red_flags || [])]
+              inv_score = min(signals[:investment_score] || 5, 2)  # Cap at 2 for prefabs
+              signals
+              |> Map.put(:red_flags, red_flags)
+              |> Map.put(:investment_score, inv_score)
+            else
+              signals
+            end
+            
             # Convert atom keys to string for llm_condition and llm_motivation
             # Now saving ALL LLM-generated fields including enhanced ones
             updates = %{

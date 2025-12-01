@@ -22,9 +22,9 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
   
   # System prompt for title analysis (kept for backwards compatibility)
   @system_prompt """
-  You are a Polish real estate analyst. Analyze property listing titles and extract signals.
+  You're scanning property titles for an investor. Extract signals quickly.
   
-  Respond ONLY with valid JSON in this exact format:
+  Respond ONLY with valid JSON:
   {
     "urgency": 0-10,
     "condition": "unknown" | "needs_renovation" | "to_finish" | "good" | "renovated" | "new",
@@ -33,34 +33,27 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
     "seller_motivation": "unknown" | "standard" | "motivated" | "very_motivated"
   }
   
-  Scoring guide:
-  - urgency 0: no urgency signals
-  - urgency 3-5: mild urgency ("okazja", "do negocjacji")
-  - urgency 6-8: clear urgency ("pilne", "szybka sprzedaż", "wyjazd")
-  - urgency 9-10: extreme urgency ("musi się sprzedać", "likwidacja")
+  URGENCY: 0=none, 3-5=mild ("okazja"), 6-8=clear ("pilne"), 9-10=extreme ("likwidacja")
   
-  Condition signals in Polish:
-  - "do remontu", "do wykończenia" = needs_renovation/to_finish
-  - "po remoncie", "odnowione" = renovated
-  - "nowe", "deweloper", "od dewelopera" = new
-  - "stan bardzo dobry", "gotowe do zamieszkania" = good
+  CONDITION: "do remontu"=needs_renovation, "po remoncie"=renovated, "od dewelopera"=new
   
-  Red flags: "spółdzielcze", "zadłużone", "hałas", "problem", "wada"
-  Positive: "cichy", "zielony", "park", "spokojny", "widok", "balkon", "taras", "ogród"
+  NOT REAL ESTATE (major red flag!):
+  - "dom szkieletowy/modułowy/prefabrykowany/mobilny" = PREFAB PRODUCT
+  - "garaż blaszany/blaszak" = METAL SHED PRODUCT
+  - "pawilon" without land = TEMPORARY STRUCTURE
+  - "z montażem" = IT'S A PRODUCT FOR SALE
   
-  Motivation signals:
-  - "bezpośrednio", "bez pośredników" = standard (common marketing)
-  - "pilne", "wyjazd", "przeprowadzka" = motivated
-  - "musi się sprzedać", "likwidacja", "poniżej rynku" = very_motivated
+  Red flags: "spółdzielcze", "zadłużone", "hałas", "problem"
+  Positive: "cichy", "park", "balkon", "taras", "ogród", "widok"
+  
+  Motivation: "pilne/wyjazd"=motivated, "musi się sprzedać"=very_motivated
   """
   
   # Enhanced prompt for full description analysis with structured data extraction
   @description_prompt """
-  You are a Polish real estate investment analyst. Analyze this property listing description.
+  You are a sharp-eyed Polish real estate scout writing quick notes for investors.
   
-  Extract ALL relevant signals for an investor looking for good deals.
-  
-  Respond ONLY with valid JSON in this exact format:
+  Respond ONLY with valid JSON:
   {
     "urgency": 0-10,
     "condition": "unknown" | "needs_renovation" | "to_finish" | "good" | "renovated" | "new",
@@ -70,72 +63,59 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
     "hidden_costs": [],
     "negotiation_hints": [],
     "investment_score": 0-10,
-    "summary": "1-2 sentence summary in Polish",
+    "summary": "Your note in Polish - see rules below",
     "monthly_fee": null or number,
     "year_built": null or number,
     "floor_info": null or "X/Y"
   }
   
-  EXTRACTION RULES:
+  EXTRACTION:
+  - monthly_fee: czynsz/opłaty in PLN
+  - year_built: rok budowy
+  - floor_info: "3/5" format
   
-  NUMERIC VALUES (extract if mentioned):
-  - monthly_fee: Extract czynsz/opłaty in PLN (e.g. "czynsz 450 zł" → 450)
-  - year_built: Extract year built (e.g. "z 1985 roku", "budynek z 2020" → 1985/2020)
-  - floor_info: Extract floor/total (e.g. "3 piętro z 5" → "3/5", "parter" → "0")
+  RED FLAGS (score 0-2 if found):
+  - "dom szkieletowy/modułowy/prefabrykowany" = PREFAB PRODUCT, not real estate!
+  - "garaż blaszany/blaszak" = Metal shed product, not property!
+  - High fees (>500 PLN/month)
+  - "bez księgi wieczystej", "spółdzielcze"
   
-  URGENCY SIGNALS (0-10):
-  - 0: No urgency signals
-  - 3-5: "okazja", "do negocjacji"  
-  - 6-8: "pilne", "szybka sprzedaż", "wyjazd"
-  - 9-10: "musi się sprzedać", "likwidacja"
+  SUMMARY RULES - THIS IS CRITICAL:
+  Write like a friend texting about a property they just saw. Be specific and unique.
   
-  CONDITION:
-  - "do remontu", "wymaga remontu" → needs_renovation
-  - "stan deweloperski", "do wykończenia" → to_finish
-  - "po generalnym remoncie" → renovated
-  - "nowe budownictwo", "od dewelopera" → new
-  - "dobry stan", "gotowe do zamieszkania" → good
+  ❌ FORBIDDEN PHRASES (never use these):
+  - "Nieruchomość w X oferuje/jest..."
+  - "co czyni tę ofertę atrakcyjną"
+  - "co jest znacznie poniżej średniej rynkowej"
+  - "atrakcyjna cena/inwestycja"
+  - "w dzielnicy X"
+  - "stanowi dobrą okazję"
+  - Any generic filler phrases
   
-  RED FLAGS:
-  - High fees (>500 PLN/month for apartment)
-  - Legal issues: "spółdzielcze własnościowe", "bez księgi wieczystej"
-  - Problems: "hałas", "ruchliwa ulica"
-  - Ground floor without garden
+  ✅ GOOD SUMMARIES (be like this):
+  - "Świeży remont, balkon na południe. Przy AGH = pewny wynajem studentom."
+  - "Parter bez ogrodu, hałas od ulicy - stąd niska cena. Trzeba sprawdzić osobiście."
+  - "Czynsz 600zł zjada zysk. Lepiej szukać dalej."
+  - "Wielki balkon, garaż w cenie. Sprzedający się spieszy - można targować."
+  - "Blaszak za 15k - to produkt z marketu, nie nieruchomość!"
+  - "Po remoncie, ale w bloku z wielkiej płyty. Cena ok, nic specjalnego."
   
-  POSITIVE SIGNALS:
-  - Location: "cicha okolica", "blisko centrum", "park"
-  - Features: "balkon", "taras", "ogród", "piwnica", "parking"
-  - Quality: "nowe okna", "klimatyzacja", "po remoncie"
-  - Transport: "tramwaj", "metro", "dobra komunikacja"
-  
-  HIDDEN COSTS (strings, e.g. "Czynsz 450 PLN/mies", "Brak miejsca parkingowego"):
-  - Monthly administration fees
-  - Required renovations
-  - Missing parking costs
-  
-  NEGOTIATION HINTS:
-  - "cena do negocjacji", "bezpośrednio", long time on market
-  
-  SUMMARY: Write 1-2 sentences in Polish summarizing key investment points.
+  Be direct. Be specific. Point out the ONE thing that matters most.
   """
   
   # Context-aware prompt template (filled in dynamically)
   @context_prompt_template """
-  You are a Polish real estate investment analyst. Analyze this property listing.
+  You're a sharp real estate scout writing quick notes for an investor friend.
   
-  PROPERTY CONTEXT (USE THIS DATA, DO NOT INVENT LOCATIONS):
-  - Listed Price: %{price} PLN
-  - Area: %{area} m²
-  - Price per m²: %{price_per_sqm} PLN/m²
-  - District: %{district}
-  - Market avg price/m² in this district: %{market_avg} PLN/m²
-  - Transaction type: %{transaction_type}
+  NUMBERS YOU KNOW:
+  - Price: %{price} PLN | Area: %{area} m² | Per m²: %{price_per_sqm} PLN
+  - Location: %{district}
+  - Market avg in area: %{market_avg} PLN/m²
+  - Type: %{transaction_type}
   
-  IMPORTANT: Use the EXACT district name "%{district}" in your summary. Do NOT use any other district or location names.
+  %{location_instruction}
   
-  Given this context, analyze the description and assess if this is a good deal.
-  
-  Respond ONLY with valid JSON in this exact format:
+  Respond ONLY with valid JSON:
   {
     "urgency": 0-10,
     "condition": "unknown" | "needs_renovation" | "to_finish" | "good" | "renovated" | "new",
@@ -145,25 +125,44 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
     "hidden_costs": [],
     "negotiation_hints": [],
     "investment_score": 0-10,
-    "summary": "1-2 sentence summary in Polish using district %{district}",
+    "summary": "Your quick note in Polish",
     "monthly_fee": null or number,
     "year_built": null or number,
     "floor_info": null or "X/Y"
   }
   
-  INVESTMENT SCORE GUIDELINES (considering the property context):
-  - 8-10: Significantly below market price, motivated seller, good condition
-  - 5-7: Fair price with some upside potential
-  - 3-4: Average deal, at market price
-  - 0-2: Overpriced or significant red flags
+  INSTANT RED FLAGS (score 0-2):
+  - "dom szkieletowy/modułowy/prefabrykowany/mobilny" = PREFAB PRODUCT!
+  - "garaż blaszany/blaszak/wiata" = Metal shed, not property!
+  - "z montażem w X godzin" = It's a product being sold!
+  - "pawilon handlowy" without land = Temporary structure!
   
-  Be especially attentive to:
-  1. Is %{price_per_sqm} PLN/m² below or above market avg of %{market_avg} PLN/m²?
-  2. Hidden costs that would increase effective price
-  3. Renovation needs that would add costs
-  4. Urgency signals suggesting negotiation room
+  SCORE GUIDE:
+  - 8-10: Way below market, seller motivated, ready to move in
+  - 5-7: Fair deal, some upside
+  - 3-4: Market price, nothing special
+  - 0-2: Overpriced, red flags, or NOT REAL ESTATE (prefab/shed)
   
-  CRITICAL: In the summary, refer to the property location as "%{district}" - do NOT make up or use different location names!
+  SUMMARY - WRITE LIKE A FRIEND TEXTING:
+  
+  ❌ NEVER SAY:
+  - "Nieruchomość w X oferuje..."
+  - "jest/stanowi atrakcyjną inwestycją/ofertą"
+  - "znacznie poniżej średniej rynkowej"
+  - "w dzielnicy X" (just say the district name naturally)
+  - Generic corporate phrases
+  
+  ✅ BE LIKE THIS:
+  - "Dębniki, %{price_per_sqm} zł/m² przy średniej %{market_avg} - solidna okazja. Balkon na południe."
+  - "Garaż blaszany to produkt z OBI, nie nieruchomość. Omijać."
+  - "Remont zrobiony, ale czynsz 650zł zjada zysk z wynajmu."
+  - "Podgórze, pilna sprzedaż - warto zadzwonić i negocjować twardo."
+  - "Zakopane, wynajem krótkoterminowy - licencja już jest? Sprawdzić."
+  - "Prefabrykat za 140k - kupujesz produkt, nie mieszkanie. Skip."
+  - "Wielka płyta, parter, hałas. Cena niska, bo jest za co."
+  
+  Focus on THE ONE THING that matters most. Be direct. Be useful.
+  %{summary_instruction}
   """
   
   @doc """
@@ -225,14 +224,37 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
       price_per_sqm = if area > 0, do: round(price / area), else: 0
       market_avg = context[:market_avg_price_per_sqm] || 0
       
+      # Check if district is actually known (not nil, empty, or "Unknown")
+      district = context[:district]
+      has_district = district && district != "" && String.downcase(district) != "unknown"
+      
+      # Build location-aware instructions
+      {location_instruction, summary_location_hint, summary_instruction} = 
+        if has_district do
+          {
+            "IMPORTANT: Use the EXACT district name \"#{district}\" in your summary. Do NOT use any other district or location names.",
+            " - mention the district \"#{district}\"",
+            "CRITICAL: In the summary, refer to the property location as \"#{district}\" - do NOT make up or use different location names!"
+          }
+        else
+          {
+            "NOTE: The district/location is unknown. Do NOT mention any specific district or location names in the summary. Focus on the property features and price.",
+            " - do NOT mention any district or location",
+            "CRITICAL: Do NOT mention any district, location, or area names in the summary since we don't know the exact location. Focus only on property features, condition, and price."
+          }
+        end
+      
       # Build context-aware prompt
       system_prompt = @context_prompt_template
       |> String.replace("%{price}", format_number(price))
       |> String.replace("%{area}", format_number(area))
       |> String.replace("%{price_per_sqm}", format_number(price_per_sqm))
-      |> String.replace("%{district}", context[:district] || "Unknown")
+      |> String.replace("%{district}", district || "Unknown")
       |> String.replace("%{market_avg}", format_number(market_avg))
       |> String.replace("%{transaction_type}", context[:transaction_type] || "sprzedaż")
+      |> String.replace("%{location_instruction}", location_instruction)
+      |> String.replace("%{summary_location_hint}", summary_location_hint)
+      |> String.replace("%{summary_instruction}", summary_instruction)
       
       truncated = String.slice(description, 0, 3000)
       call_openai(truncated, api_key, system_prompt, "Property description:\n\n")
@@ -469,7 +491,29 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
     |> maybe_add_field(signals, "monthly_fee", :monthly_fee, nil)
     |> maybe_add_field(signals, "year_built", :year_built, nil)
     |> maybe_add_field(signals, "floor_info", :floor_info, nil)
+    # Clean up summary to remove "Unknown" location references
+    |> clean_summary()
   end
+  
+  # Clean up summary to remove "Unknown" location references that LLM may have generated
+  defp clean_summary(%{summary: summary} = signals) when is_binary(summary) do
+    cleaned = summary
+    # Remove common patterns with "Unknown"
+    |> String.replace(~r/\s*w\s+dzielnicy\s+Unknown\.?/i, "")
+    |> String.replace(~r/\s*w\s+Unknown\.?/i, "")
+    |> String.replace(~r/\s*w\s+okolicy\s+Unknown\.?/i, "")
+    |> String.replace(~r/\s*w\s+rejonie\s+Unknown\.?/i, "")
+    |> String.replace(~r/\s*na\s+terenie\s+Unknown\.?/i, "")
+    |> String.replace(~r/\bUnknown\b/i, "")
+    # Clean up double spaces and trailing commas
+    |> String.replace(~r/\s+/, " ")
+    |> String.replace(~r/,\s*,/, ",")
+    |> String.replace(~r/,\s*\./, ".")
+    |> String.trim()
+    
+    %{signals | summary: cleaned}
+  end
+  defp clean_summary(signals), do: signals
   
   defp normalize_signals(_), do: default_signals()
   
@@ -525,6 +569,52 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
   defp get_api_key do
     Application.get_env(:rzeczywiscie, :openai_api_key, "")
   end
+  
+  @doc """
+  Check if a property title/description indicates a product being sold (not real estate).
+  Returns true if the listing is for a prefab house, metal shed, or other product.
+  """
+  def is_prefab_house?(text) when is_binary(text) do
+    text_lower = String.downcase(text)
+    
+    # Prefab/modular houses - products, not real estate
+    prefab_patterns = [
+      "dom szkieletowy",
+      "dom modułowy", 
+      "dom prefabrykowany",
+      "dom mobilny",
+      "domek mobilny",
+      "domek modułowy",
+      "domek szkieletowy",
+      "z montażem w",
+      "montaż w",
+      "gotowy do montażu",
+      "dom całoroczny drewniany",
+      "dom drewniany całoroczny",
+      "domek letniskowy",
+      # Metal sheds - definitely products
+      "garaż blaszany",
+      "blaszak",
+      "garaże blaszane",
+      "wiata blaszana",
+      "hala blaszana",
+      # Commercial kiosks/pavilions without land
+      "pawilon handlowy",
+      "kiosk handlowy",
+      "kontener",
+      # Product indicators
+      "producent",
+      "całe małopolskie",  # delivery range = product
+      "dostawa gratis",
+      "transport w cenie"
+    ]
+    
+    Enum.any?(prefab_patterns, fn pattern -> 
+      String.contains?(text_lower, pattern)
+    end)
+  end
+  
+  def is_prefab_house?(_), do: false
   
   @doc """
   Calculate score bonus from LLM signals.

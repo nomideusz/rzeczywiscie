@@ -72,11 +72,23 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
   @doc """
   Infer city from district name. If district is a known Kraków district, return "Kraków".
   Returns the original city if provided, otherwise attempts to infer from district.
+  
+  Handles edge cases:
+  - nil city
+  - empty string city
+  - whitespace-only city
   """
   def infer_city(city, district) do
-    # If city is already set and non-empty, use it
-    if city && city != "" do
-      city
+    # Trim and check if city is actually set
+    city_trimmed = case city do
+      nil -> nil
+      c when is_binary(c) -> String.trim(c)
+      _ -> nil
+    end
+    
+    # If city is already set and non-empty (after trimming), use it
+    if city_trimmed && city_trimmed != "" do
+      city_trimmed
     else
       # Try to infer city from district
       infer_city_from_district(district)
