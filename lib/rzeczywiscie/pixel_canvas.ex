@@ -477,13 +477,11 @@ defmodule Rzeczywiscie.PixelCanvas do
 
   @doc """
   Returns global milestone progress information.
-  Special pixels (like unicorns) don't count towards milestones.
+  All pixels count towards milestones (including special pixels).
   """
   def milestone_progress do
-    # Count only regular pixels (not special pixels) for milestone progress
-    total_regular_pixels = Pixel
-    |> where([p], p.is_special == false or is_nil(p.is_special))
-    |> Repo.aggregate(:count)
+    # Count all pixels for milestone progress
+    total_pixels = Repo.aggregate(Pixel, :count)
     
     # Define milestones: every 1000 pixels unlocks a Unicorn
     milestones = [
@@ -495,13 +493,13 @@ defmodule Rzeczywiscie.PixelCanvas do
     ]
 
     # Find next milestone and current progress
-    next_milestone = Enum.find(milestones, fn m -> total_regular_pixels < m.threshold end)
+    next_milestone = Enum.find(milestones, fn m -> total_pixels < m.threshold end)
     
-    unlocked_rewards = Enum.filter(milestones, fn m -> total_regular_pixels >= m.threshold end)
+    unlocked_rewards = Enum.filter(milestones, fn m -> total_pixels >= m.threshold end)
                        |> Enum.map(& &1.reward)
 
     %{
-      total_pixels: total_regular_pixels,
+      total_pixels: total_pixels,
       next_milestone: next_milestone,
       unlocked_rewards: unlocked_rewards,
       all_milestones: milestones
@@ -510,13 +508,11 @@ defmodule Rzeczywiscie.PixelCanvas do
 
   @doc """
   Check and unlock global milestones, distributing special pixels to all active users.
-  Special pixels don't count towards milestones.
+  All pixels count towards milestones.
   """
   def check_and_unlock_milestones do
-    # Count only regular pixels (not special pixels) for milestone checks
-    total_pixels = Pixel
-    |> where([p], p.is_special == false or is_nil(p.is_special))
-    |> Repo.aggregate(:count)
+    # Count all pixels for milestone checks
+    total_pixels = Repo.aggregate(Pixel, :count)
     
     # Milestones to check
     milestones_to_check = [

@@ -931,7 +931,12 @@ defmodule RzeczywiscieWeb.LLMResultsLive do
   
   defp parse_string(nil), do: nil
   defp parse_string(""), do: nil
-  defp parse_string(str) when is_binary(str), do: String.trim(str) |> case do "" -> nil; s -> s end
+  defp parse_string(str) when is_binary(str) do
+    case String.trim(str) do
+      "" -> nil
+      s -> s
+    end
+  end
   
   defp parse_number(nil), do: nil
   defp parse_number(""), do: nil
