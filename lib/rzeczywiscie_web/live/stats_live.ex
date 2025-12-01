@@ -754,13 +754,14 @@ defmodule RzeczywiscieWeb.StatsLive do
           order_by: [desc: count(p.id)]
       )
 
-    # Top cities
+    # Top cities - normalize by extracting base city name (before comma)
+    # This groups "Kraków", "Kraków, Stare Miasto", "Kraków, Podgórze" all as "Kraków"
     top_cities =
       Repo.all(
         from p in Property,
           where: p.active == true and not is_nil(p.city),
-          group_by: p.city,
-          select: {p.city, count(p.id)},
+          group_by: fragment("SPLIT_PART(?, ',', 1)", p.city),
+          select: {fragment("SPLIT_PART(?, ',', 1)", p.city), count(p.id)},
           order_by: [desc: count(p.id)],
           limit: 10
       )
