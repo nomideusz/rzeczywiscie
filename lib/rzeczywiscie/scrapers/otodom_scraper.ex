@@ -455,6 +455,12 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
       :error -> nil
     end
   end
+  # Handle range format (minValue/maxValue) - use minValue as conservative estimate
+  defp extract_floor_size_value(%{"minValue" => min_val, "maxValue" => _max_val}) when is_number(min_val) do
+    min_val
+  end
+  defp extract_floor_size_value(%{"minValue" => min_val}) when is_number(min_val), do: min_val
+  defp extract_floor_size_value(%{"maxValue" => max_val}) when is_number(max_val), do: max_val
   defp extract_floor_size_value(str) when is_binary(str) do
     # Parse string like "50 m²" or "50"
     case Float.parse(String.trim(str)) do
@@ -790,21 +796,55 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
 
     result =
       Enum.reduce_while(selectors, nil, fn selector, _acc ->
-        case Floki.find(card, selector) |> Floki.text() do
-          "" -> {:cont, nil}
-          title -> {:halt, {:ok, String.trim(title)}}
+        text = Floki.find(card, selector) |> Floki.text() |> String.trim()
+        if text != "" and String.length(text) > 3 do
+          {:halt, {:ok, text}}
+        else
+          {:cont, nil}
         end
       end)
 
-    # If no title found with selectors, check if this is a link element
-    # and extract title from the link text or aria-label
-    if is_nil(result) do
-      case extract_title_from_link(card) do
-        nil -> {:error, :no_title}
-        title -> {:ok, title}
-      end
-    else
-      result
+    # Fallback 1: Check if this is a link element
+    result = result || case extract_title_from_link(card) do
+      nil -> nil
+      title -> {:ok, title}
+    end
+    
+    # Fallback 2: Try container-based title extraction
+    result = result || case extract_title_from_container(card) do
+      nil -> nil
+      title -> {:ok, title}
+    end
+    
+    # Fallback 3: Try to build title from URL
+    result = result || extract_title_from_url(card)
+    
+    result || {:error, :no_title}
+  end
+  
+  # Extract a title from the URL path (last resort)
+  defp extract_title_from_url(card) do
+    case extract_url(card) do
+      {:ok, url} ->
+        # Parse URL like /pl/oferta/mieszkanie-3-pokoje-krakow-debniki-ID123
+        case Regex.run(~r{/pl/oferta/([^/]+)}, url) do
+          [_, slug] ->
+            # Convert slug to readable title
+            title = slug
+                    |> String.replace(~r/-ID\d+.*$/, "")  # Remove ID suffix
+                    |> String.replace("-", " ")
+                    |> String.split()
+                    |> Enum.map(&String.capitalize/1)
+                    |> Enum.join(" ")
+            
+            if String.length(title) > 5 do
+              {:ok, title}
+            else
+              nil
+            end
+          _ -> nil
+        end
+      _ -> nil
     end
   end
 
@@ -820,13 +860,53 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
     if title_from_attr do
       String.trim(title_from_attr)
     else
-      # Extract text from children
-      text = Floki.text({tag, attrs, children}) |> String.trim()
-      if text != "", do: text, else: nil
+      # Extract text from children - but clean it up
+      text = Floki.text({tag, attrs, children}) 
+             |> String.trim()
+             |> String.replace(~r/\s+/, " ")  # Normalize whitespace
+      
+      # Only return if it looks like a title (has some content, not too short)
+      if text != "" and String.length(text) > 5 do
+        # Take first line / reasonable portion as title
+        text
+        |> String.split("\n")
+        |> List.first()
+        |> String.slice(0, 200)
+        |> String.trim()
+      else
+        nil
+      end
     end
   end
 
   defp extract_title_from_link(_), do: nil
+  
+  # Improved approach: find any element with substantial text that could be a title
+  defp extract_title_from_container(container) do
+    # Try various selectors for title within the container
+    title_selectors = [
+      "h2", "h3", "h1",  # Standard headings
+      "p[data-cy*='title']",
+      "span[data-cy*='title']",
+      "[class*='title']",
+      "[class*='Title']",
+      "p:first-of-type",  # First paragraph might be title
+      "span:first-of-type"
+    ]
+    
+    Enum.find_value(title_selectors, fn selector ->
+      case Floki.find(container, selector) do
+        [] -> nil
+        elements ->
+          text = elements |> Floki.text() |> String.trim() |> String.replace(~r/\s+/, " ")
+          if text != "" and String.length(text) > 5 and String.length(text) < 300 do
+            text
+          else
+            nil
+          end
+      end
+    end)
+  end
 
   defp extract_price(card, title) do
     selectors = [
