@@ -18,241 +18,128 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
   ## Options
     * `:pages` - Number of pages to scrape per transaction type (default: 1)
     * `:delay` - Delay between requests in milliseconds (default: 5000)
-    * `:deep` - If true, fetches each listing's detail page for accurate data (slower but more reliable)
+    * `:enrich` - If true, auto-enriches properties missing data after scraping (default: false)
   """
   def scrape(opts \\ []) do
     pages = Keyword.get(opts, :pages, 1)
     delay = Keyword.get(opts, :delay, 5000)
-    deep = Keyword.get(opts, :deep, false)
+    enrich = Keyword.get(opts, :enrich, false)
 
-    if deep do
-      scrape_deep(pages, delay)
-    else
-      scrape_fast(pages, delay)
-    end
-  end
-
-  # Fast scrape: Parse search result pages directly (may miss some data)
-  defp scrape_fast(pages, delay) do
-    Logger.info("Starting Otodom FAST scrape for Malopolskie region, #{pages} page(s) per transaction type")
+    Logger.info("Starting Otodom scrape for Malopolskie region, #{pages} page(s) per transaction type")
 
     # Scrape both sale and rent listings
     sale_results = scrape_transaction_type(@malopolskie_sale_url, "sprzedaż", pages, delay)
     rent_results = scrape_transaction_type(@malopolskie_rent_url, "wynajem", pages, delay)
 
     all_results = sale_results ++ rent_results
-    save_results(all_results, "fast")
-  end
-
-  # Deep scrape: Get URLs from search pages, then fetch each detail page (like rescraper)
-  defp scrape_deep(pages, delay) do
-    Logger.info("Starting Otodom DEEP scrape for Malopolskie region, #{pages} page(s) per transaction type")
-    Logger.info("Deep mode: Will fetch each listing's detail page for accurate data")
-
-    # Step 1: Get all listing URLs from search pages
-    sale_urls = get_listing_urls(@malopolskie_sale_url, "sprzedaż", pages, delay)
-    rent_urls = get_listing_urls(@malopolskie_rent_url, "wynajem", pages, delay)
-
-    all_urls = sale_urls ++ rent_urls
-    Logger.info("Found #{length(all_urls)} unique listing URLs")
-
-    # Step 2: Fetch each detail page and extract full data
-    all_results =
-      all_urls
-      |> Enum.with_index(1)
-      |> Enum.map(fn {{url, transaction_type}, index} ->
-        Logger.info("[#{index}/#{length(all_urls)}] Deep fetching: #{String.slice(url, 0, 60)}...")
-        result = fetch_detail_page(url, transaction_type)
-        
-        # Be respectful with delays
-        if index < length(all_urls), do: Process.sleep(delay)
-        
-        result
-      end)
-      |> Enum.reject(&is_nil/1)
-
-    save_results(all_results, "deep")
-  end
-
-  # Get listing URLs from search result pages
-  defp get_listing_urls(base_url, transaction_type, pages, delay) do
-    Logger.info("Collecting #{transaction_type} listing URLs...")
-
-    1..pages
-    |> Enum.flat_map(fn page ->
-      url = if page == 1, do: base_url, else: "#{base_url}?page=#{page}"
-
-      case fetch_page(url) do
-        {:ok, html} ->
-          urls = extract_listing_urls(html)
-          Logger.info("Page #{page}: found #{length(urls)} listing URLs")
-          
-          if page < pages, do: Process.sleep(delay)
-          
-          # Return URLs with transaction type
-          Enum.map(urls, &{&1, transaction_type})
-
-        {:error, reason} ->
-          Logger.error("Failed to fetch page #{page}: #{inspect(reason)}")
-          []
-      end
-    end)
-    |> Enum.uniq_by(fn {url, _} -> url end)
-  end
-
-  # Extract listing URLs from search results HTML
-  defp extract_listing_urls(html) do
-    case Floki.parse_document(html) do
-      {:ok, document} ->
-        # Find all links to listing pages
-        document
-        |> Floki.find("a[href*='/pl/oferta/']")
-        |> Enum.map(fn {"a", attrs, _} ->
-          Enum.find_value(attrs, fn {"href", href} -> href; _ -> nil end)
-        end)
-        |> Enum.reject(&is_nil/1)
-        |> Enum.map(fn href ->
-          if String.starts_with?(href, "/"), do: "#{@base_url}#{href}", else: href
-        end)
-        |> Enum.uniq()
-
-      {:error, _} ->
-        []
-    end
-  end
-
-  # Fetch and parse a detail page (like rescraper does)
-  defp fetch_detail_page(url, transaction_type) do
-    case fetch_page(url) do
-      {:ok, html} ->
-        parse_detail_page(html, url, transaction_type)
-
-      {:error, reason} ->
-        Logger.warning("Failed to fetch detail page: #{inspect(reason)}")
-        nil
-    end
-  end
-
-  # Parse a listing detail page (more reliable than search results)
-  defp parse_detail_page(html, url, transaction_type) do
-    # Skip if response looks like CSS or garbage
-    if is_invalid_response?(html) do
-      Logger.warning("Skipping invalid response (CSS/garbage) for URL: #{String.slice(url, 0, 50)}...")
-      nil
-    else
-      parse_detail_page_safe(html, url, transaction_type)
-    end
-  end
-  
-  defp is_invalid_response?(html) do
-    # Check if content looks like CSS rather than HTML
-    html_preview = String.slice(html, 0, 500)
-    cond do
-      # Starts with CSS-like content
-      String.match?(html_preview, ~r/^\s*[\.\#\@\:]/m) -> true
-      # Contains lots of CSS selectors
-      String.match?(html_preview, ~r/\{[^}]*:[^}]*\}/m) and not String.contains?(html_preview, "<") -> true
-      # No HTML tags at all
-      not String.contains?(html_preview, "<") -> true
-      # Has doctype or html tag - valid HTML
-      String.match?(html_preview, ~r/<!doctype|<html/i) -> false
-      # Default: assume valid
-      true -> false
-    end
-  end
-  
-  defp parse_detail_page_safe(html, url, transaction_type) do
-    case Floki.parse_document(html) do
-      {:ok, document} ->
-        # Try JSON-LD first (most reliable)
-        json_ld_data = extract_json_ld_from_detail(document)
-        
-        # Fall back to HTML extraction
-        html_data = %{
-          title: extract_detail_title(document),
-          price: extract_detail_price(document),
-          area_sqm: extract_detail_area(document),
-          rooms: extract_detail_rooms(document),
-          district: extract_detail_district(document),
-          image_url: extract_detail_image(document)
-        }
-        
-        # Merge JSON-LD with HTML fallbacks
-        data = merge_extraction_data(json_ld_data, html_data)
-        
-        # Build property map
-        external_id = extract_id_from_url(url)
-        title = data[:title] || "Property #{external_id}"
-        
-        if external_id do
-          transaction_type_normalized = case transaction_type do
-            "sprzedaż" -> "sale"
-            "wynajem" -> "rent"
-            _ -> determine_transaction_type_from_price(data[:price])
-          end
-          
-          %{
-            external_id: external_id,
-            source: "otodom",
-            url: url,
-            title: title,
-            price: data[:price],
-            area_sqm: data[:area_sqm],
-            rooms: data[:rooms],
-            transaction_type: transaction_type_normalized,
-            property_type: extract_property_type_from_text(title),
-            district: data[:district],
-            voivodeship: "małopolskie",
-            image_url: data[:image_url],
-            raw_data: %{scraped_at: DateTime.utc_now() |> DateTime.to_iso8601(), method: "deep"}
-          }
-        else
-          Logger.warning("Could not extract ID from URL: #{url}")
-          nil
-        end
-
-      {:error, reason} ->
-        Logger.warning("Failed to parse HTML: #{inspect(reason)}")
-        nil
-    end
-  end
-
-  # Extract JSON-LD from detail page
-  defp extract_json_ld_from_detail(document) do
-    scripts = Floki.find(document, "script[type='application/ld+json']")
     
-    Enum.reduce(scripts, %{}, fn script, acc ->
-      text = Floki.text(script)
-      case Jason.decode(text) do
-        {:ok, data} ->
-          extracted = extract_from_json_ld_detail(data)
-          Map.merge(acc, extracted, fn _k, v1, v2 -> v1 || v2 end)
-        {:error, _} ->
-          acc
+    # Save results
+    result = save_results(all_results)
+    
+    # Auto-enrich if requested
+    if enrich do
+      Logger.info("🔄 Auto-enriching properties with missing data...")
+      enrich_recent_properties(delay)
+    end
+    
+    result
+  end
+  
+  @doc """
+  Enrich recently scraped properties that are missing data.
+  Uses the PropertyRescraper to fetch detail pages and fill in:
+  - Missing price, area, rooms, district
+  - Descriptions
+  """
+  def enrich_recent_properties(delay \\ 2000) do
+    alias Rzeczywiscie.Scrapers.PropertyRescraper
+    
+    # Rescrape properties missing any key data
+    Logger.info("Enriching properties missing price/area/rooms...")
+    PropertyRescraper.rescrape_missing(missing: :all, limit: 100, delay: delay)
+    
+    # Fetch descriptions for properties without them
+    Logger.info("Fetching descriptions for properties without them...")
+    fetch_missing_descriptions(limit: 50, delay: delay)
+  end
+  
+  defp fetch_missing_descriptions(opts) do
+    import Ecto.Query
+    alias Rzeczywiscie.Repo
+    alias Rzeczywiscie.RealEstate.Property
+    alias Rzeczywiscie.Scrapers.ExtractionHelpers
+    
+    limit = Keyword.get(opts, :limit, 50)
+    delay = Keyword.get(opts, :delay, 2000)
+    
+    # Get Otodom properties without descriptions, recently scraped first
+    properties = Repo.all(
+      from p in Property,
+        where: p.active == true and p.source == "otodom" and (is_nil(p.description) or p.description == ""),
+        order_by: [desc: p.inserted_at],
+        limit: ^limit,
+        select: %{id: p.id, url: p.url}
+    )
+    
+    Logger.info("Found #{length(properties)} Otodom properties without descriptions")
+    
+    Enum.with_index(properties, 1)
+    |> Enum.each(fn {prop, index} ->
+      Logger.info("[#{index}/#{length(properties)}] Fetching description for ##{prop.id}")
+      
+      case ExtractionHelpers.fetch_otodom_description(prop.url) do
+        {:ok, description} when is_binary(description) and description != "" ->
+          # Update the property with the description
+          property = Rzeczywiscie.RealEstate.get_property(prop.id)
+          case Rzeczywiscie.RealEstate.update_property(property, %{description: description}) do
+            {:ok, _} -> Logger.info("✓ Updated description for ##{prop.id} (#{String.length(description)} chars)")
+            {:error, _} -> Logger.warning("✗ Failed to update description for ##{prop.id}")
+          end
+        _ ->
+          Logger.warning("No description found for ##{prop.id}")
       end
+      
+      if index < length(properties), do: Process.sleep(delay)
     end)
   end
 
-  defp extract_from_json_ld_detail(data) when is_map(data) do
-    %{
-      title: data["name"],
-      price: parse_json_price_detail(data["offers"]["price"] || data["price"]),
-      area_sqm: parse_json_area_detail(data["floorSize"]),
-      rooms: parse_json_rooms_detail(data["numberOfRooms"])
-    }
-  rescue
-    _ -> %{}
-  end
-  defp extract_from_json_ld_detail(_), do: %{}
+  # Save function
+  defp save_results(all_results) do
+    Logger.info("Starting database save for #{length(all_results)} properties...")
 
-  defp parse_json_price_detail(price) when is_number(price), do: Decimal.new(round(price))
-  defp parse_json_price_detail(price) when is_binary(price) do
-    case Float.parse(String.replace(price, ~r/[^\d.]/, "")) do
-      {num, _} -> Decimal.from_float(num)
-      :error -> nil
-    end
+    saved =
+      Enum.with_index(all_results, 1)
+      |> Enum.map(fn {property_data, index} ->
+        title_preview = String.slice(property_data.title, 0, 50)
+        Logger.info("Saving #{index}/#{length(all_results)}: #{title_preview} (ID: #{property_data.external_id})")
+
+        try do
+          case RealEstate.upsert_property(property_data) do
+            {:ok, property} ->
+              Logger.info("✓ Saved property ID #{property.id}")
+              {:ok, property}
+
+            {:error, changeset} ->
+              Logger.error("✗ Failed: #{inspect(changeset.errors)}")
+              {:error, changeset}
+          end
+        rescue
+          e ->
+            Logger.error("✗ Exception: #{inspect(e)}")
+            {:error, e}
+        end
+      end)
+
+    successful = Enum.count(saved, fn {status, _} -> status == :ok end)
+    failed = length(saved) - successful
+
+    Logger.info("Otodom scrape completed: #{successful}/#{length(all_results)} saved, #{failed} failed")
+
+    {:ok, %{total: length(all_results), saved: successful}}
   end
-  defp parse_json_price_detail(_), do: nil
+
+  # NOTE: Deep scrape code removed - use :enrich option instead for reliable data extraction
+  # The PropertyRescraper does a better job of parsing individual detail pages
 
   defp parse_json_area_detail(%{"value" => value}) when is_number(value), do: Decimal.from_float(value * 1.0)
   defp parse_json_area_detail(area) when is_number(area), do: Decimal.from_float(area * 1.0)

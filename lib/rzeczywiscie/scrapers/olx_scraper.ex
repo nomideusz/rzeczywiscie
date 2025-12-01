@@ -16,23 +16,14 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
   ## Options
     * `:pages` - Number of pages to scrape (default: 1)
     * `:delay` - Delay between requests in milliseconds (default: 2000)
-    * `:deep` - If true, fetches each listing's detail page for accurate data (slower but more reliable)
+    * `:enrich` - If true, auto-enriches properties missing data after scraping (default: false)
   """
   def scrape(opts \\ []) do
     pages = Keyword.get(opts, :pages, 1)
     delay = Keyword.get(opts, :delay, 2000)
-    deep = Keyword.get(opts, :deep, false)
+    enrich = Keyword.get(opts, :enrich, false)
 
-    if deep do
-      scrape_deep(pages, delay)
-    else
-      scrape_fast(pages, delay)
-    end
-  end
-
-  # Fast scrape: Parse search result pages directly
-  defp scrape_fast(pages, delay) do
-    Logger.info("Starting OLX FAST scrape for Malopolskie region, #{pages} page(s)")
+    Logger.info("Starting OLX scrape for Malopolskie region, #{pages} page(s)")
 
     results =
       1..pages
@@ -55,208 +46,79 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
         end
       end)
 
-    save_results(results, "fast")
-  end
-
-  # Deep scrape: Get URLs from search pages, then fetch each detail page (like rescraper)
-  defp scrape_deep(pages, delay) do
-    Logger.info("Starting OLX DEEP scrape for Malopolskie region, #{pages} page(s)")
-    Logger.info("Deep mode: Will fetch each listing's detail page for accurate data")
-
-    # Step 1: Get all listing URLs from search pages
-    all_urls =
-      1..pages
-      |> Enum.flat_map(fn page ->
-        url = if page == 1, do: @malopolskie_url, else: "#{@malopolskie_url}?page=#{page}"
-
-        case fetch_page(url) do
-          {:ok, html} ->
-            urls = extract_listing_urls(html)
-            Logger.info("Page #{page}: found #{length(urls)} listing URLs")
-            
-            if page < pages, do: Process.sleep(delay)
-            urls
-
-          {:error, reason} ->
-            Logger.error("Failed to fetch page #{page}: #{inspect(reason)}")
-            []
-        end
-      end)
-      |> Enum.uniq()
-
-    Logger.info("Found #{length(all_urls)} unique listing URLs")
-
-    # Step 2: Fetch each detail page and extract full data
-    results =
-      all_urls
-      |> Enum.with_index(1)
-      |> Enum.map(fn {listing_url, index} ->
-        Logger.info("[#{index}/#{length(all_urls)}] Deep fetching: #{String.slice(listing_url, 0, 60)}...")
-        result = fetch_detail_page(listing_url)
-        
-        # Be respectful with delays
-        if index < length(all_urls), do: Process.sleep(delay)
-        
-        result
-      end)
-      |> Enum.reject(&is_nil/1)
-
-    save_results(results, "deep")
-  end
-
-  # Extract listing URLs from search results HTML
-  defp extract_listing_urls(html) do
-    case Floki.parse_document(html) do
-      {:ok, document} ->
-        # Find all links to listing pages
-        document
-        |> Floki.find("a[href*='/d/oferta/']")
-        |> Enum.map(fn {"a", attrs, _} ->
-          Enum.find_value(attrs, fn {"href", href} -> href; _ -> nil end)
-        end)
-        |> Enum.reject(&is_nil/1)
-        |> Enum.map(fn href ->
-          if String.starts_with?(href, "/"), do: "#{@base_url}#{href}", else: href
-        end)
-        |> Enum.uniq()
-
-      {:error, _} ->
-        []
+    # Save results
+    result = save_results(results)
+    
+    # Auto-enrich if requested
+    if enrich do
+      Logger.info("🔄 Auto-enriching properties with missing data...")
+      enrich_recent_properties(delay)
     end
-  end
-
-  # Fetch and parse a detail page (like rescraper does)
-  defp fetch_detail_page(url) do
-    case fetch_page(url) do
-      {:ok, html} ->
-        parse_detail_page(html, url)
-
-      {:error, reason} ->
-        Logger.warning("Failed to fetch detail page: #{inspect(reason)}")
-        nil
-    end
-  end
-
-  # Parse a listing detail page (more reliable than search results)
-  defp parse_detail_page(html, url) do
-    # Skip if response looks like CSS or garbage
-    if is_invalid_response?(html) do
-      Logger.warning("Skipping invalid response (CSS/garbage) for URL: #{String.slice(url, 0, 50)}...")
-      nil
-    else
-      parse_detail_page_safe(html, url)
-    end
+    
+    result
   end
   
-  defp is_invalid_response?(html) do
-    # Check if content looks like CSS rather than HTML
-    html_preview = String.slice(html, 0, 500)
-    cond do
-      # Starts with CSS-like content
-      String.match?(html_preview, ~r/^\s*[\.\#\@\:]/m) -> true
-      # Contains lots of CSS selectors
-      String.match?(html_preview, ~r/\{[^}]*:[^}]*\}/m) and not String.contains?(html_preview, "<") -> true
-      # No HTML tags at all
-      not String.contains?(html_preview, "<") -> true
-      # Has doctype or html tag - valid HTML
-      String.match?(html_preview, ~r/<!doctype|<html/i) -> false
-      # Default: assume valid
-      true -> false
-    end
+  @doc """
+  Enrich recently scraped properties that are missing data.
+  Uses the PropertyRescraper to fetch detail pages and fill in:
+  - Missing price, area, rooms, district
+  - Descriptions
+  """
+  def enrich_recent_properties(delay \\ 2000) do
+    alias Rzeczywiscie.Scrapers.PropertyRescraper
+    
+    # Rescrape properties missing any key data
+    Logger.info("Enriching properties missing price/area/rooms...")
+    PropertyRescraper.rescrape_missing(missing: :all, limit: 100, delay: delay)
+    
+    # Fetch descriptions for properties without them
+    Logger.info("Fetching descriptions for properties without them...")
+    fetch_missing_descriptions(limit: 50, delay: delay)
   end
   
-  defp parse_detail_page_safe(html, url) do
-    case Floki.parse_document(html) do
-      {:ok, document} ->
-        full_text = Floki.text(document) |> String.slice(0, 50_000)  # Limit text size
-        
-        # Extract data from detail page
-        title = extract_detail_title(document)
-        price = extract_detail_price(document, full_text)
-        area_sqm = ExtractionHelpers.extract_area_from_text(full_text)
-        rooms = ExtractionHelpers.extract_rooms_from_text(full_text)
-        district = ExtractionHelpers.extract_krakow_district(full_text)
-        image_url = extract_detail_image(document)
-        
-        # Extract ID from URL
-        external_id = extract_id_from_url(url)
-        
-        if external_id && title do
-          # Determine transaction type from price
-          transaction_type = if price do
-            price_float = Decimal.to_float(price)
-            if price_float < 15000, do: "rent", else: "sale"
-          else
-            "sale"
+  defp fetch_missing_descriptions(opts) do
+    import Ecto.Query
+    alias Rzeczywiscie.Repo
+    alias Rzeczywiscie.RealEstate.Property
+    alias Rzeczywiscie.Scrapers.ExtractionHelpers
+    
+    limit = Keyword.get(opts, :limit, 50)
+    delay = Keyword.get(opts, :delay, 2000)
+    
+    # Get OLX properties without descriptions, recently scraped first
+    properties = Repo.all(
+      from p in Property,
+        where: p.active == true and p.source == "olx" and (is_nil(p.description) or p.description == ""),
+        order_by: [desc: p.inserted_at],
+        limit: ^limit,
+        select: %{id: p.id, url: p.url}
+    )
+    
+    Logger.info("Found #{length(properties)} OLX properties without descriptions")
+    
+    Enum.with_index(properties, 1)
+    |> Enum.each(fn {prop, index} ->
+      Logger.info("[#{index}/#{length(properties)}] Fetching description for ##{prop.id}")
+      
+      case ExtractionHelpers.fetch_olx_description(prop.url) do
+        {:ok, description} when is_binary(description) and description != "" ->
+          # Update the property with the description
+          property = Rzeczywiscie.RealEstate.get_property(prop.id)
+          case Rzeczywiscie.RealEstate.update_property(property, %{description: description}) do
+            {:ok, _} -> Logger.info("✓ Updated description for ##{prop.id} (#{String.length(description)} chars)")
+            {:error, _} -> Logger.warning("✗ Failed to update description for ##{prop.id}")
           end
-          
-          %{
-            external_id: external_id,
-            source: "olx",
-            url: url,
-            title: title,
-            price: price,
-            area_sqm: area_sqm,
-            rooms: rooms,
-            transaction_type: transaction_type,
-            property_type: extract_property_type(title),
-            district: district,
-            voivodeship: "małopolskie",
-            image_url: image_url,
-            raw_data: %{scraped_at: DateTime.utc_now() |> DateTime.to_iso8601(), method: "deep"}
-          }
-        else
-          Logger.warning("Could not extract required data from URL: #{url}")
-          nil
-        end
-
-      {:error, reason} ->
-        Logger.warning("Failed to parse HTML: #{inspect(reason)}")
-        nil
-    end
-  end
-
-  # HTML extraction for detail pages
-  defp extract_detail_title(document) do
-    selectors = ["h1", "h1[data-cy='ad_title']", "[data-testid='ad-title']"]
-    Enum.find_value(selectors, fn sel ->
-      text = document |> Floki.find(sel) |> Floki.text() |> String.trim()
-      if text != "", do: text, else: nil
+        _ ->
+          Logger.warning("No description found for ##{prop.id}")
+      end
+      
+      if index < length(properties), do: Process.sleep(delay)
     end)
   end
 
-  defp extract_detail_price(document, full_text) do
-    selectors = [
-      "h3[data-testid='ad-price-container']",
-      "[data-testid='ad-price']",
-      "h3[class*='price']",
-      "div[class*='price'] h3"
-    ]
-    
-    text = Enum.find_value(selectors, fn sel ->
-      t = document |> Floki.find(sel) |> Floki.text() |> String.trim()
-      if String.match?(t, ~r/\d/), do: t, else: nil
-    end)
-    
-    if text do
-      ExtractionHelpers.parse_price(text)
-    else
-      ExtractionHelpers.extract_price_from_full_text(full_text)
-    end
-  end
-
-  defp extract_detail_image(document) do
-    document
-    |> Floki.find("img[src*='olx'], img[data-src*='olx']")
-    |> Enum.find_value(fn
-      {"img", attrs, _} -> Enum.find_value(attrs, fn {"src", src} -> src; {"data-src", src} -> src; _ -> nil end)
-      _ -> nil
-    end)
-  end
-
-  # Shared save function
-  defp save_results(results, mode) do
-    Logger.info("Starting database save for #{length(results)} properties (#{mode} mode)...")
+  # Save function
+  defp save_results(results) do
+    Logger.info("Starting database save for #{length(results)} properties...")
 
     saved =
       Enum.with_index(results, 1)
