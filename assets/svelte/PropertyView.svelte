@@ -41,7 +41,7 @@
   <!-- Page Header - Mobile Optimized -->
   <div class="bg-base-100 border-b-4 border-base-content">
     <div class="container mx-auto px-3 md:px-4 py-4 md:py-6">
-      <!-- Navigation - Scrollable on mobile -->
+      <!-- Navigation - Scrollable on mobile (mirrors Layouts.property_nav) -->
       <nav class="flex gap-1 overflow-x-auto scrollbar-hide -mx-3 px-3 md:mx-0 md:px-0 md:flex-wrap">
         <a href="/real-estate" class="px-2 md:px-3 py-1.5 md:py-2 text-[10px] md:text-xs font-bold uppercase tracking-wide bg-base-content text-base-100 whitespace-nowrap shrink-0">
           Properties
@@ -54,6 +54,9 @@
         </a>
         <a href="/hot-deals" class="px-2 md:px-3 py-1.5 md:py-2 text-[10px] md:text-xs font-bold uppercase tracking-wide border-2 border-warning text-warning hover:bg-warning hover:text-warning-content transition-colors whitespace-nowrap shrink-0">
           🔥 Deals
+        </a>
+        <a href="/llm-results" class="px-2 md:px-3 py-1.5 md:py-2 text-[10px] md:text-xs font-bold uppercase tracking-wide border-2 border-info text-info hover:bg-info hover:text-info-content transition-colors whitespace-nowrap shrink-0">
+          🤖 LLM
         </a>
         <a href="/admin" class="px-2 md:px-3 py-1.5 md:py-2 text-[10px] md:text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors whitespace-nowrap shrink-0">
           Admin

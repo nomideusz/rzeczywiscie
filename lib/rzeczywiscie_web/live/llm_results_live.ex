@@ -31,21 +31,7 @@ defmodule RzeczywiscieWeb.LLMResultsLive do
       <!-- Header -->
       <div class="bg-base-100 border-b-4 border-base-content">
         <div class="container mx-auto px-3 md:px-4 py-4 md:py-6">
-          <!-- Navigation -->
-          <nav class="flex gap-1 overflow-x-auto scrollbar-hide -mx-3 px-3 md:mx-0 md:px-0 md:flex-wrap">
-            <a href="/real-estate" class="px-2 md:px-3 py-1.5 md:py-2 text-[10px] md:text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors whitespace-nowrap shrink-0">
-              Properties
-            </a>
-            <a href="/hot-deals" class="px-2 md:px-3 py-1.5 md:py-2 text-[10px] md:text-xs font-bold uppercase tracking-wide border-2 border-warning text-warning hover:bg-warning hover:text-warning-content transition-colors whitespace-nowrap shrink-0">
-              🔥 Hot Deals
-            </a>
-            <a href="/llm-results" class="px-2 md:px-3 py-1.5 md:py-2 text-[10px] md:text-xs font-bold uppercase tracking-wide bg-base-content text-base-100 whitespace-nowrap shrink-0">
-              🤖 LLM Results
-            </a>
-            <a href="/admin" class="px-2 md:px-3 py-1.5 md:py-2 text-[10px] md:text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors whitespace-nowrap shrink-0">
-              Admin
-            </a>
-          </nav>
+          <Layouts.property_nav current_path={@current_path} />
 
           <div class="mt-3 md:mt-4">
             <h1 class="text-xl md:text-3xl font-black uppercase tracking-tight">

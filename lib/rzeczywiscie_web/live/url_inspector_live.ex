@@ -21,23 +21,9 @@ defmodule RzeczywiscieWeb.UrlInspectorLive do
       <!-- Header -->
       <div class="bg-base-100 border-b-4 border-base-content">
         <div class="container mx-auto px-4 py-6">
-          <!-- Navigation -->
-          <nav class="flex gap-1 mb-4">
-            <a href="/real-estate" class="px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">
-              Properties
-            </a>
-            <a href="/favorites" class="px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">
-              Favorites
-            </a>
-            <a href="/stats" class="px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">
-              Stats
-            </a>
-            <a href="/admin" class="px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">
-              Admin
-            </a>
-          </nav>
+          <.property_nav current_path={@current_path} />
 
-          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mt-4">
             <div>
               <h1 class="text-2xl md:text-3xl font-black uppercase tracking-tight">URL Inspector</h1>
               <p class="text-sm font-bold uppercase tracking-wide opacity-60">Debug URL Patterns</p>

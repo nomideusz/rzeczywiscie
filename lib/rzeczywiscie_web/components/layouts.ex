@@ -88,7 +88,7 @@ defmodule RzeczywiscieWeb.Layouts do
   
   def property_nav(assigns) do
     ~H"""
-    <nav class="flex gap-1 flex-wrap">
+    <nav class="flex gap-1 flex-wrap overflow-x-auto scrollbar-hide -mx-3 px-3 md:mx-0 md:px-0">
       <.property_nav_link href="/real-estate" current_path={@current_path}>
         Properties
       </.property_nav_link>
@@ -99,7 +99,10 @@ defmodule RzeczywiscieWeb.Layouts do
         Stats
       </.property_nav_link>
       <.property_nav_link href="/hot-deals" current_path={@current_path} special="warning">
-        🔥 Hot Deals
+        🔥 Deals
+      </.property_nav_link>
+      <.property_nav_link href="/llm-results" current_path={@current_path} special="info">
+        🤖 LLM
       </.property_nav_link>
       <.property_nav_link href="/admin" current_path={@current_path}>
         Admin
@@ -122,10 +125,11 @@ defmodule RzeczywiscieWeb.Layouts do
     <a
       href={@href}
       class={[
-        "px-3 py-2 text-xs font-bold uppercase tracking-wide transition-colors",
+        "px-2 md:px-3 py-1.5 md:py-2 text-[10px] md:text-xs font-bold uppercase tracking-wide transition-colors whitespace-nowrap shrink-0",
         @active && "bg-base-content text-base-100",
         not @active && @special == "warning" && "border-2 border-warning text-warning hover:bg-warning hover:text-warning-content",
-        not @active && @special != "warning" && "border-2 border-base-content hover:bg-base-content hover:text-base-100"
+        not @active && @special == "info" && "border-2 border-info text-info hover:bg-info hover:text-info-content",
+        not @active && @special not in ["warning", "info"] && "border-2 border-base-content hover:bg-base-content hover:text-base-100"
       ]}
     >
       {render_slot(@inner_block)}
