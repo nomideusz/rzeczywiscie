@@ -1,7 +1,7 @@
 defmodule Rzeczywiscie.Workers.CleanupWorker do
   @moduledoc """
   Oban worker for cleaning up stale property listings.
-  Marks properties as inactive if they haven't been seen in 48 hours.
+  Marks properties as inactive if they haven't been seen in 96 hours (4 days).
   Scheduled to run daily at 3 AM via cron.
   """
 
@@ -10,9 +10,12 @@ defmodule Rzeczywiscie.Workers.CleanupWorker do
   require Logger
   alias Rzeczywiscie.RealEstate
 
+  # Stale threshold: 96 hours = 4 days
+  @stale_hours 96
+
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
-    hours = Map.get(args, "hours", 48)
+    hours = Map.get(args, "hours", @stale_hours)
 
     Logger.info("CleanupWorker starting: marking properties inactive if not seen in #{hours} hours")
 
@@ -27,8 +30,13 @@ defmodule Rzeczywiscie.Workers.CleanupWorker do
   Manually trigger a cleanup job.
   """
   def trigger(opts \\ []) do
-    %{"hours" => Keyword.get(opts, :hours, 48)}
+    %{"hours" => Keyword.get(opts, :hours, @stale_hours)}
     |> __MODULE__.new()
     |> Oban.insert()
   end
+  
+  @doc """
+  Returns the stale threshold in hours.
+  """
+  def stale_hours, do: @stale_hours
 end

@@ -919,8 +919,8 @@ defmodule RzeczywiscieWeb.AdminLive do
       _ -> 0
     end
 
-    # Count stale properties (active but not seen in 48+ hours)
-    cutoff = DateTime.utc_now() |> DateTime.add(-48 * 3600, :second)
+    # Count stale properties (active but not seen in 96+ hours / 4 days)
+    cutoff = DateTime.utc_now() |> DateTime.add(-96 * 3600, :second)
     stale = Repo.aggregate(
       from(p in Property, where: p.active == true and p.last_seen_at < ^cutoff),
       :count, :id
@@ -1012,8 +1012,8 @@ defmodule RzeczywiscieWeb.AdminLive do
 
   # Cleanup helpers
   defp run_cleanup_task(:stale) do
-    {count, _} = RealEstate.mark_stale_properties_inactive(48)
-    "Marked #{count} stale properties as inactive"
+    {count, _} = RealEstate.mark_stale_properties_inactive(96)
+    "Marked #{count} stale properties as inactive (not seen in 96h+)"
   end
 
   defp run_cleanup_task(:duplicates) do

@@ -81,7 +81,7 @@ defmodule RzeczywiscieWeb.StatsLive do
             </div>
             <div class="p-4 text-center">
               <div class={"text-3xl font-black #{if @stats.stale_count > 0, do: "text-warning", else: "text-success"}"}><%= @stats.stale_count %></div>
-              <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">Stale (48h+)</div>
+              <div class="text-[10px] font-bold uppercase tracking-wide opacity-60">Stale (4 days+)</div>
               <div class="text-xs opacity-50">Will deactivate soon</div>
             </div>
           </div>
@@ -99,7 +99,7 @@ defmodule RzeczywiscieWeb.StatsLive do
                   <%= String.upcase(source) %>: <%= count %>
                 </span>
               <% end %>
-              <span class="text-xs opacity-60">Not seen in 48h+ — will become inactive</span>
+              <span class="text-xs opacity-60">Not seen in 4+ days — will become inactive</span>
             </div>
           </div>
         </div>
@@ -840,8 +840,8 @@ defmodule RzeczywiscieWeb.StatsLive do
       )
       |> Enum.take(8)
 
-    # Stale properties (not seen in 48+ hours)
-    cutoff = DateTime.utc_now() |> DateTime.add(-48 * 3600, :second)
+    # Stale properties (not seen in 96+ hours / 4 days)
+    cutoff = DateTime.utc_now() |> DateTime.add(-96 * 3600, :second)
     stale_count = Repo.aggregate(
       from(p in Property, where: p.active == true and p.last_seen_at < ^cutoff),
       :count, :id

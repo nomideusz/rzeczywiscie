@@ -270,8 +270,9 @@ defmodule Rzeczywiscie.RealEstate do
   @doc """
   Mark properties as inactive if not seen recently.
   This should be run periodically (e.g., daily) to clean up old listings.
+  Default threshold is 96 hours (4 days).
   """
-  def mark_stale_properties_inactive(hours_ago \\ 48) do
+  def mark_stale_properties_inactive(hours_ago \\ 96) do
     cutoff = DateTime.utc_now() |> DateTime.add(-hours_ago * 3600, :second)
 
     from(p in Property,
