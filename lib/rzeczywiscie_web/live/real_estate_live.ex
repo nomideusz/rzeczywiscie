@@ -327,7 +327,15 @@ defmodule RzeczywiscieWeb.RealEstateLive do
         aqi: aqi_data && aqi_data.aqi,
         aqi_category: aqi_data && aqi_data.category,
         dominant_pollutant: aqi_data && aqi_data.dominant_pollutant,
-        is_favorited: is_favorited
+        is_favorited: is_favorited,
+        # LLM Analysis fields
+        llm_investment_score: property.llm_investment_score,
+        llm_score: property.llm_score,
+        llm_summary: property.llm_summary,
+        llm_motivation: property.llm_motivation,
+        llm_condition: property.llm_condition,
+        llm_urgency: property.llm_urgency,
+        llm_analyzed_at: serialize_datetime(property.llm_analyzed_at)
       }
     end)
   end

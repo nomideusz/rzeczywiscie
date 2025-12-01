@@ -133,6 +133,21 @@
     return 'bg-base-300 opacity-50'
   }
 
+  // LLM score styling
+  function getLlmScoreClass(score) {
+    if (!score && score !== 0) return ''
+    if (score >= 8) return 'bg-success text-success-content'
+    if (score >= 5) return 'bg-info text-info-content'
+    if (score >= 3) return 'bg-warning text-warning-content'
+    return 'bg-error/50 text-error-content'
+  }
+
+  function getLlmMotivationIcon(motivation) {
+    if (motivation === 'very_motivated') return '🔥'
+    if (motivation === 'motivated') return '💰'
+    return ''
+  }
+
   // Handlers
   function handleSort(column) {
     if (sortColumn === column) {
@@ -605,41 +620,61 @@
                 <!-- Property (Title + Location combined) -->
                 <td class="px-2 py-1.5">
                   <div class="flex items-start gap-2">
-                    <!-- Thumbnail -->
-                    {#if property.image_url && !failedImages.has(property.image_url)}
-                      <div
-                        class="w-12 h-9 bg-base-300 overflow-hidden border border-base-content/20 cursor-zoom-in flex-shrink-0"
-                        onmouseenter={(e) => showPreview(e, property.image_url)}
-                        onmousemove={updatePreviewPosition}
-                        onmouseleave={hidePreview}
-                      >
-                        <img
-                          src={property.image_url}
-                          alt=""
-                          class="w-full h-full object-cover pointer-events-none"
-                          loading="lazy"
-                          onerror={(e) => handleImageError(e, property.image_url)}
-                        />
-                      </div>
-                    {:else}
-                      <div class="w-12 h-9 bg-base-300 flex-shrink-0 flex items-center justify-center text-[10px] opacity-30 border border-base-content/10">
-                        —
-                      </div>
-                    {/if}
+                    <!-- Thumbnail with LLM score overlay -->
+                    <div class="relative flex-shrink-0">
+                      {#if property.image_url && !failedImages.has(property.image_url)}
+                        <div
+                          class="w-12 h-9 bg-base-300 overflow-hidden border border-base-content/20 cursor-zoom-in"
+                          onmouseenter={(e) => showPreview(e, property.image_url)}
+                          onmousemove={updatePreviewPosition}
+                          onmouseleave={hidePreview}
+                        >
+                          <img
+                            src={property.image_url}
+                            alt=""
+                            class="w-full h-full object-cover pointer-events-none"
+                            loading="lazy"
+                            onerror={(e) => handleImageError(e, property.image_url)}
+                          />
+                        </div>
+                      {:else}
+                        <div class="w-12 h-9 bg-base-300 flex items-center justify-center text-[10px] opacity-30 border border-base-content/10">
+                          —
+                        </div>
+                      {/if}
+                      <!-- LLM Investment Score Badge (overlay on thumbnail) -->
+                      {#if property.llm_investment_score != null && property.llm_investment_score >= 5}
+                        <div class="absolute -top-1 -right-1 px-1 text-[9px] font-black {getLlmScoreClass(property.llm_investment_score)}" title="AI Investment Score: {property.llm_investment_score}/10">
+                          {property.llm_investment_score}
+                        </div>
+                      {/if}
+                    </div>
                     <!-- Title & Location -->
                     <div class="min-w-0 flex-1">
                       <div class="font-medium leading-tight line-clamp-2 text-[13px]" title={property.title}>
                         {#if isNew(property.inserted_at)}
                           <span class="inline-block px-1 py-0.5 text-[9px] font-black bg-success text-success-content mr-1 align-middle">NEW</span>
                         {/if}
+                        {#if property.llm_investment_score >= 8}
+                          <span class="inline-block px-1 py-0.5 text-[9px] font-black bg-success text-success-content mr-1 align-middle" title="Top AI Pick">🤖⭐</span>
+                        {/if}
                         {property.title}
                         {#if property.description && property.description.length > 50}
                           <span class="text-info ml-1" title="Has description">📝</span>
+                        {/if}
+                        {#if property.llm_motivation && property.llm_motivation !== 'standard' && property.llm_motivation !== 'unknown'}
+                          <span class="ml-1" title="Seller: {property.llm_motivation}">{getLlmMotivationIcon(property.llm_motivation)}</span>
                         {/if}
                       </div>
                       <div class="text-[11px] opacity-60 mt-0.5">
                         {property.city || '—'}{property.district ? ` · ${property.district}` : ''}{property.rooms ? ` · ${property.rooms}p` : ''}
                       </div>
+                      <!-- LLM Summary (if available) -->
+                      {#if property.llm_summary && !property.llm_summary.includes('Skipped')}
+                        <div class="text-[10px] text-info mt-0.5 line-clamp-1" title={property.llm_summary}>
+                          💡 {property.llm_summary}
+                        </div>
+                      {/if}
                       <!-- Description preview on hover/click -->
                       {#if property.description && property.description.length > 50}
                         <details class="mt-1">
@@ -772,8 +807,26 @@
 
           <!-- Content -->
           <div class="p-4">
+            <!-- LLM Summary Banner (if high score) -->
+            {#if property.llm_investment_score >= 7 && property.llm_summary && !property.llm_summary.includes('Skipped')}
+              <div class="mb-3 px-3 py-2 bg-success/10 border border-success/30 text-sm">
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="px-1.5 py-0.5 text-[10px] font-black {getLlmScoreClass(property.llm_investment_score)}">
+                    🤖 {property.llm_investment_score}/10
+                  </span>
+                  {#if property.llm_motivation && property.llm_motivation !== 'standard' && property.llm_motivation !== 'unknown'}
+                    <span class="text-xs">{getLlmMotivationIcon(property.llm_motivation)} {property.llm_motivation.replace('_', ' ')}</span>
+                  {/if}
+                </div>
+                <div class="text-xs text-success line-clamp-2">💡 {property.llm_summary}</div>
+              </div>
+            {/if}
+
             <!-- Title -->
             <h3 class="font-bold text-lg leading-tight mb-2 line-clamp-2" title={property.title}>
+              {#if property.llm_investment_score >= 8}
+                <span class="inline-block px-1 py-0.5 text-[10px] font-black bg-success text-success-content mr-1 align-middle">🤖⭐</span>
+              {/if}
               {property.title}
               {#if property.description && property.description.length > 50}
                 <span class="text-info ml-1 text-sm" title="Has description">📝</span>
