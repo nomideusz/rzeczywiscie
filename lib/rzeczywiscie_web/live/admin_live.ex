@@ -1564,8 +1564,10 @@ defmodule RzeczywiscieWeb.AdminLive do
         Logger.info("[#{idx}/#{total}] Analyzing property ##{property.id}...")
 
         # Wrap in a Task with timeout to prevent hanging
+        # Use analyze_description directly - we only want to analyze properties WITH descriptions
+        # (no fallback to title analysis)
         task = Task.async(fn ->
-          LLMAnalyzer.analyze_property(property)
+          LLMAnalyzer.analyze_description(property.description)
         end)
 
         # 35-second timeout (slightly more than API timeout)
