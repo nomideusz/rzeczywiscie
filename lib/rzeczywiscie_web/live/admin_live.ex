@@ -1645,16 +1645,34 @@ defmodule RzeczywiscieWeb.AdminLive do
       Logger.info("OpenAI API key configured (#{String.length(api_key)} chars)")
       
       # Get properties WITH descriptions for LLM analysis (prefer description over title)
-      properties = from(p in Property,
+      all_properties = from(p in Property,
         where: p.active == true and 
                not is_nil(p.description) and 
                fragment("length(?)", p.description) > 100 and
                is_nil(p.llm_analyzed_at),
         order_by: [desc: p.inserted_at],
-        limit: 50
+        limit: 100  # Fetch more, then filter out CSS garbage
       )
       |> Repo.all()
       
+      # Filter out CSS garbage descriptions before sending to LLM
+      {valid_properties, css_garbage} = Enum.split_with(all_properties, fn p ->
+        is_valid_description?(p.description)
+      end)
+      
+      # Mark CSS garbage as analyzed (with score 0) so we don't keep trying
+      if length(css_garbage) > 0 do
+        Logger.warning("Skipping #{length(css_garbage)} properties with CSS garbage descriptions")
+        Enum.each(css_garbage, fn p ->
+          RealEstate.update_property(p, %{
+            llm_analyzed_at: DateTime.utc_now(),
+            llm_score: 0,
+            llm_summary: "Skipped: description contains CSS/invalid content"
+          })
+        end)
+      end
+      
+      properties = Enum.take(valid_properties, 50)
       total = length(properties)
       
       if total == 0 do
@@ -1775,5 +1793,49 @@ defmodule RzeczywiscieWeb.AdminLive do
   defp investment_score_text_class(score) when is_integer(score) and score >= 3, do: "text-warning"
   defp investment_score_text_class(score) when is_integer(score), do: "text-error"
   defp investment_score_text_class(_), do: ""
+  
+  # Check if description is valid (not CSS garbage)
+  defp is_valid_description?(nil), do: false
+  defp is_valid_description?(desc) when byte_size(desc) < 50, do: false
+  defp is_valid_description?(desc) do
+    desc_lower = String.downcase(desc)
+    first_100 = String.slice(desc_lower, 0, 100)
+    
+    # CSS indicators
+    css_patterns = [
+      "@media",
+      "@keyframes", 
+      ".css-",
+      "{text-decoration",
+      "{display:",
+      "{color:",
+      "{background",
+      ":hover{",
+      ":focus{",
+      "!important",
+      "var(--",
+      "oklch(",
+      "rgba(",
+      "min-width:",
+      "max-width:",
+      "font-family:",
+      "font-size:",
+      "line-height:",
+      "padding:",
+      "margin:"
+    ]
+    
+    # Check if description starts with or heavily contains CSS
+    has_css = Enum.any?(css_patterns, fn pattern -> 
+      String.contains?(first_100, pattern)
+    end)
+    
+    # Check if it has too many CSS-like characters
+    css_char_ratio = (String.graphemes(desc) 
+      |> Enum.count(fn c -> c in ["{", "}", ":", ";"] end)) / max(String.length(desc), 1)
+    
+    # Valid if no CSS patterns and low CSS character ratio
+    not has_css and css_char_ratio < 0.05
+  end
 
 end
