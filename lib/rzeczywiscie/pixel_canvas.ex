@@ -244,10 +244,34 @@ defmodule Rzeczywiscie.PixelCanvas do
   end
 
   @doc """
+  Returns the number of pixels covered by a unicorn shape.
+  """
+  def unicorn_pixel_count, do: length(@unicorn_shape_right)
+
+  @doc """
+  Calculates total pixel coverage on the canvas.
+  - Regular/mega/massive pixels: each record = 1 pixel (mega/massive stored as multiple records)
+  - Unicorns: 1 record = 52 pixels (the shape size)
+  """
+  def total_pixel_coverage do
+    # Count non-special pixels (regular, mega, massive - all stored as individual records)
+    regular_count = Pixel
+    |> where([p], p.is_special == false or is_nil(p.is_special))
+    |> Repo.aggregate(:count)
+
+    # Count special pixels (unicorns) and multiply by shape size
+    unicorn_count = Pixel
+    |> where([p], p.is_special == true)
+    |> Repo.aggregate(:count)
+
+    regular_count + (unicorn_count * unicorn_pixel_count())
+  end
+
+  @doc """
   Returns total pixel count and unique users count.
   """
   def stats do
-    total_pixels = Repo.aggregate(Pixel, :count)
+    total_pixels = total_pixel_coverage()
     unique_users = Pixel
       |> select([p], fragment("COUNT(DISTINCT ?)", p.user_id))
       |> Repo.one()
@@ -478,10 +502,11 @@ defmodule Rzeczywiscie.PixelCanvas do
   @doc """
   Returns global milestone progress information.
   All pixels count towards milestones (including special pixels).
+  Unicorns count as their full shape size (52 pixels each).
   """
   def milestone_progress do
-    # Count all pixels for milestone progress
-    total_pixels = Repo.aggregate(Pixel, :count)
+    # Count all pixels for milestone progress (unicorns count as their full shape)
+    total_pixels = total_pixel_coverage()
     
     # Define milestones: every 1000 pixels unlocks a Unicorn
     milestones = [
@@ -508,11 +533,11 @@ defmodule Rzeczywiscie.PixelCanvas do
 
   @doc """
   Check and unlock global milestones, distributing special pixels to all active users.
-  All pixels count towards milestones.
+  All pixels count towards milestones (unicorns count as their full shape).
   """
   def check_and_unlock_milestones do
-    # Count all pixels for milestone checks
-    total_pixels = Repo.aggregate(Pixel, :count)
+    # Count all pixels for milestone checks (unicorns count as their full shape)
+    total_pixels = total_pixel_coverage()
     
     # Milestones to check
     milestones_to_check = [
