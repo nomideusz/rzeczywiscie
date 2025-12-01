@@ -984,8 +984,10 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
 
     result =
       Enum.reduce_while(selectors, nil, fn selector, _acc ->
-        text = Floki.find(card, selector) |> Floki.text() |> String.trim()
-        if text != "" and String.length(text) > 3 do
+        raw_text = Floki.find(card, selector) |> Floki.text() |> String.trim()
+        # Clean CSS garbage from extracted text
+        text = ExtractionHelpers.clean_css_from_text(raw_text)
+        if text != "" and String.length(text) > 3 and not ExtractionHelpers.is_css_content?(text) do
           {:halt, {:ok, text}}
         else
           {:cont, nil}
@@ -995,13 +997,17 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
     # Fallback 1: Check if this is a link element
     result = result || case extract_title_from_link(card) do
       nil -> nil
-      title -> {:ok, title}
+      title -> 
+        clean_title = ExtractionHelpers.clean_css_from_text(title)
+        if clean_title != "" and not ExtractionHelpers.is_css_content?(clean_title), do: {:ok, clean_title}, else: nil
     end
     
     # Fallback 2: Try container-based title extraction
     result = result || case extract_title_from_container(card) do
       nil -> nil
-      title -> {:ok, title}
+      title -> 
+        clean_title = ExtractionHelpers.clean_css_from_text(title)
+        if clean_title != "" and not ExtractionHelpers.is_css_content?(clean_title), do: {:ok, clean_title}, else: nil
     end
     
     # Fallback 3: Try to build title from URL

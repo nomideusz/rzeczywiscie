@@ -439,9 +439,14 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
 
     result =
       Enum.reduce_while(selectors, nil, fn selector, _acc ->
-        case Floki.find(card, selector) |> Floki.text() do
-          "" -> {:cont, nil}
-          title -> {:halt, {:ok, String.trim(title)}}
+        raw_title = Floki.find(card, selector) |> Floki.text() |> String.trim()
+        # Clean CSS garbage from extracted text
+        title = ExtractionHelpers.clean_css_from_text(raw_title)
+        
+        if title != "" and not ExtractionHelpers.is_css_content?(title) do
+          {:halt, {:ok, title}}
+        else
+          {:cont, nil}
         end
       end)
 

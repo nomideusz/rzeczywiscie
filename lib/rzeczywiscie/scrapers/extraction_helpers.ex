@@ -7,6 +7,48 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
 
   require Logger
 
+  @doc """
+  Removes CSS garbage from scraped text.
+  Handles patterns like ".css-1q5hv6o{position:absolute;...}" that leak into titles.
+  """
+  def clean_css_from_text(nil), do: nil
+  def clean_css_from_text(text) when is_binary(text) do
+    text
+    # Remove CSS class definitions: .css-xxx{...}
+    |> String.replace(~r/\.css-[a-zA-Z0-9_-]+\{[^}]*\}/s, "")
+    # Remove CSS at-rules: @media, @keyframes, etc.
+    |> String.replace(~r/@[a-z-]+[^{]*\{[^}]*\}/s, "")
+    # Remove inline style blocks: {property: value; ...}
+    |> String.replace(~r/\{[^}]*:[^}]*\}/s, "")
+    # Remove CSS-like property-value patterns: color:red; font-size:12px;
+    |> String.replace(~r/[a-z-]+:\s*[^;]+;/i, "")
+    # Remove CSS functions: var(--, oklch(, rgba(
+    |> String.replace(~r/(?:var|oklch|rgba|rgb|calc|url)\([^)]*\)/i, "")
+    # Remove !important
+    |> String.replace(~r/!important/i, "")
+    # Clean up multiple spaces and trim
+    |> String.replace(~r/\s+/, " ")
+    |> String.trim()
+  end
+
+  @doc """
+  Check if text looks like CSS garbage (contains CSS patterns).
+  """
+  def is_css_content?(nil), do: false
+  def is_css_content?(text) when is_binary(text) do
+    css_patterns = [
+      ~r/\.css-[a-zA-Z0-9_-]+\{/,
+      ~r/@media\s*\(/,
+      ~r/\{[^}]*position\s*:/,
+      ~r/:hover\s*\{/,
+      ~r/text-decoration\s*:/,
+      ~r/font-family\s*:/,
+      ~r/display\s*:\s*(?:none|block|flex)/
+    ]
+    
+    Enum.any?(css_patterns, &Regex.match?(&1, text))
+  end
+
   # Minimum valid prices to avoid extracting room counts or erroneous values
   # Rent: at least 100 PLN (no one rents for less)
   # Sale: at least 10,000 PLN (no one sells for less)

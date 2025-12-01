@@ -138,18 +138,17 @@ defmodule RzeczywiscieWeb.LLMResultsLive do
                 <!-- Main Content -->
                 <div class="flex-1 p-3 md:p-4 min-w-0">
                   <!-- Title & Meta -->
-                  <div class="flex items-start gap-2 mb-2">
-                    <div class="flex-1 min-w-0">
-                      <h3 class="font-bold text-sm md:text-base leading-tight line-clamp-2"><%= property.title %></h3>
-                      <div class="text-[10px] md:text-xs opacity-60 mt-1">
-                        <%= property.district || property.city || "?" %> · 
-                        <%= if property.price, do: "#{Decimal.to_string(property.price)} PLN", else: "?" %> · 
-                        <%= if property.area_sqm, do: "#{Decimal.to_string(property.area_sqm)} m²", else: "?" %>
-                      </div>
-                    </div>
-                    <a href={property.url} target="_blank" class="px-2 py-1 text-xs font-bold border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors shrink-0">
-                      ↗
+                  <div class="mb-2">
+                    <a href={property.url} target="_blank" class="group flex items-start gap-2">
+                      <h3 class="font-bold text-sm md:text-base leading-tight line-clamp-2 group-hover:text-primary transition-colors flex-1">
+                        <%= property.title %> <span class="text-primary opacity-0 group-hover:opacity-100 transition-opacity">↗</span>
+                      </h3>
                     </a>
+                    <div class="text-[10px] md:text-xs opacity-60 mt-1">
+                      <%= property.district || property.city || "?" %> · 
+                      <%= if property.price, do: "#{Decimal.to_string(property.price)} PLN", else: "?" %> · 
+                      <%= if property.area_sqm, do: "#{Decimal.to_string(property.area_sqm)} m²", else: "?" %>
+                    </div>
                   </div>
                   
                   <!-- AI Summary -->
