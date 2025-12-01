@@ -236,82 +236,87 @@
 </script>
 
 <div>
-  <!-- Filters Section - Redesigned -->
+  <!-- Filters Section - Mobile Optimized -->
   <div class="bg-base-100 border-2 border-base-content mb-6">
-    <!-- Row 1: Transaction & Property Type Toggles -->
-    <div class="flex flex-wrap items-stretch border-b-2 border-base-content">
+    <!-- Mobile: Stacked layout, Desktop: Row layout -->
+    <div class="flex flex-col md:flex-row md:items-stretch border-b-2 border-base-content">
       <!-- Transaction Type -->
-      <div class="flex items-center border-r-2 border-base-content">
-        <span class="px-3 py-2 text-[10px] font-bold uppercase tracking-wide opacity-50 bg-base-200">Transaction</span>
-        <button
-          onclick={() => { filterTransactionType = ''; applyFilters() }}
-          class="px-3 py-2 text-xs font-bold transition-colors cursor-pointer border-l border-base-content/30 {filterTransactionType === '' ? 'bg-base-content text-base-100' : 'hover:bg-base-200'}"
-        >
-          All
-        </button>
-        <button
-          onclick={() => { filterTransactionType = 'sprzedaż'; applyFilters() }}
-          class="px-3 py-2 text-xs font-bold transition-colors cursor-pointer border-l border-base-content/30 {filterTransactionType === 'sprzedaż' ? 'bg-info text-info-content' : 'hover:bg-base-200'}"
-        >
-          Sprzedaż
-        </button>
-        <button
-          onclick={() => { filterTransactionType = 'wynajem'; applyFilters() }}
-          class="px-3 py-2 text-xs font-bold transition-colors cursor-pointer border-l border-base-content/30 {filterTransactionType === 'wynajem' ? 'bg-warning text-warning-content' : 'hover:bg-base-200'}"
-        >
-          Wynajem
-        </button>
+      <div class="flex items-center border-b md:border-b-0 md:border-r-2 border-base-content">
+        <span class="px-2 md:px-3 py-2 text-[10px] font-bold uppercase tracking-wide opacity-50 bg-base-200 shrink-0">Type</span>
+        <div class="flex flex-1 overflow-x-auto">
+          <button
+            onclick={() => { filterTransactionType = ''; applyFilters() }}
+            class="px-2 md:px-3 py-2 text-xs font-bold transition-colors cursor-pointer border-l border-base-content/30 whitespace-nowrap {filterTransactionType === '' ? 'bg-base-content text-base-100' : 'hover:bg-base-200'}"
+          >
+            All
+          </button>
+          <button
+            onclick={() => { filterTransactionType = 'sprzedaż'; applyFilters() }}
+            class="px-2 md:px-3 py-2 text-xs font-bold transition-colors cursor-pointer border-l border-base-content/30 whitespace-nowrap {filterTransactionType === 'sprzedaż' ? 'bg-info text-info-content' : 'hover:bg-base-200'}"
+          >
+            Sale
+          </button>
+          <button
+            onclick={() => { filterTransactionType = 'wynajem'; applyFilters() }}
+            class="px-2 md:px-3 py-2 text-xs font-bold transition-colors cursor-pointer border-l border-base-content/30 whitespace-nowrap {filterTransactionType === 'wynajem' ? 'bg-warning text-warning-content' : 'hover:bg-base-200'}"
+          >
+            Rent
+          </button>
+        </div>
       </div>
 
-      <!-- Property Type -->
-      <div class="flex items-center flex-1">
-        <span class="px-3 py-2 text-[10px] font-bold uppercase tracking-wide opacity-50 bg-base-200">Type</span>
-        <button
-          onclick={() => { filterPropertyType = ''; applyFilters() }}
-          class="px-3 py-2 text-xs font-bold transition-colors cursor-pointer border-l border-base-content/30 {filterPropertyType === '' ? 'bg-base-content text-base-100' : 'hover:bg-base-200'}"
-        >
-          All
-        </button>
-        <button
-          onclick={() => { filterPropertyType = 'mieszkanie'; applyFilters() }}
-          class="px-3 py-2 text-xs font-bold transition-colors cursor-pointer border-l border-base-content/30 {filterPropertyType === 'mieszkanie' ? 'bg-base-content text-base-100' : 'hover:bg-base-200'}"
-        >
-          Mieszkanie
-        </button>
-        <button
-          onclick={() => { filterPropertyType = 'dom'; applyFilters() }}
-          class="px-3 py-2 text-xs font-bold transition-colors cursor-pointer border-l border-base-content/30 {filterPropertyType === 'dom' ? 'bg-base-content text-base-100' : 'hover:bg-base-200'}"
-        >
-          Dom
-        </button>
-        <button
-          onclick={() => { filterPropertyType = 'pokój'; applyFilters() }}
-          class="px-3 py-2 text-xs font-bold transition-colors cursor-pointer border-l border-base-content/30 {filterPropertyType === 'pokój' ? 'bg-base-content text-base-100' : 'hover:bg-base-200'}"
-        >
-          Pokój
-        </button>
-        <button
-          onclick={() => { filterPropertyType = 'działka'; applyFilters() }}
-          class="px-3 py-2 text-xs font-bold transition-colors cursor-pointer border-l border-base-content/30 {filterPropertyType === 'działka' ? 'bg-base-content text-base-100' : 'hover:bg-base-200'}"
-        >
-          Działka
-        </button>
-        <button
-          onclick={() => { filterPropertyType = 'lokal użytkowy'; applyFilters() }}
-          class="px-3 py-2 text-xs font-bold transition-colors cursor-pointer border-l border-base-content/30 {filterPropertyType === 'lokal użytkowy' ? 'bg-base-content text-base-100' : 'hover:bg-base-200'}"
-        >
-          Lokal
-        </button>
+      <!-- Property Type - Scrollable on mobile -->
+      <div class="flex items-center flex-1 min-w-0">
+        <span class="px-2 md:px-3 py-2 text-[10px] font-bold uppercase tracking-wide opacity-50 bg-base-200 shrink-0 hidden md:block">Property</span>
+        <div class="flex flex-1 overflow-x-auto scrollbar-hide">
+          <button
+            onclick={() => { filterPropertyType = ''; applyFilters() }}
+            class="px-2 md:px-3 py-2 text-xs font-bold transition-colors cursor-pointer border-l border-base-content/30 whitespace-nowrap {filterPropertyType === '' ? 'bg-base-content text-base-100' : 'hover:bg-base-200'}"
+          >
+            All
+          </button>
+          <button
+            onclick={() => { filterPropertyType = 'mieszkanie'; applyFilters() }}
+            class="px-2 md:px-3 py-2 text-xs font-bold transition-colors cursor-pointer border-l border-base-content/30 whitespace-nowrap {filterPropertyType === 'mieszkanie' ? 'bg-base-content text-base-100' : 'hover:bg-base-200'}"
+          >
+            Apt
+          </button>
+          <button
+            onclick={() => { filterPropertyType = 'dom'; applyFilters() }}
+            class="px-2 md:px-3 py-2 text-xs font-bold transition-colors cursor-pointer border-l border-base-content/30 whitespace-nowrap {filterPropertyType === 'dom' ? 'bg-base-content text-base-100' : 'hover:bg-base-200'}"
+          >
+            House
+          </button>
+          <button
+            onclick={() => { filterPropertyType = 'pokój'; applyFilters() }}
+            class="px-2 md:px-3 py-2 text-xs font-bold transition-colors cursor-pointer border-l border-base-content/30 whitespace-nowrap {filterPropertyType === 'pokój' ? 'bg-base-content text-base-100' : 'hover:bg-base-200'}"
+          >
+            Room
+          </button>
+          <button
+            onclick={() => { filterPropertyType = 'działka'; applyFilters() }}
+            class="px-2 md:px-3 py-2 text-xs font-bold transition-colors cursor-pointer border-l border-base-content/30 whitespace-nowrap {filterPropertyType === 'działka' ? 'bg-base-content text-base-100' : 'hover:bg-base-200'}"
+          >
+            Plot
+          </button>
+          <button
+            onclick={() => { filterPropertyType = 'lokal użytkowy'; applyFilters() }}
+            class="px-2 md:px-3 py-2 text-xs font-bold transition-colors cursor-pointer border-l border-base-content/30 whitespace-nowrap {filterPropertyType === 'lokal użytkowy' ? 'bg-base-content text-base-100' : 'hover:bg-base-200'}"
+          >
+            Commercial
+          </button>
+        </div>
       </div>
 
-      <!-- Expand/Collapse -->
+      <!-- Expand/Collapse - Always visible -->
       <button
         onclick={() => filtersExpanded = !filtersExpanded}
-        class="px-4 py-2 text-xs font-bold uppercase tracking-wide hover:bg-base-200 transition-colors cursor-pointer border-l-2 border-base-content flex items-center gap-2"
+        class="px-3 md:px-4 py-2 text-xs font-bold uppercase tracking-wide hover:bg-base-200 transition-colors cursor-pointer border-t md:border-t-0 md:border-l-2 border-base-content flex items-center justify-center gap-2 shrink-0"
       >
-        More
+        <span class="hidden sm:inline">More</span>
+        <span class="sm:hidden">{filtersExpanded ? '−' : '+'}</span>
         <svg
-          class="w-3 h-3 transition-transform {filtersExpanded ? 'rotate-180' : ''}"
+          class="w-3 h-3 transition-transform hidden sm:block {filtersExpanded ? 'rotate-180' : ''}"
           fill="none" stroke="currentColor" viewBox="0 0 24 24"
         >
           <path stroke-linecap="square" stroke-width="3" d="M19 9l-7 7-7-7" />
@@ -380,54 +385,54 @@
       </div>
     {/if}
 
-    <!-- Row 3: Expanded Filters -->
+    <!-- Row 3: Expanded Filters - Mobile Optimized -->
     {#if filtersExpanded}
-      <div class="p-4">
+      <div class="p-3 md:p-4">
         <!-- Search -->
-        <div class="mb-4">
-          <label class="block text-xs font-bold uppercase tracking-wide mb-1 opacity-60" for="filter-search">
-            Search in title & description
+        <div class="mb-3 md:mb-4">
+          <label class="block text-[10px] md:text-xs font-bold uppercase tracking-wide mb-1 opacity-60" for="filter-search">
+            Search
           </label>
           <input
             id="filter-search"
             type="text"
             placeholder="balkon, garaż, widok..."
-            class="w-full px-3 py-2 text-sm border-2 border-base-content bg-base-100 focus:border-primary focus:outline-none"
+            class="w-full px-2 md:px-3 py-2 text-sm border-2 border-base-content bg-base-100 focus:border-primary focus:outline-none"
             bind:value={filterSearch}
           />
         </div>
 
-        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 md:gap-4">
           <!-- City -->
           <div>
-            <label class="block text-xs font-bold uppercase tracking-wide mb-1 opacity-60" for="filter-city">
+            <label class="block text-[10px] md:text-xs font-bold uppercase tracking-wide mb-1 opacity-60" for="filter-city">
               City
             </label>
             <input
               id="filter-city"
               type="text"
               placeholder="Kraków..."
-              class="w-full px-3 py-2 text-sm border-2 border-base-content bg-base-100 focus:border-primary focus:outline-none"
+              class="w-full px-2 py-1.5 md:py-2 text-sm border-2 border-base-content bg-base-100 focus:border-primary focus:outline-none"
               bind:value={filterCity}
             />
           </div>
 
           <!-- Price Range -->
           <div>
-            <label class="block text-xs font-bold uppercase tracking-wide mb-1 opacity-60">
+            <label class="block text-[10px] md:text-xs font-bold uppercase tracking-wide mb-1 opacity-60">
               Price (PLN)
             </label>
             <div class="flex gap-1">
               <input
                 type="number"
                 placeholder="Min"
-                class="w-full px-2 py-2 text-sm border-2 border-base-content bg-base-100 focus:border-primary focus:outline-none"
+                class="w-full px-1.5 md:px-2 py-1.5 md:py-2 text-sm border-2 border-base-content bg-base-100 focus:border-primary focus:outline-none"
                 bind:value={filterMinPrice}
               />
               <input
                 type="number"
                 placeholder="Max"
-                class="w-full px-2 py-2 text-sm border-2 border-base-content bg-base-100 focus:border-primary focus:outline-none"
+                class="w-full px-1.5 md:px-2 py-1.5 md:py-2 text-sm border-2 border-base-content bg-base-100 focus:border-primary focus:outline-none"
                 bind:value={filterMaxPrice}
               />
             </div>
@@ -435,20 +440,20 @@
 
           <!-- Area Range -->
           <div>
-            <label class="block text-xs font-bold uppercase tracking-wide mb-1 opacity-60">
+            <label class="block text-[10px] md:text-xs font-bold uppercase tracking-wide mb-1 opacity-60">
               Area (m²)
             </label>
             <div class="flex gap-1">
               <input
                 type="number"
                 placeholder="Min"
-                class="w-full px-2 py-2 text-sm border-2 border-base-content bg-base-100 focus:border-primary focus:outline-none"
+                class="w-full px-1.5 md:px-2 py-1.5 md:py-2 text-sm border-2 border-base-content bg-base-100 focus:border-primary focus:outline-none"
                 bind:value={filterMinArea}
               />
               <input
                 type="number"
                 placeholder="Max"
-                class="w-full px-2 py-2 text-sm border-2 border-base-content bg-base-100 focus:border-primary focus:outline-none"
+                class="w-full px-1.5 md:px-2 py-1.5 md:py-2 text-sm border-2 border-base-content bg-base-100 focus:border-primary focus:outline-none"
                 bind:value={filterMaxArea}
               />
             </div>
@@ -456,12 +461,12 @@
 
           <!-- Rooms -->
           <div>
-            <label class="block text-xs font-bold uppercase tracking-wide mb-1 opacity-60" for="filter-rooms">
+            <label class="block text-[10px] md:text-xs font-bold uppercase tracking-wide mb-1 opacity-60" for="filter-rooms">
               Rooms
             </label>
             <select
               id="filter-rooms"
-              class="w-full px-3 py-2 text-sm border-2 border-base-content bg-base-100 focus:border-primary focus:outline-none"
+              class="w-full px-2 py-1.5 md:py-2 text-sm border-2 border-base-content bg-base-100 focus:border-primary focus:outline-none"
               bind:value={filterRooms}
             >
               <option value="">Any</option>
@@ -475,12 +480,12 @@
 
           <!-- Source -->
           <div>
-            <label class="block text-xs font-bold uppercase tracking-wide mb-1 opacity-60" for="filter-source">
+            <label class="block text-[10px] md:text-xs font-bold uppercase tracking-wide mb-1 opacity-60" for="filter-source">
               Source
             </label>
             <select
               id="filter-source"
-              class="w-full px-3 py-2 text-sm border-2 border-base-content bg-base-100 focus:border-primary focus:outline-none"
+              class="w-full px-2 py-1.5 md:py-2 text-sm border-2 border-base-content bg-base-100 focus:border-primary focus:outline-none"
               bind:value={filterSource}
             >
               <option value="">All</option>
@@ -489,14 +494,14 @@
             </select>
           </div>
 
-          <!-- Transaction Type -->
-          <div>
-            <label class="block text-xs font-bold uppercase tracking-wide mb-1 opacity-60" for="filter-transaction">
+          <!-- Transaction Type (hidden on mobile - already in quick filters) -->
+          <div class="hidden md:block">
+            <label class="block text-[10px] md:text-xs font-bold uppercase tracking-wide mb-1 opacity-60" for="filter-transaction">
               Transaction
             </label>
             <select
               id="filter-transaction"
-              class="w-full px-3 py-2 text-sm border-2 border-base-content bg-base-100 focus:border-primary focus:outline-none"
+              class="w-full px-2 py-1.5 md:py-2 text-sm border-2 border-base-content bg-base-100 focus:border-primary focus:outline-none"
               bind:value={filterTransactionType}
             >
               <option value="">All</option>
@@ -505,14 +510,14 @@
             </select>
           </div>
 
-          <!-- Property Type -->
-          <div>
-            <label class="block text-xs font-bold uppercase tracking-wide mb-1 opacity-60" for="filter-property">
+          <!-- Property Type (hidden on mobile - already in quick filters) -->
+          <div class="hidden md:block">
+            <label class="block text-[10px] md:text-xs font-bold uppercase tracking-wide mb-1 opacity-60" for="filter-property">
               Property
             </label>
             <select
               id="filter-property"
-              class="w-full px-3 py-2 text-sm border-2 border-base-content bg-base-100 focus:border-primary focus:outline-none"
+              class="w-full px-2 py-1.5 md:py-2 text-sm border-2 border-base-content bg-base-100 focus:border-primary focus:outline-none"
               bind:value={filterPropertyType}
             >
               <option value="">All</option>
@@ -526,8 +531,8 @@
           </div>
         </div>
 
-        <div class="mt-3 text-xs opacity-50">
-          Filters apply automatically as you type
+        <div class="mt-2 md:mt-3 text-[10px] md:text-xs opacity-50">
+          Auto-filters as you type
         </div>
       </div>
     {/if}
@@ -852,54 +857,58 @@
     </div>
   {/if}
 
-  <!-- Pagination -->
+  <!-- Pagination - Mobile Optimized -->
   {#if pagination.total_pages > 1}
-    <div class="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-      <div class="text-sm opacity-60">
-        Showing {((pagination.page - 1) * pagination.page_size) + 1}–{Math.min(pagination.page * pagination.page_size, pagination.total_count)} of {pagination.total_count.toLocaleString()}
+    <div class="mt-4 md:mt-6 flex flex-col items-center gap-3 md:gap-4">
+      <!-- Page info -->
+      <div class="text-xs md:text-sm opacity-60 text-center">
+        {((pagination.page - 1) * pagination.page_size) + 1}–{Math.min(pagination.page * pagination.page_size, pagination.total_count)} of {pagination.total_count.toLocaleString()}
       </div>
 
+      <!-- Pagination buttons -->
       <div class="flex border-2 border-base-content">
         <button
           onclick={() => goToPage(pagination.page - 1)}
           disabled={pagination.page === 1}
-          class="px-4 py-2 text-sm font-bold uppercase tracking-wide hover:bg-base-content hover:text-base-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+          class="px-3 md:px-4 py-1.5 md:py-2 text-sm font-bold hover:bg-base-content hover:text-base-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
         >
           ←
         </button>
 
+        <!-- Hide extra page numbers on mobile -->
         {#if pagination.page > 2}
-          <button onclick={() => goToPage(1)} class="px-3 py-2 text-sm font-bold border-l-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors cursor-pointer">
+          <button onclick={() => goToPage(1)} class="hidden sm:block px-2 md:px-3 py-1.5 md:py-2 text-sm font-bold border-l-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors cursor-pointer">
             1
           </button>
         {/if}
 
         {#if pagination.page > 3}
-          <span class="px-2 py-2 text-sm border-l-2 border-base-content opacity-50">...</span>
+          <span class="hidden sm:block px-1.5 md:px-2 py-1.5 md:py-2 text-sm border-l-2 border-base-content opacity-50">...</span>
         {/if}
 
         {#if pagination.page > 1}
-          <button onclick={() => goToPage(pagination.page - 1)} class="px-3 py-2 text-sm font-bold border-l-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors cursor-pointer">
+          <button onclick={() => goToPage(pagination.page - 1)} class="hidden sm:block px-2 md:px-3 py-1.5 md:py-2 text-sm font-bold border-l-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors cursor-pointer">
             {pagination.page - 1}
           </button>
         {/if}
 
-        <span class="px-3 py-2 text-sm font-bold border-l-2 border-base-content bg-base-content text-base-100">
-          {pagination.page}
+        <!-- Current page always visible -->
+        <span class="px-3 md:px-4 py-1.5 md:py-2 text-sm font-bold border-l-2 border-base-content bg-base-content text-base-100">
+          {pagination.page}/{pagination.total_pages}
         </span>
 
         {#if pagination.page < pagination.total_pages}
-          <button onclick={() => goToPage(pagination.page + 1)} class="px-3 py-2 text-sm font-bold border-l-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors cursor-pointer">
+          <button onclick={() => goToPage(pagination.page + 1)} class="hidden sm:block px-2 md:px-3 py-1.5 md:py-2 text-sm font-bold border-l-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors cursor-pointer">
             {pagination.page + 1}
           </button>
         {/if}
 
         {#if pagination.page < pagination.total_pages - 2}
-          <span class="px-2 py-2 text-sm border-l-2 border-base-content opacity-50">...</span>
+          <span class="hidden sm:block px-1.5 md:px-2 py-1.5 md:py-2 text-sm border-l-2 border-base-content opacity-50">...</span>
         {/if}
 
         {#if pagination.page < pagination.total_pages - 1}
-          <button onclick={() => goToPage(pagination.total_pages)} class="px-3 py-2 text-sm font-bold border-l-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors cursor-pointer">
+          <button onclick={() => goToPage(pagination.total_pages)} class="hidden sm:block px-2 md:px-3 py-1.5 md:py-2 text-sm font-bold border-l-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors cursor-pointer">
             {pagination.total_pages}
           </button>
         {/if}
@@ -907,7 +916,7 @@
         <button
           onclick={() => goToPage(pagination.page + 1)}
           disabled={pagination.page === pagination.total_pages}
-          class="px-4 py-2 text-sm font-bold uppercase tracking-wide border-l-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+          class="px-3 md:px-4 py-1.5 md:py-2 text-sm font-bold border-l-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
         >
           →
         </button>

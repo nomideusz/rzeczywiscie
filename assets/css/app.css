@@ -103,4 +103,18 @@
 /* Make LiveView wrapper divs transparent for layout */
 [data-phx-session], [data-phx-teleported-src] { display: contents }
 
+/* Hide scrollbar but keep scroll functionality - for mobile horizontal scrolls */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari and Opera */
+}
+
+/* Mobile touch scroll momentum */
+.overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
 /* This file is for your main application CSS */
