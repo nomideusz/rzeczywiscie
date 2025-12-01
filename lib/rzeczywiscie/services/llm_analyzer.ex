@@ -123,13 +123,15 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
   @context_prompt_template """
   You are a Polish real estate investment analyst. Analyze this property listing.
   
-  PROPERTY CONTEXT:
+  PROPERTY CONTEXT (USE THIS DATA, DO NOT INVENT LOCATIONS):
   - Listed Price: %{price} PLN
   - Area: %{area} m²
   - Price per m²: %{price_per_sqm} PLN/m²
   - District: %{district}
   - Market avg price/m² in this district: %{market_avg} PLN/m²
   - Transaction type: %{transaction_type}
+  
+  IMPORTANT: Use the EXACT district name "%{district}" in your summary. Do NOT use any other district or location names.
   
   Given this context, analyze the description and assess if this is a good deal.
   
@@ -143,7 +145,7 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
     "hidden_costs": [],
     "negotiation_hints": [],
     "investment_score": 0-10,
-    "summary": "1-2 sentence summary in Polish",
+    "summary": "1-2 sentence summary in Polish using district %{district}",
     "monthly_fee": null or number,
     "year_built": null or number,
     "floor_info": null or "X/Y"
@@ -160,6 +162,8 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
   2. Hidden costs that would increase effective price
   3. Renovation needs that would add costs
   4. Urgency signals suggesting negotiation room
+  
+  CRITICAL: In the summary, refer to the property location as "%{district}" - do NOT make up or use different location names!
   """
   
   @doc """
