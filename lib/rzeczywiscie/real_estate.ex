@@ -207,11 +207,15 @@ defmodule Rzeczywiscie.RealEstate do
   Create a new property or update if exists.
   This is the main function called by scrapers.
   Checks for duplicates by both source+external_id and URL to prevent duplicates.
+  Automatically geocodes using cached district coordinates if available.
   """
   def upsert_property(attrs) do
     require Logger
     now = DateTime.utc_now() |> DateTime.truncate(:second)
     attrs = Map.put(attrs, :last_seen_at, now)
+    
+    # Auto-geocode if district is cached and no coordinates yet
+    attrs = maybe_auto_geocode(attrs)
 
     # Check for existing property by source+external_id OR by URL
     existing =
@@ -225,7 +229,52 @@ defmodule Rzeczywiscie.RealEstate do
 
       property ->
         Logger.info("Updating existing property: ID #{property.id}, external_id: #{attrs.external_id}")
+        # Also auto-geocode existing properties if they don't have coordinates
+        attrs = if is_nil(property.latitude), do: maybe_auto_geocode(attrs), else: attrs
         update_property(property, attrs)
+    end
+  end
+  
+  # Automatically add coordinates from cached district data
+  defp maybe_auto_geocode(attrs) do
+    alias Rzeczywiscie.Services.Geocoding
+    
+    has_coords? = Map.get(attrs, :latitude) || Map.get(attrs, "latitude")
+    district = Map.get(attrs, :district) || Map.get(attrs, "district")
+    has_street? = case Map.get(attrs, :street) || Map.get(attrs, "street") do
+      nil -> false
+      "" -> false
+      s when is_binary(s) -> String.length(s) > 3
+      _ -> false
+    end
+    
+    # Only auto-geocode if: no coordinates, has district, no specific street, district is cached
+    cond do
+      has_coords? -> 
+        attrs
+        
+      !district || district == "" ->
+        attrs
+        
+      has_street? ->
+        # Has street address - let manual geocoding handle it for precision
+        attrs
+        
+      Geocoding.district_cached?(district) ->
+        # Use cached district coordinates (FREE, instant)
+        case Geocoding.geocode_property(%{district: district, street: nil, city: "Kraków", voivodeship: "małopolskie"}) do
+          {:ok, %{lat: lat, lng: lng}} ->
+            require Logger
+            Logger.debug("Auto-geocoded property in #{district} from cache")
+            attrs
+            |> Map.put(:latitude, lat)
+            |> Map.put(:longitude, lng)
+          _ ->
+            attrs
+        end
+        
+      true ->
+        attrs
     end
   end
 
