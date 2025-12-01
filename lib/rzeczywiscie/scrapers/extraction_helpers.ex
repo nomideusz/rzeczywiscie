@@ -722,22 +722,6 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
     |> String.trim()
   end
   
-  # Check if text looks like CSS code rather than a real description
-  defp is_css_content?(text) do
-    # CSS variables pattern (:root { --var: value; })
-    css_patterns = [
-      ~r/^:root\s*\{/,                    # Starts with :root {
-      ~r/--[a-zA-Z]+:\s*[^;]+;/,          # CSS variables (--varName: value;)
-      ~r/#[A-F0-9]{6,8}FF\b/i,            # Color codes like #FFFFFFFF
-      ~r/\bcolors[A-Z][a-zA-Z]+:/,        # CSS var names like colorsBackgroundPrimary:
-      ~r/\bwidth[A-Z][a-zA-Z]+:/          # CSS var names like widthSmall:
-    ]
-    
-    # If multiple CSS patterns match, it's likely CSS
-    matches = Enum.count(css_patterns, fn pattern -> Regex.match?(pattern, text) end)
-    matches >= 2
-  end
-  
   # Validate that extracted text is a real description, not CSS/garbage
   defp validate_description(nil), do: nil
   defp validate_description(text) when byte_size(text) < 20, do: nil
