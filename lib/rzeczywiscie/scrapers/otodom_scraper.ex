@@ -421,26 +421,53 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
     item = offer["itemOffered"] || %{}
     
     # Try multiple locations where area/floorSize might be stored
-    floor_size = 
+    # Note: floorSize can be either a direct number OR a map like {"value": 50, "unitCode": "MTK"}
+    floor_size_raw = 
       item["floorSize"] ||
       item["size"] ||
       offer["floorSize"] ||
-      offer["size"] ||
-      get_in(item, ["floorSize", "value"]) ||
-      get_in(offer, ["floorSize", "value"])
+      offer["size"]
     
-    area = parse_json_number(floor_size)
+    # Extract the actual number value
+    floor_size_value = extract_floor_size_value(floor_size_raw)
+    
+    area = parse_json_number(floor_size_value)
     
     # Debug logging when area extraction fails
     if is_nil(area) do
       offer_type = offer["@type"]
       item_type = item["@type"]
-      Logger.debug("Failed to extract area from offer type=#{inspect(offer_type)}, item type=#{inspect(item_type)}")
+      Logger.info("Failed to extract area - offer type=#{inspect(offer_type)}, item type=#{inspect(item_type)}, floorSize raw=#{inspect(floor_size_raw)}")
     end
     
     area
   end
   defp extract_area_from_offer(_), do: nil
+
+  # Extract the numeric value from floorSize which can be in different formats
+  defp extract_floor_size_value(nil), do: nil
+  defp extract_floor_size_value(num) when is_number(num), do: num
+  defp extract_floor_size_value(%{"value" => value}) when is_number(value), do: value
+  defp extract_floor_size_value(%{"value" => value}) when is_binary(value) do
+    # Parse string value like "50" or "50.5"
+    case Float.parse(value) do
+      {num, _} -> num
+      :error -> nil
+    end
+  end
+  defp extract_floor_size_value(str) when is_binary(str) do
+    # Parse string like "50 m²" or "50"
+    case Float.parse(String.trim(str)) do
+      {num, _} -> num
+      :error -> nil
+    end
+  end
+  defp extract_floor_size_value(map) when is_map(map) do
+    # Try common keys for the value
+    map["value"] || map["amount"] || map["size"]
+    |> extract_floor_size_value()
+  end
+  defp extract_floor_size_value(_), do: nil
 
   defp parse_json_price(price) when is_float(price) do
     Decimal.from_float(price)
