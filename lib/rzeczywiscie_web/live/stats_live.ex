@@ -29,7 +29,7 @@ defmodule RzeczywiscieWeb.StatsLive do
       |> assign(:max_rooms, nil)
       |> assign(:sort_by, "sale_count")
       |> assign(:sort_dir, :desc)
-      |> assign(:filtered_district_prices, calculate_filtered_district_prices("mieszkanie", "all", nil, nil, nil, nil, false))
+      |> assign(:filtered_district_prices, calculate_filtered_district_prices("mieszkanie", "all"))
       |> sort_filtered_prices()
 
     {:ok, socket}
