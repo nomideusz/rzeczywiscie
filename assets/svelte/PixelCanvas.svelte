@@ -509,8 +509,10 @@
         if (pixel.claimer_name) {
           ctx.shadowBlur = 0
           
-          // Calculate unicorn center position (body is roughly at dx:3-4, dy:-4 to -2)
-          const centerX = (pixel.x + 3) * cellSize + cellSize / 2
+          // Calculate unicorn center position based on direction
+          // Right-facing: body at dx:3-4, Left-facing: body at dx:-3 to -4
+          const bodyOffsetX = direction === 'left' ? -3 : 3
+          const centerX = (pixel.x + bodyOffsetX) * cellSize + cellSize / 2
           const centerY = (pixel.y - 3) * cellSize + cellSize / 2
           
           // Dynamic font size based on cell size, small but readable
