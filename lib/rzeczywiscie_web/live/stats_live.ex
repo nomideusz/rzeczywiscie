@@ -27,10 +27,10 @@ defmodule RzeczywiscieWeb.StatsLive do
       |> assign(:max_area, nil)
       |> assign(:min_rooms, nil)
       |> assign(:max_rooms, nil)
-      |> assign(:exclude_stale, true)  # Default: exclude stale for accurate current prices
+      |> assign(:exclude_stale, false)  # Default: use all data - prices don't change quickly
       |> assign(:sort_by, "sale_count")
       |> assign(:sort_dir, :desc)
-      |> assign(:filtered_district_prices, calculate_filtered_district_prices("mieszkanie", "all", nil, nil, nil, nil, true))
+      |> assign(:filtered_district_prices, calculate_filtered_district_prices("mieszkanie", "all", nil, nil, nil, nil, false))
       |> sort_filtered_prices()
 
     {:ok, socket}
@@ -275,17 +275,18 @@ defmodule RzeczywiscieWeb.StatsLive do
                 </div>
               </div>
               
-              <!-- Freshness Filter -->
+              <!-- Data Scope Filter -->
               <div class="flex items-center gap-2 ml-auto">
+                <span class="text-[10px] opacity-50">Data:</span>
                 <button
                   phx-click="toggle_exclude_stale"
-                  class={"px-2 py-1 text-xs font-bold border transition-colors cursor-pointer #{if @exclude_stale, do: "bg-success text-success-content border-success", else: "border-warning text-warning"}"}
-                  title={if @exclude_stale, do: "Using fresh listings only (seen in last 4 days)", else: "Including stale listings (may have outdated prices)"}
+                  class={"px-2 py-1 text-xs font-bold border transition-colors cursor-pointer #{if @exclude_stale, do: "border-base-content/30 hover:bg-base-200", else: "bg-primary text-primary-content border-primary"}"}
+                  title={if @exclude_stale, do: "Only listings seen in last 4 days", else: "All active listings (recommended for price analysis)"}
                 >
                   <%= if @exclude_stale do %>
-                    ✓ Fresh only
+                    Fresh only
                   <% else %>
-                    ⚠️ +Stale
+                    ✓ All data
                   <% end %>
                 </button>
               </div>
@@ -1019,7 +1020,7 @@ defmodule RzeczywiscieWeb.StatsLive do
   defp price_range("wynajem"), do: {Decimal.new("300"), Decimal.new("100000")}
   defp price_range(_), do: {Decimal.new("1"), Decimal.new("999999999")}
 
-  defp calculate_filtered_district_prices(property_type, transaction_type, min_area \\ nil, max_area \\ nil, min_rooms \\ nil, max_rooms \\ nil, exclude_stale \\ true) do
+  defp calculate_filtered_district_prices(property_type, transaction_type, min_area \\ nil, max_area \\ nil, min_rooms \\ nil, max_rooms \\ nil, exclude_stale \\ false) do
     filters = %{min_area: min_area, max_area: max_area, min_rooms: min_rooms, max_rooms: max_rooms, exclude_stale: exclude_stale}
     
     # Stale cutoff: 96 hours (4 days)
@@ -1122,8 +1123,8 @@ defmodule RzeczywiscieWeb.StatsLive do
              p.price >= ^min_valid and
              p.price <= ^max_valid)
     
-    # Apply stale filter
-    base_query = if Map.get(filters, :exclude_stale, true) do
+    # Apply stale filter (default: include all data for better price analysis)
+    base_query = if Map.get(filters, :exclude_stale, false) do
       where(base_query, [p], p.last_seen_at >= ^stale_cutoff)
     else
       base_query
@@ -1173,7 +1174,7 @@ defmodule RzeczywiscieWeb.StatsLive do
              p.area_sqm > 0)
     
     # Apply stale filter for sqm calculation too
-    sqm_query = if Map.get(filters, :exclude_stale, true) do
+    sqm_query = if Map.get(filters, :exclude_stale, false) do
       where(sqm_query, [p], p.last_seen_at >= ^stale_cutoff)
     else
       sqm_query
