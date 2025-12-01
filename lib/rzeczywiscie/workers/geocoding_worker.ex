@@ -31,18 +31,30 @@ defmodule Rzeczywiscie.Workers.GeocodingWorker do
       Logger.info("No properties to geocode")
       :ok
     else
+      # Count how many will use cached coordinates vs API
+      cached_count = Enum.count(properties, fn p ->
+        has_street? = p.street && p.street != "" && String.length(p.street) > 3
+        !has_street? && Geocoding.district_cached?(p.district)
+      end)
+      api_count = length(properties) - cached_count
+      
+      Logger.info("Geocoding batch: #{cached_count} from cache (FREE), #{api_count} API calls")
+      
       results =
         Enum.map(properties, fn property ->
+          has_street? = property.street && property.street != "" && String.length(property.street) > 3
+          needs_api? = has_street? || !Geocoding.district_cached?(property.district)
+          
           result = geocode_property(property)
 
-          # Add delay between requests to respect API limits
-          if delay_ms > 0, do: Process.sleep(delay_ms)
+          # Only delay for actual API calls
+          if needs_api? && delay_ms > 0, do: Process.sleep(delay_ms)
 
           result
         end)
 
       successful = Enum.count(results, fn {status, _} -> status == :ok end)
-      Logger.info("GeocodingWorker completed: #{successful}/#{length(properties)} geocoded")
+      Logger.info("GeocodingWorker completed: #{successful}/#{length(properties)} geocoded (#{cached_count} from cache)")
 
       :ok
     end
