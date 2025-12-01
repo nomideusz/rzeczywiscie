@@ -488,6 +488,26 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
     # Also check for divs with description-like classes
     description_divs = Floki.find(document, "div[class*='escription'], div[class*='Content'], div[class*='content']")
     Logger.info("OLX page has #{length(description_divs)} divs with description/content in class")
+    
+    # Log actual content of description divs to see what we're getting
+    if length(description_divs) > 0 do
+      Enum.each(Enum.take(description_divs, 3), fn div ->
+        text = Floki.text(div) |> String.trim() |> String.slice(0, 200)
+        {_tag, attrs, _} = div
+        class = Enum.find_value(attrs, fn {"class", v} -> v; _ -> nil end) || "no-class"
+        Logger.info("  Description div (class=#{String.slice(class, 0, 50)}): '#{text}'")
+      end)
+    end
+    
+    # Check page title to see if we're on the right page
+    title = Floki.find(document, "title") |> Floki.text() |> String.trim()
+    Logger.info("OLX page title: #{title}")
+    
+    # Check if there's a login wall or cookie consent
+    body_text = Floki.find(document, "body") |> Floki.text() |> String.slice(0, 500)
+    if String.contains?(body_text, ["logowanie", "zaloguj", "cookie", "Captcha", "robot"]) do
+      Logger.warning("OLX page may have login/cookie/captcha wall")
+    end
   end
 
   # Extract description from Otodom document
