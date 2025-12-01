@@ -504,6 +504,38 @@
           ctx.fillStyle = color
           ctx.fillRect(px, py, cellSize - 2, cellSize - 2)
         })
+        
+        // Draw claimer name directly on the unicorn with shining effect
+        if (pixel.claimer_name) {
+          ctx.shadowBlur = 0
+          
+          // Calculate unicorn center position (body is roughly at dx:3-4, dy:-4 to -2)
+          const centerX = (pixel.x + 3) * cellSize + cellSize / 2
+          const centerY = (pixel.y - 3) * cellSize + cellSize / 2
+          
+          // Dynamic font size based on cell size, small but readable
+          const fontSize = Math.max(8, Math.min(cellSize * 0.9, 14))
+          
+          // Rainbow shining text effect
+          const textHue = (Date.now() / 15 + pixel.x * 10) % 360
+          
+          ctx.font = `bold ${fontSize}px "Segoe UI", system-ui, sans-serif`
+          ctx.textAlign = 'center'
+          ctx.textBaseline = 'middle'
+          
+          // Glowing outline for visibility
+          ctx.shadowBlur = 6
+          ctx.shadowColor = `hsl(${textHue}, 100%, 70%)`
+          ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)'
+          ctx.lineWidth = 2.5
+          ctx.strokeText(pixel.claimer_name, centerX, centerY)
+          
+          // Shining rainbow fill
+          ctx.fillStyle = `hsl(${textHue}, 100%, 85%)`
+          ctx.fillText(pixel.claimer_name, centerX, centerY)
+          
+          ctx.shadowBlur = 0
+        }
       }
     })
 
@@ -1461,15 +1493,7 @@
       </div>
     {/if}
 
-    <!-- Cursor-following tooltip for special pixels -->
-    {#if hoveredSpecialPixel}
-      <div 
-        class="fixed pointer-events-none z-[200] bg-neutral-900 text-white px-2 py-1 rounded text-sm font-medium shadow-lg"
-        style="left: {mousePosition.x + 15}px; top: {mousePosition.y + 15}px;"
-      >
-        {hoveredSpecialPixel.name}
-      </div>
-    {/if}
+    <!-- Name now displays directly on the unicorn with shining effect -->
 
     <!-- Inline unicorn placement controls - appears when position is selected -->
     {#if pendingSpecialPixel}

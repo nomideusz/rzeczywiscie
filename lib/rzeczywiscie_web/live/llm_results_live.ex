@@ -10,6 +10,7 @@ defmodule RzeczywiscieWeb.LLMResultsLive do
   def mount(_params, _session, socket) do
     districts = load_districts()
     cities = load_cities()
+    property_types = load_property_types()
     
     socket =
       socket
@@ -28,6 +29,7 @@ defmodule RzeczywiscieWeb.LLMResultsLive do
       |> assign(:filter_area_max, nil)
       |> assign(:filter_transaction, nil)
       |> assign(:filter_source, nil)
+      |> assign(:filter_property_type, nil)
       |> assign(:filter_urgency, nil)
       |> assign(:filter_has_red_flags, nil)
       |> assign(:filter_has_positive, nil)
@@ -36,6 +38,7 @@ defmodule RzeczywiscieWeb.LLMResultsLive do
       # Dropdown options
       |> assign(:districts, districts)
       |> assign(:cities, cities)
+      |> assign(:property_types, property_types)
       # Pagination
       |> assign(:page, 1)
       |> assign(:per_page, 20)
@@ -216,11 +219,22 @@ defmodule RzeczywiscieWeb.LLMResultsLive do
                   
                   <!-- Transaction -->
                   <div>
-                    <label class="text-[9px] font-bold uppercase tracking-wide opacity-50 block mb-1">Type</label>
+                    <label class="text-[9px] font-bold uppercase tracking-wide opacity-50 block mb-1">Transaction</label>
                     <select name="filter_transaction" class="w-full px-2 py-1.5 text-xs border-2 border-base-content/30 bg-base-100 focus:border-primary focus:outline-none cursor-pointer">
-                      <option value="">All types</option>
+                      <option value="">All</option>
                       <option value="sprzedaż" selected={@filter_transaction == "sprzedaż"}>🏷️ Sale</option>
                       <option value="wynajem" selected={@filter_transaction == "wynajem"}>🔑 Rent</option>
+                    </select>
+                  </div>
+                  
+                  <!-- Property Type -->
+                  <div>
+                    <label class="text-[9px] font-bold uppercase tracking-wide opacity-50 block mb-1">Property</label>
+                    <select name="filter_property_type" class="w-full px-2 py-1.5 text-xs border-2 border-base-content/30 bg-base-100 focus:border-primary focus:outline-none cursor-pointer">
+                      <option value="">All types</option>
+                      <%= for ptype <- @property_types do %>
+                        <option value={ptype} selected={@filter_property_type == ptype}><%= property_type_label(ptype) %></option>
+                      <% end %>
                     </select>
                   </div>
                   
@@ -364,6 +378,12 @@ defmodule RzeczywiscieWeb.LLMResultsLive do
                 <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold bg-base-300">
                   <%= @filter_source %>
                   <button phx-click="clear_filter" phx-value-filter="source" class="hover:opacity-70 cursor-pointer">×</button>
+                </span>
+              <% end %>
+              <%= if @filter_property_type do %>
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold bg-primary/30">
+                  🏠 <%= property_type_label(@filter_property_type) %>
+                  <button phx-click="clear_filter" phx-value-filter="property_type" class="hover:opacity-70 cursor-pointer">×</button>
                 </span>
               <% end %>
               <%= if @filter_price_min || @filter_price_max do %>
@@ -596,6 +616,7 @@ defmodule RzeczywiscieWeb.LLMResultsLive do
       |> assign(:filter_city, parse_string(params["filter_city"]))
       |> assign(:filter_transaction, parse_string(params["filter_transaction"]))
       |> assign(:filter_source, parse_string(params["filter_source"]))
+      |> assign(:filter_property_type, parse_string(params["filter_property_type"]))
       |> assign(:filter_price_min, parse_number(params["filter_price_min"]))
       |> assign(:filter_price_max, parse_number(params["filter_price_max"]))
       |> assign(:filter_area_min, parse_number(params["filter_area_min"]))
@@ -616,6 +637,7 @@ defmodule RzeczywiscieWeb.LLMResultsLive do
       "city" -> assign(socket, :filter_city, nil)
       "transaction" -> assign(socket, :filter_transaction, nil)
       "source" -> assign(socket, :filter_source, nil)
+      "property_type" -> assign(socket, :filter_property_type, nil)
       "price" -> socket |> assign(:filter_price_min, nil) |> assign(:filter_price_max, nil)
       "area" -> socket |> assign(:filter_area_min, nil) |> assign(:filter_area_max, nil)
       "urgency" -> assign(socket, :filter_urgency, nil)
@@ -639,6 +661,7 @@ defmodule RzeczywiscieWeb.LLMResultsLive do
       |> assign(:filter_city, nil)
       |> assign(:filter_transaction, nil)
       |> assign(:filter_source, nil)
+      |> assign(:filter_property_type, nil)
       |> assign(:filter_price_min, nil)
       |> assign(:filter_price_max, nil)
       |> assign(:filter_area_min, nil)
@@ -711,6 +734,12 @@ defmodule RzeczywiscieWeb.LLMResultsLive do
     query = case socket.assigns.filter_source do
       nil -> query
       source -> where(query, [p], p.source == ^source)
+    end
+    
+    # Apply property type filter
+    query = case socket.assigns.filter_property_type do
+      nil -> query
+      ptype -> where(query, [p], p.property_type == ^ptype)
     end
     
     # Apply price range filters
@@ -877,6 +906,27 @@ defmodule RzeczywiscieWeb.LLMResultsLive do
     |> Repo.all()
   end
   
+  defp load_property_types do
+    from(p in Property, 
+      where: p.active == true and not is_nil(p.llm_analyzed_at) and not is_nil(p.property_type) and p.property_type != "",
+      select: p.property_type,
+      distinct: true,
+      order_by: p.property_type
+    )
+    |> Repo.all()
+  end
+  
+  defp property_type_label("mieszkanie"), do: "🏢 Mieszkanie"
+  defp property_type_label("dom"), do: "🏠 Dom"
+  defp property_type_label("pokój"), do: "🛏️ Pokój"
+  defp property_type_label("działka"), do: "🌳 Działka"
+  defp property_type_label("garaż"), do: "🚗 Garaż"
+  defp property_type_label("lokal"), do: "🏪 Lokal"
+  defp property_type_label("biuro"), do: "💼 Biuro"
+  defp property_type_label("magazyn"), do: "📦 Magazyn"
+  defp property_type_label("hala"), do: "🏭 Hala"
+  defp property_type_label(other), do: other
+  
   # Parsing Helpers
   
   defp parse_string(nil), do: nil
@@ -903,6 +953,7 @@ defmodule RzeczywiscieWeb.LLMResultsLive do
     assigns.filter_city ||
     assigns.filter_transaction ||
     assigns.filter_source ||
+    assigns.filter_property_type ||
     assigns.filter_price_min ||
     assigns.filter_price_max ||
     assigns.filter_area_min ||
