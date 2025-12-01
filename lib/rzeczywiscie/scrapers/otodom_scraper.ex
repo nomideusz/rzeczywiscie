@@ -173,7 +173,7 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
             area_sqm: data[:area_sqm],
             rooms: data[:rooms],
             transaction_type: transaction_type_normalized,
-            property_type: detect_property_type(title),
+            property_type: extract_property_type_from_text(title),
             district: data[:district],
             voivodeship: "małopolskie",
             image_url: data[:image_url],

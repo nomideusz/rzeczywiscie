@@ -172,7 +172,7 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
             area_sqm: area_sqm,
             rooms: rooms,
             transaction_type: transaction_type,
-            property_type: detect_property_type(title),
+            property_type: extract_property_type(title),
             district: district,
             voivodeship: "małopolskie",
             image_url: image_url,
