@@ -361,61 +361,75 @@ defmodule Rzeczywiscie.RealEstate do
   end
 
   @doc """
-  Backfill missing districts from city field.
+  Backfill missing districts from city field and URL.
   
-  Many properties have city as "Kraków, Podgórze" but empty district.
-  This extracts the district from the city field.
+  Tries multiple strategies:
+  1. Extract from city field if format is "Kraków, Podgórze"
+  2. Extract from URL if it contains district name (e.g. /krakow-podgorze/)
   
   Returns count of updated properties.
   """
   def backfill_districts_from_city do
     require Logger
+    alias Rzeczywiscie.Scrapers.ExtractionHelpers
     
-    # Find properties with empty district but city containing comma (like "Kraków, Podgórze")
+    # Find ALL properties with empty district
     properties = Repo.all(
       from p in Property,
         where: p.active == true and
-               (is_nil(p.district) or p.district == "") and
-               not is_nil(p.city) and
-               fragment("? LIKE '%,%'", p.city)
+               (is_nil(p.district) or p.district == ""),
+        limit: 500
     )
     
-    Logger.info("Found #{length(properties)} properties with district in city field")
+    Logger.info("Found #{length(properties)} properties missing district")
     
     updated_count = Enum.reduce(properties, 0, fn property, count ->
-      # Extract district from city (part after comma)
-      case String.split(property.city, ",", parts: 2) do
-        [_city, district_part] ->
-          district = String.trim(district_part)
-          if district != "" do
-            case Repo.update(Property.changeset(property, %{district: district})) do
-              {:ok, _} -> 
-                count + 1
-              {:error, _} -> 
-                count
-            end
-          else
-            count
+      # Strategy 1: Try to extract from city field (if "Kraków, Podgórze" format)
+      district_from_city = case property.city do
+        nil -> nil
+        city ->
+          case String.split(city, ",", parts: 2) do
+            [_base, district_part] -> 
+              d = String.trim(district_part)
+              if d != "", do: d, else: nil
+            _ -> nil
           end
-        _ ->
-          count
+      end
+      
+      # Strategy 2: Try to extract from URL
+      district_from_url = ExtractionHelpers.extract_krakow_district(property.url)
+      
+      # Strategy 3: Try to extract from title
+      district_from_title = ExtractionHelpers.extract_krakow_district(property.title)
+      
+      # Use first available
+      district = district_from_city || district_from_url || district_from_title
+      
+      if district && district != "" do
+        case Repo.update(Property.changeset(property, %{district: district})) do
+          {:ok, _} -> 
+            count + 1
+          {:error, _} -> 
+            count
+        end
+      else
+        count
       end
     end)
     
-    Logger.info("Backfilled #{updated_count} districts from city field")
+    Logger.info("Backfilled #{updated_count} districts")
     updated_count
   end
   
   @doc """
-  Count properties missing district but having it in city field.
+  Count properties missing district that we might be able to fill.
+  Counts all properties with empty district (we'll try URL/title extraction).
   """
   def count_missing_districts do
     Repo.aggregate(
       from(p in Property,
         where: p.active == true and
-               (is_nil(p.district) or p.district == "") and
-               not is_nil(p.city) and
-               fragment("? LIKE '%,%'", p.city)),
+               (is_nil(p.district) or p.district == "")),
       :count, :id
     )
   end
