@@ -535,7 +535,9 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
 
   defp try_otodom_description_selectors(document) do
     selectors = [
-      # Primary Otodom description selectors
+      # Primary Otodom description selectors - these work!
+      "div[data-cy='ad_description'] div",  # This one works per logs!
+      "div[data-cy='ad_description']",
       "div[data-cy='adPageAdDescription']",
       "section[aria-label='Opis']",
       "div[data-testid='ad-description']",
