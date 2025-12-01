@@ -651,7 +651,13 @@
                     </div>
                     <!-- Title & Location -->
                     <div class="min-w-0 flex-1">
-                      <div class="font-medium leading-tight line-clamp-2 text-[13px]" title={property.title}>
+                      <a 
+                        href={property.url} 
+                        target="_blank" 
+                        rel="noopener"
+                        class="block font-medium leading-tight line-clamp-2 text-[13px] hover:text-primary transition-colors group"
+                        title={property.title}
+                      >
                         {#if isNew(property.inserted_at)}
                           <span class="inline-block px-1 py-0.5 text-[9px] font-black bg-success text-success-content mr-1 align-middle">NEW</span>
                         {/if}
@@ -659,13 +665,14 @@
                           <span class="inline-block px-1 py-0.5 text-[9px] font-black bg-success text-success-content mr-1 align-middle" title="Top AI Pick">🤖⭐</span>
                         {/if}
                         {property.title}
+                        <span class="text-primary opacity-0 group-hover:opacity-100 transition-opacity">↗</span>
                         {#if property.description && property.description.length > 50}
                           <span class="text-info ml-1" title="Has description">📝</span>
                         {/if}
                         {#if property.llm_motivation && property.llm_motivation !== 'standard' && property.llm_motivation !== 'unknown'}
                           <span class="ml-1" title="Seller: {property.llm_motivation}">{getLlmMotivationIcon(property.llm_motivation)}</span>
                         {/if}
-                      </div>
+                      </a>
                       <div class="text-[11px] opacity-60 mt-0.5">
                         {property.city || '—'}{property.district ? ` · ${property.district}` : ''}{property.rooms ? ` · ${property.rooms}p` : ''}
                       </div>
@@ -823,15 +830,22 @@
             {/if}
 
             <!-- Title -->
-            <h3 class="font-bold text-lg leading-tight mb-2 line-clamp-2" title={property.title}>
+            <a 
+              href={property.url} 
+              target="_blank" 
+              rel="noopener"
+              class="block font-bold text-lg leading-tight mb-2 line-clamp-2 hover:text-primary transition-colors group"
+              title={property.title}
+            >
               {#if property.llm_investment_score >= 8}
                 <span class="inline-block px-1 py-0.5 text-[10px] font-black bg-success text-success-content mr-1 align-middle">🤖⭐</span>
               {/if}
               {property.title}
+              <span class="text-primary opacity-0 group-hover:opacity-100 transition-opacity">↗</span>
               {#if property.description && property.description.length > 50}
                 <span class="text-info ml-1 text-sm" title="Has description">📝</span>
               {/if}
-            </h3>
+            </a>
 
             <!-- Location -->
             <div class="text-sm opacity-70 mb-3">
