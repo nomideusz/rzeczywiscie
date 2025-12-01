@@ -83,29 +83,43 @@ defmodule RzeczywiscieWeb.AdminLive do
           <div class="px-4 py-2 border-b-2 border-base-content bg-base-200">
             <h2 class="text-sm font-bold uppercase tracking-wide">🌐 Scrapers</h2>
           </div>
+          <%= if @scrape_result && @scrape_running == nil do %>
+            <div class="mx-4 mt-3 px-3 py-2 text-xs font-bold bg-success/20 text-success border border-success">✓ <%= @scrape_result %></div>
+          <% end %>
           <div class="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-base-content/30">
             <div class="p-4">
               <div class="flex items-center justify-between mb-3">
                 <h3 class="font-bold">OLX.pl</h3>
                 <span class="px-2 py-1 text-[10px] font-bold uppercase bg-primary/20 text-primary">Małopolskie</span>
               </div>
-              <%= if @scrape_result && @scrape_running == nil do %>
-                <div class="mb-3 px-3 py-2 text-xs font-bold bg-success/20 text-success border border-success">✓ <%= @scrape_result %></div>
-              <% end %>
-              <button phx-click="run_scrape" phx-value-source="olx" disabled={@scrape_running != nil}
-                class={"w-full px-4 py-3 text-sm font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @scrape_running != nil, do: "border-base-content/30 opacity-50", else: "border-base-content hover:bg-base-content hover:text-base-100"}"}>
-                <%= if @scrape_running == :olx, do: "⏳ Scraping...", else: "Scrape OLX (3 pages)" %>
-              </button>
+              <div class="flex gap-2">
+                <button phx-click="run_scrape" phx-value-source="olx" phx-value-deep="false" disabled={@scrape_running != nil}
+                  class={"flex-1 px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @scrape_running != nil, do: "border-base-content/30 opacity-50", else: "border-base-content hover:bg-base-content hover:text-base-100"}"}>
+                  <%= if @scrape_running == :olx, do: "⏳ Running...", else: "Fast" %>
+                </button>
+                <button phx-click="run_scrape" phx-value-source="olx" phx-value-deep="true" disabled={@scrape_running != nil}
+                  class={"flex-1 px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @scrape_running != nil, do: "border-base-content/30 opacity-50", else: "border-accent hover:bg-accent hover:text-accent-content"}"}>
+                  <%= if @scrape_running == :olx_deep, do: "⏳ Running...", else: "🎯 Deep" %>
+                </button>
+              </div>
+              <p class="mt-2 text-[10px] opacity-60">Deep: fetches each listing page (slower, more reliable)</p>
             </div>
             <div class="p-4">
               <div class="flex items-center justify-between mb-3">
                 <h3 class="font-bold">Otodom.pl</h3>
                 <span class="px-2 py-1 text-[10px] font-bold uppercase bg-secondary/20 text-secondary">Małopolskie</span>
               </div>
-              <button phx-click="run_scrape" phx-value-source="otodom" disabled={@scrape_running != nil}
-                class={"w-full px-4 py-3 text-sm font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @scrape_running != nil, do: "border-base-content/30 opacity-50", else: "border-base-content hover:bg-base-content hover:text-base-100"}"}>
-                <%= if @scrape_running == :otodom, do: "⏳ Scraping...", else: "Scrape Otodom (3 pages)" %>
-              </button>
+              <div class="flex gap-2">
+                <button phx-click="run_scrape" phx-value-source="otodom" phx-value-deep="false" disabled={@scrape_running != nil}
+                  class={"flex-1 px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @scrape_running != nil, do: "border-base-content/30 opacity-50", else: "border-base-content hover:bg-base-content hover:text-base-100"}"}>
+                  <%= if @scrape_running == :otodom, do: "⏳ Running...", else: "Fast" %>
+                </button>
+                <button phx-click="run_scrape" phx-value-source="otodom" phx-value-deep="true" disabled={@scrape_running != nil}
+                  class={"flex-1 px-3 py-2 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @scrape_running != nil, do: "border-base-content/30 opacity-50", else: "border-accent hover:bg-accent hover:text-accent-content"}"}>
+                  <%= if @scrape_running == :otodom_deep, do: "⏳ Running...", else: "🎯 Deep" %>
+                </button>
+              </div>
+              <p class="mt-2 text-[10px] opacity-60">Deep: fetches each listing page (slower, more reliable)</p>
             </div>
           </div>
         </div>
@@ -542,19 +556,27 @@ defmodule RzeczywiscieWeb.AdminLive do
   end
 
   @impl true
-  def handle_event("run_scrape", %{"source" => source}, socket) do
+  def handle_event("run_scrape", %{"source" => source, "deep" => deep}, socket) do
+    deep? = deep == "true"
     source_atom = String.to_existing_atom(source)
-    Logger.info("Starting #{source} scrape from admin panel")
+    running_key = if deep?, do: String.to_atom("#{source}_deep"), else: source_atom
     
-    socket = assign(socket, :scrape_running, source_atom)
+    Logger.info("Starting #{source} #{if deep?, do: "DEEP", else: "FAST"} scrape from admin panel")
+    
+    socket = assign(socket, :scrape_running, running_key)
     
     parent = self()
     Task.start(fn ->
-      result = run_scraper(source_atom)
+      result = run_scraper(source_atom, deep?)
       send(parent, {:scrape_complete, result})
     end)
     
     {:noreply, socket}
+  end
+  
+  def handle_event("run_scrape", %{"source" => source}, socket) do
+    # Legacy handler without deep parameter
+    handle_event("run_scrape", %{"source" => source, "deep" => "false"}, socket)
   end
 
   @impl true
@@ -828,18 +850,20 @@ defmodule RzeczywiscieWeb.AdminLive do
   end
 
   # Scraper helpers
-  defp run_scraper(:olx) do
+  defp run_scraper(:olx, deep?) do
     alias Rzeczywiscie.Scrapers.OlxScraper
-    Logger.info("Running OLX scraper (3 pages)...")
-    result = OlxScraper.scrape(pages: 3)
-    "OLX: #{inspect(result)}"
+    mode = if deep?, do: "DEEP", else: "FAST"
+    Logger.info("Running OLX #{mode} scraper (3 pages)...")
+    result = OlxScraper.scrape(pages: 3, deep: deep?)
+    "OLX #{mode}: #{inspect(result)}"
   end
 
-  defp run_scraper(:otodom) do
+  defp run_scraper(:otodom, deep?) do
     alias Rzeczywiscie.Scrapers.OtodomScraper
-    Logger.info("Running Otodom scraper (3 pages)...")
-    result = OtodomScraper.scrape(pages: 3)
-    "Otodom: #{inspect(result)}"
+    mode = if deep?, do: "DEEP", else: "FAST"
+    Logger.info("Running Otodom #{mode} scraper (3 pages)...")
+    result = OtodomScraper.scrape(pages: 3, deep: deep?)
+    "Otodom #{mode}: #{inspect(result)}"
   end
 
   # Enrichment helpers
