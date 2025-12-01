@@ -339,6 +339,7 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
 
   @doc """
   Fetch and extract description from OLX listing page.
+  Note: OLX often redirects to Otodom (same company), so we detect and handle both.
   Returns {:ok, description} or {:error, reason}.
   """
   def fetch_olx_description(url) when is_binary(url) do
@@ -346,7 +347,16 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
       {:ok, html} ->
         case Floki.parse_document(html) do
           {:ok, document} ->
-            description = extract_olx_description_from_document(document)
+            # Check if we landed on Otodom (redirect)
+            page_title = Floki.find(document, "title") |> Floki.text() |> String.downcase()
+            
+            description = if String.contains?(page_title, "otodom") do
+              Logger.info("OLX URL redirected to Otodom, using Otodom selectors")
+              extract_otodom_description_from_document(document)
+            else
+              extract_olx_description_from_document(document)
+            end
+            
             {:ok, description}
 
           {:error, reason} ->
@@ -525,14 +535,23 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
 
   defp try_otodom_description_selectors(document) do
     selectors = [
+      # Primary Otodom description selectors
       "div[data-cy='adPageAdDescription']",
       "section[aria-label='Opis']",
-      "div[class*='description']",
-      "div.css-1wekrze",  # Otodom description class
-      "div.css-1k7yu81",   # Alternative class
-      # New selectors for updated Otodom layout
       "div[data-testid='ad-description']",
-      "section[data-testid='ad-description-section']"
+      "section[data-testid='ad-description-section']",
+      # Class-based selectors (Otodom uses CSS modules)
+      "div.css-1wekrze",
+      "div.css-1k7yu81",
+      "div.css-1bi0g88",  # Possible description container
+      "div.css-1t38rho",  # Another common pattern
+      # Section-based selectors
+      "section.css-10m5oaz",  # Description section
+      "div[class*='AdDescription']",
+      "div[class*='adDescription']",
+      # Generic but specific enough
+      "article section p",
+      "main section p"
     ]
 
     description = Enum.reduce_while(selectors, nil, fn selector, _acc ->
@@ -541,24 +560,84 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
         elements
         |> Floki.text()
         |> String.trim()
+        |> clean_css_artifacts()  # Clean up inline CSS artifacts
 
-      if text != "" and String.length(text) > 10 do
-        Logger.info("Otodom description found with selector: #{selector}")
+      if text != "" and String.length(text) > 50 do
+        Logger.info("Otodom description found with selector: #{selector} (#{String.length(text)} chars)")
         {:halt, text}
       else
-        if length(elements) > 0 do
-          Logger.info("Otodom selector '#{selector}' found #{length(elements)} elements but no text")
-        end
         {:cont, nil}
       end
     end)
     
-    # If no description found via selectors, log what's available
+    # If no description found via selectors, try to find any large text block
+    description = if is_nil(description) do
+      Logger.info("Trying fallback: looking for any substantial text block")
+      try_find_any_description_block(document)
+    else
+      description
+    end
+    
+    # If still no description found, log debug info
     if is_nil(description) do
-      Logger.info("No Otodom description found with standard selectors")
+      Logger.info("No Otodom description found with any selector")
+      debug_otodom_structure(document)
     end
     
     description
+  end
+  
+  # Clean up CSS-in-JS artifacts that sometimes appear in scraped text
+  defp clean_css_artifacts(text) do
+    text
+    |> String.replace(~r/\.css-[a-z0-9]+\{[^}]+\}/i, "")
+    |> String.replace(~r/-webkit-[^;]+;/i, "")
+    |> String.replace(~r/-ms-[^;]+;/i, "")
+    |> String.replace(~r/flex-shrink:[^;]+;/i, "")
+    |> String.trim()
+  end
+  
+  # Try to find any block of text that looks like a description
+  defp try_find_any_description_block(document) do
+    # Find all paragraphs and divs, look for one with substantial text
+    candidates = 
+      Floki.find(document, "p, div") 
+      |> Enum.map(fn el -> 
+        text = Floki.text(el) |> String.trim() |> clean_css_artifacts()
+        {el, text, String.length(text)}
+      end)
+      |> Enum.filter(fn {_el, text, len} -> 
+        len > 200 and  # Substantial length
+        not String.contains?(text, ["Cookie", "Polityka prywatności", "Regulamin"]) and  # Not legal text
+        String.contains?(text, [" ", "."]) # Has spaces and sentences
+      end)
+      |> Enum.sort_by(fn {_, _, len} -> -len end)  # Longest first
+      |> Enum.take(1)
+    
+    case candidates do
+      [{_el, text, len}] -> 
+        Logger.info("Found description fallback: #{len} chars")
+        text
+      _ -> 
+        nil
+    end
+  end
+  
+  # Debug helper for Otodom pages
+  defp debug_otodom_structure(document) do
+    # Find sections with aria-label
+    sections = Floki.find(document, "section[aria-label]")
+    aria_labels = Enum.map(sections, fn {_, attrs, _} ->
+      Enum.find_value(attrs, fn {"aria-label", v} -> v; _ -> nil end)
+    end) |> Enum.reject(&is_nil/1) |> Enum.take(10)
+    Logger.info("Otodom sections with aria-label: #{inspect(aria_labels)}")
+    
+    # Find data-testid elements
+    testid_elements = Floki.find(document, "[data-testid]")
+    testids = Enum.map(testid_elements, fn {_, attrs, _} ->
+      Enum.find_value(attrs, fn {"data-testid", v} -> v; _ -> nil end)
+    end) |> Enum.reject(&is_nil/1) |> Enum.uniq() |> Enum.take(15)
+    Logger.info("Otodom data-testid values: #{inspect(testids)}")
   end
 
   defp try_otodom_json_ld_description(document) do
