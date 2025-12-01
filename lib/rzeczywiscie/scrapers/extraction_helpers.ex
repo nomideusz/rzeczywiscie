@@ -62,6 +62,77 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
   def infer_city_from_district(_), do: nil
 
   @doc """
+  Extract a Kraków district name from text.
+  Returns the normalized district name if found, nil otherwise.
+  """
+  def extract_krakow_district(nil), do: nil
+  def extract_krakow_district(""), do: nil
+  def extract_krakow_district(text) when is_binary(text) do
+    # Krakow districts with their normalized names
+    districts = %{
+      "wzgórza krzesławickie" => "Wzgórza Krzesławickie",
+      "wzgorza krzeslawickie" => "Wzgórza Krzesławickie",
+      "podgórze duchackie" => "Podgórze Duchackie",
+      "podgorze duchackie" => "Podgórze Duchackie",
+      "prądnik czerwony" => "Prądnik Czerwony",
+      "pradnik czerwony" => "Prądnik Czerwony",
+      "prądnik biały" => "Prądnik Biały",
+      "pradnik bialy" => "Prądnik Biały",
+      "stare miasto" => "Stare Miasto",
+      "nowa huta" => "Nowa Huta",
+      "borek fałęcki" => "Borek Fałęcki",
+      "borek falecki" => "Borek Fałęcki",
+      "łagiewniki" => "Łagiewniki",
+      "lagiewniki" => "Łagiewniki",
+      "krowodrza" => "Krowodrza",
+      "zwierzyniec" => "Zwierzyniec",
+      "bronowice" => "Bronowice",
+      "dębniki" => "Dębniki",
+      "debniki" => "Dębniki",
+      "podgórze" => "Podgórze",
+      "podgorze" => "Podgórze",
+      "grzegórzki" => "Grzegórzki",
+      "grzegorzki" => "Grzegórzki",
+      "czyżyny" => "Czyżyny",
+      "czyzyny" => "Czyżyny",
+      "mistrzejowice" => "Mistrzejowice",
+      "bieńczyce" => "Bieńczyce",
+      "bienczyce" => "Bieńczyce",
+      "swoszowice" => "Swoszowice",
+      "bieżanów" => "Bieżanów",
+      "biezanow" => "Bieżanów",
+      "prokocim" => "Prokocim",
+      "ruczaj" => "Ruczaj",
+      "wola justowska" => "Wola Justowska",
+      "kazimierz" => "Kazimierz",
+      "salwator" => "Salwator",
+      "pychowice" => "Pychowice",
+      "zabłocie" => "Zabłocie",
+      "zablocie" => "Zabłocie",
+      "płaszów" => "Płaszów",
+      "plaszow" => "Płaszów",
+      "kurdwanów" => "Kurdwanów",
+      "kurdwanow" => "Kurdwanów",
+      "wola duchacka" => "Wola Duchacka",
+      "kliny" => "Kliny",
+      "azory" => "Azory",
+      "olsza" => "Olsza",
+      "dąbie" => "Dąbie",
+      "dabie" => "Dąbie"
+    }
+    
+    # Limit text size to avoid performance issues
+    text_limited = String.slice(text, 0, 5000)
+    text_lower = String.downcase(text_limited)
+    
+    # Find matching district
+    Enum.find_value(districts, fn {pattern, name} ->
+      if String.contains?(text_lower, pattern), do: name, else: nil
+    end)
+  end
+  def extract_krakow_district(_), do: nil
+
+  @doc """
   Parse price text to Decimal.
   Handles formats like: "1 200 zł", "1,200.50 PLN", "1200", "1 200,50"
   
