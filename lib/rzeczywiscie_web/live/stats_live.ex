@@ -27,7 +27,6 @@ defmodule RzeczywiscieWeb.StatsLive do
       |> assign(:max_area, nil)
       |> assign(:min_rooms, nil)
       |> assign(:max_rooms, nil)
-      |> assign(:exclude_stale, false)  # Default: use all data - prices don't change quickly
       |> assign(:sort_by, "sale_count")
       |> assign(:sort_dir, :desc)
       |> assign(:filtered_district_prices, calculate_filtered_district_prices("mieszkanie", "all", nil, nil, nil, nil, false))
@@ -275,21 +274,6 @@ defmodule RzeczywiscieWeb.StatsLive do
                 </div>
               </div>
               
-              <!-- Data Scope Filter -->
-              <div class="flex items-center gap-2 ml-auto">
-                <span class="text-[10px] opacity-50">Data:</span>
-                <button
-                  phx-click="toggle_exclude_stale"
-                  class={"px-2 py-1 text-xs font-bold border transition-colors cursor-pointer #{if @exclude_stale, do: "border-base-content/30 hover:bg-base-200", else: "bg-primary text-primary-content border-primary"}"}
-                  title={if @exclude_stale, do: "Only listings seen in last 4 days", else: "All active listings (recommended for price analysis)"}
-                >
-                  <%= if @exclude_stale do %>
-                    Fresh only
-                  <% else %>
-                    ✓ All data
-                  <% end %>
-                </button>
-              </div>
             </div>
           </div>
 
@@ -680,15 +664,6 @@ defmodule RzeczywiscieWeb.StatsLive do
     {:noreply, socket}
   end
   
-  @impl true
-  def handle_event("toggle_exclude_stale", _params, socket) do
-    socket =
-      socket
-      |> assign(:exclude_stale, !socket.assigns.exclude_stale)
-      |> refresh_district_prices()
-
-    {:noreply, socket}
-  end
 
   defp parse_int_or_nil(""), do: nil
   defp parse_int_or_nil(nil), do: nil
@@ -706,8 +681,7 @@ defmodule RzeczywiscieWeb.StatsLive do
       socket.assigns.min_area,
       socket.assigns.max_area,
       socket.assigns.min_rooms,
-      socket.assigns.max_rooms,
-      socket.assigns.exclude_stale
+      socket.assigns.max_rooms
     )
     
     socket
@@ -872,7 +846,7 @@ defmodule RzeczywiscieWeb.StatsLive do
       |> Enum.take(8)
 
     # Stale properties (not seen in 96+ hours / 4 days)
-    cutoff = DateTime.utc_now() |> DateTime.add(-96 * 3600, :second)
+    cutoff = DateTime.utc_now() |> DateTime.add(-@stale_hours * 3600, :second)
     stale_count = Repo.aggregate(
       from(p in Property, where: p.active == true and p.last_seen_at < ^cutoff),
       :count, :id
@@ -1020,26 +994,17 @@ defmodule RzeczywiscieWeb.StatsLive do
   defp price_range("wynajem"), do: {Decimal.new("300"), Decimal.new("100000")}
   defp price_range(_), do: {Decimal.new("1"), Decimal.new("999999999")}
 
-  defp calculate_filtered_district_prices(property_type, transaction_type, min_area \\ nil, max_area \\ nil, min_rooms \\ nil, max_rooms \\ nil, exclude_stale \\ false) do
-    filters = %{min_area: min_area, max_area: max_area, min_rooms: min_rooms, max_rooms: max_rooms, exclude_stale: exclude_stale}
-    
-    # Stale cutoff: 96 hours (4 days)
-    stale_cutoff = DateTime.utc_now() |> DateTime.add(-@stale_hours * 3600, :second)
+  defp calculate_filtered_district_prices(property_type, transaction_type, min_area \\ nil, max_area \\ nil, min_rooms \\ nil, max_rooms \\ nil) do
+    filters = %{min_area: min_area, max_area: max_area, min_rooms: min_rooms, max_rooms: max_rooms}
     
     # Get districts with this property type (with price sanity filter)
+    # Uses ALL active data - prices don't change quickly in real estate
     base_query = from p in Property,
       where: p.active == true and 
              p.property_type == ^property_type and
              not is_nil(p.district) and 
              p.district != "" and
              not is_nil(p.price)
-    
-    # Exclude stale properties if requested (for accurate current market prices)
-    base_query = if exclude_stale do
-      where(base_query, [p], p.last_seen_at >= ^stale_cutoff)
-    else
-      base_query
-    end
     
     # Add area filters
     base_query = if min_area do
@@ -1112,8 +1077,6 @@ defmodule RzeczywiscieWeb.StatsLive do
 
   defp get_district_stats(property_type, district, transaction_type, filters \\ %{}) do
     {min_valid, max_valid} = price_range(transaction_type)
-    stale_cutoff = DateTime.utc_now() |> DateTime.add(-@stale_hours * 3600, :second)
-    
     base_query = from(p in Property,
       where: p.active == true and 
              p.property_type == ^property_type and
@@ -1122,13 +1085,6 @@ defmodule RzeczywiscieWeb.StatsLive do
              not is_nil(p.price) and
              p.price >= ^min_valid and
              p.price <= ^max_valid)
-    
-    # Apply stale filter (default: include all data for better price analysis)
-    base_query = if Map.get(filters, :exclude_stale, false) do
-      where(base_query, [p], p.last_seen_at >= ^stale_cutoff)
-    else
-      base_query
-    end
     
     # Apply area filters
     base_query = if filters[:min_area] do
@@ -1172,13 +1128,6 @@ defmodule RzeczywiscieWeb.StatsLive do
              p.price <= ^max_valid and
              not is_nil(p.area_sqm) and
              p.area_sqm > 0)
-    
-    # Apply stale filter for sqm calculation too
-    sqm_query = if Map.get(filters, :exclude_stale, false) do
-      where(sqm_query, [p], p.last_seen_at >= ^stale_cutoff)
-    else
-      sqm_query
-    end
     
     sqm_query = if filters[:min_area] do
       where(sqm_query, [p], p.area_sqm >= ^filters[:min_area])
