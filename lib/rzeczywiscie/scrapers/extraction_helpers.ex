@@ -443,12 +443,17 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
           |> Floki.text()
           |> String.trim()
 
-        if text != "" and String.length(text) > 10 do
+        # Only accept if it's substantial AND not CSS garbage
+        if text != "" and String.length(text) > 10 and not is_css_content?(text) do
           Logger.info("OLX description found with selector: #{selector}")
           {:halt, text}
         else
-          if length(elements) > 0 do
-            Logger.info("OLX selector '#{selector}' found #{length(elements)} elements but no text")
+          if length(elements) > 0 and text != "" do
+            if is_css_content?(text) do
+              Logger.info("OLX selector '#{selector}' found CSS content, skipping")
+            else
+              Logger.info("OLX selector '#{selector}' found #{length(elements)} elements but no valid text")
+            end
           end
           {:cont, nil}
         end
@@ -530,7 +535,8 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
     # Strategy 2: Extract from JSON-LD if available
     description = description || try_otodom_json_ld_description(document)
 
-    description
+    # Validate that it's not CSS garbage
+    validate_description(description)
   end
 
   defp try_otodom_description_selectors(document) do
@@ -564,10 +570,14 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
         |> String.trim()
         |> clean_css_artifacts()  # Clean up inline CSS artifacts
 
-      if text != "" and String.length(text) > 50 do
+      # Accept only if it's substantial AND not CSS garbage
+      if text != "" and String.length(text) > 50 and not is_css_content?(text) do
         Logger.info("Otodom description found with selector: #{selector} (#{String.length(text)} chars)")
         {:halt, text}
       else
+        if text != "" and is_css_content?(text) do
+          Logger.info("Otodom selector '#{selector}' found CSS content, skipping")
+        end
         {:cont, nil}
       end
     end)
@@ -599,6 +609,34 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
     |> String.trim()
   end
   
+  # Check if text looks like CSS code rather than a real description
+  defp is_css_content?(text) do
+    # CSS variables pattern (:root { --var: value; })
+    css_patterns = [
+      ~r/^:root\s*\{/,                    # Starts with :root {
+      ~r/--[a-zA-Z]+:\s*[^;]+;/,          # CSS variables (--varName: value;)
+      ~r/#[A-F0-9]{6,8}FF\b/i,            # Color codes like #FFFFFFFF
+      ~r/\bcolors[A-Z][a-zA-Z]+:/,        # CSS var names like colorsBackgroundPrimary:
+      ~r/\bwidth[A-Z][a-zA-Z]+:/          # CSS var names like widthSmall:
+    ]
+    
+    # If multiple CSS patterns match, it's likely CSS
+    matches = Enum.count(css_patterns, fn pattern -> Regex.match?(pattern, text) end)
+    matches >= 2
+  end
+  
+  # Validate that extracted text is a real description, not CSS/garbage
+  defp validate_description(nil), do: nil
+  defp validate_description(text) when byte_size(text) < 20, do: nil
+  defp validate_description(text) do
+    if is_css_content?(text) do
+      Logger.warning("Rejected CSS content as description (#{String.length(text)} chars)")
+      nil
+    else
+      text
+    end
+  end
+  
   # Try to find any block of text that looks like a description
   defp try_find_any_description_block(document) do
     # Find all paragraphs and divs, look for one with substantial text
@@ -611,6 +649,7 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
       |> Enum.filter(fn {_el, text, len} -> 
         len > 200 and  # Substantial length
         not String.contains?(text, ["Cookie", "Polityka prywatności", "Regulamin"]) and  # Not legal text
+        not is_css_content?(text) and  # Not CSS garbage
         String.contains?(text, [" ", "."]) # Has spaces and sentences
       end)
       |> Enum.sort_by(fn {_, _, len} -> -len end)  # Longest first
