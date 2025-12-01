@@ -274,6 +274,13 @@ defmodule RzeczywiscieWeb.AdminLive do
                 >
                   🤖 LLM Analysis (Top 50)
                 </button>
+                <button 
+                  phx-click="clear_llm_analysis" 
+                  data-confirm="Clear LLM analysis for all properties? They will be re-analyzed on next run."
+                  class="px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 border-warning text-warning hover:bg-warning hover:text-warning-content transition-colors"
+                >
+                  🔄 Re-analyze All
+                </button>
               <% end %>
             </div>
             
@@ -775,6 +782,41 @@ defmodule RzeczywiscieWeb.AdminLive do
       result = run_llm_analysis(parent)
       send(parent, {:llm_complete, result})
     end)
+    
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("clear_llm_analysis", _params, socket) do
+    Logger.info("Clearing LLM analysis for all properties (for re-analysis)")
+    
+    # Clear LLM fields for all analyzed properties
+    {count, _} = from(p in Property, 
+      where: not is_nil(p.llm_analyzed_at)
+    )
+    |> Repo.update_all(set: [
+      llm_analyzed_at: nil,
+      llm_score: 0,
+      llm_investment_score: nil,
+      llm_summary: nil,
+      llm_urgency: 0,
+      llm_condition: nil,
+      llm_motivation: nil,
+      llm_positive_signals: [],
+      llm_red_flags: [],
+      llm_hidden_costs: [],
+      llm_negotiation_hints: [],
+      llm_monthly_fee: nil,
+      llm_year_built: nil,
+      llm_floor_info: nil
+    ])
+    
+    Logger.info("Cleared LLM analysis for #{count} properties")
+    
+    socket = 
+      socket
+      |> assign(:llm_result, "Cleared LLM analysis for #{count} properties. Run 'LLM Analysis' to re-analyze.")
+      |> assign(:llm_stats, get_llm_stats())
     
     {:noreply, socket}
   end
