@@ -351,7 +351,14 @@ defmodule RzeczywiscieWeb.AdminLive do
                 <div class="space-y-2 max-h-64 overflow-y-auto">
                   <%= for prop <- @llm_stats.top_properties do %>
                     <div class="flex items-start gap-2 text-xs border-b border-base-content/10 pb-2">
-                      <span class="px-2 py-1 bg-primary text-primary-content font-bold shrink-0"><%= prop.llm_score %></span>
+                      <div class="flex flex-col gap-1 shrink-0">
+                        <span class="px-2 py-1 bg-primary text-primary-content font-bold text-center"><%= prop.llm_score %></span>
+                        <%= if prop.llm_investment_score do %>
+                          <span class={"px-2 py-0.5 text-[10px] font-bold text-center " <> investment_score_class(prop.llm_investment_score) <> " " <> investment_score_text_class(prop.llm_investment_score)}>
+                            INV <%= prop.llm_investment_score %>
+                          </span>
+                        <% end %>
+                      </div>
                       <div class="flex-1 min-w-0">
                         <div class="font-medium truncate"><%= String.slice(prop.title || "", 0, 50) %></div>
                         <div class="opacity-60">
@@ -365,6 +372,9 @@ defmodule RzeczywiscieWeb.AdminLive do
                             <span class="text-success">✨<%= length(prop.llm_positive_signals) %></span>
                           <% end %>
                         </div>
+                        <%= if prop.llm_summary do %>
+                          <div class="text-[10px] opacity-50 mt-1 truncate"><%= String.slice(prop.llm_summary || "", 0, 80) %>...</div>
+                        <% end %>
                       </div>
                       <button phx-click="view_llm_details" phx-value-id={prop.id} class="px-2 py-1 text-[10px] font-bold uppercase border border-info text-info hover:bg-info hover:text-info-content transition-colors shrink-0">
                         View
@@ -470,8 +480,28 @@ defmodule RzeczywiscieWeb.AdminLive do
               </div>
             </div>
 
+            <!-- AI Summary (NEW) -->
+            <%= if @selected_llm_property.llm_summary do %>
+              <div class="bg-info/10 border-2 border-info p-4">
+                <div class="flex items-start gap-3">
+                  <span class="text-2xl">💡</span>
+                  <div>
+                    <h4 class="text-sm font-bold uppercase mb-1">AI Summary</h4>
+                    <p class="text-sm"><%= @selected_llm_property.llm_summary %></p>
+                  </div>
+                </div>
+              </div>
+            <% end %>
+            
             <!-- LLM Scores Grid -->
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <!-- Investment Score (NEW - most important!) -->
+              <div class={"p-3 border-2 " <> investment_score_class(@selected_llm_property.llm_investment_score)}>
+                <div class={"text-3xl font-black " <> investment_score_text_class(@selected_llm_property.llm_investment_score)}>
+                  <%= @selected_llm_property.llm_investment_score || "?" %>/10
+                </div>
+                <div class="text-[10px] font-bold uppercase tracking-wide opacity-70">Investment</div>
+              </div>
               <div class="bg-primary/20 border-2 border-primary p-3">
                 <div class="text-3xl font-black text-primary"><%= @selected_llm_property.llm_score || 0 %></div>
                 <div class="text-[10px] font-bold uppercase tracking-wide opacity-70">LLM Score</div>
@@ -495,6 +525,30 @@ defmodule RzeczywiscieWeb.AdminLive do
                 <div class="text-[10px] font-bold uppercase tracking-wide opacity-70">Motivation</div>
               </div>
             </div>
+            
+            <!-- Extracted Data (NEW) -->
+            <%= if @selected_llm_property.llm_monthly_fee || @selected_llm_property.llm_year_built || @selected_llm_property.llm_floor_info do %>
+              <div class="grid grid-cols-3 gap-3">
+                <%= if @selected_llm_property.llm_monthly_fee do %>
+                  <div class="bg-base-200 border border-base-content/20 p-3 text-center">
+                    <div class="text-xl font-bold"><%= @selected_llm_property.llm_monthly_fee %> PLN</div>
+                    <div class="text-[10px] font-bold uppercase opacity-60">Monthly Fee</div>
+                  </div>
+                <% end %>
+                <%= if @selected_llm_property.llm_year_built do %>
+                  <div class="bg-base-200 border border-base-content/20 p-3 text-center">
+                    <div class="text-xl font-bold"><%= @selected_llm_property.llm_year_built %></div>
+                    <div class="text-[10px] font-bold uppercase opacity-60">Year Built</div>
+                  </div>
+                <% end %>
+                <%= if @selected_llm_property.llm_floor_info do %>
+                  <div class="bg-base-200 border border-base-content/20 p-3 text-center">
+                    <div class="text-xl font-bold"><%= @selected_llm_property.llm_floor_info %></div>
+                    <div class="text-[10px] font-bold uppercase opacity-60">Floor</div>
+                  </div>
+                <% end %>
+              </div>
+            <% end %>
 
             <!-- Positive Signals -->
             <%= if @selected_llm_property.llm_positive_signals && length(@selected_llm_property.llm_positive_signals) > 0 do %>
@@ -524,6 +578,40 @@ defmodule RzeczywiscieWeb.AdminLive do
                   <%= for flag <- @selected_llm_property.llm_red_flags do %>
                     <span class="px-3 py-2 text-sm bg-error/20 text-error border border-error/50 font-medium">
                       <%= flag %>
+                    </span>
+                  <% end %>
+                </div>
+              </div>
+            <% end %>
+            
+            <!-- Hidden Costs (NEW) -->
+            <%= if @selected_llm_property.llm_hidden_costs && length(@selected_llm_property.llm_hidden_costs) > 0 do %>
+              <div>
+                <h4 class="text-sm font-bold uppercase mb-2 flex items-center gap-2">
+                  <span>💸 Hidden Costs</span>
+                  <span class="px-2 py-1 text-xs bg-warning text-warning-content"><%= length(@selected_llm_property.llm_hidden_costs) %></span>
+                </h4>
+                <div class="flex flex-wrap gap-2">
+                  <%= for cost <- @selected_llm_property.llm_hidden_costs do %>
+                    <span class="px-3 py-2 text-sm bg-warning/20 text-warning-content border border-warning/50 font-medium">
+                      <%= cost %>
+                    </span>
+                  <% end %>
+                </div>
+              </div>
+            <% end %>
+            
+            <!-- Negotiation Hints (NEW) -->
+            <%= if @selected_llm_property.llm_negotiation_hints && length(@selected_llm_property.llm_negotiation_hints) > 0 do %>
+              <div>
+                <h4 class="text-sm font-bold uppercase mb-2 flex items-center gap-2">
+                  <span>🤝 Negotiation Hints</span>
+                  <span class="px-2 py-1 text-xs bg-accent text-accent-content"><%= length(@selected_llm_property.llm_negotiation_hints) %></span>
+                </h4>
+                <div class="flex flex-wrap gap-2">
+                  <%= for hint <- @selected_llm_property.llm_negotiation_hints do %>
+                    <span class="px-3 py-2 text-sm bg-accent/20 text-accent-content border border-accent/50 font-medium">
+                      <%= hint %>
                     </span>
                   <% end %>
                 </div>
@@ -1546,6 +1634,7 @@ defmodule RzeczywiscieWeb.AdminLive do
   
   defp run_llm_analysis(parent) do
     alias Rzeczywiscie.Services.LLMAnalyzer
+    alias Rzeczywiscie.RealEstate.DealScorer
     
     # Check if API key is configured
     api_key = Application.get_env(:rzeczywiscie, :openai_api_key, "")
@@ -1572,7 +1661,7 @@ defmodule RzeczywiscieWeb.AdminLive do
         Logger.info("No properties with descriptions pending LLM analysis")
         "No properties with descriptions pending LLM analysis (all already analyzed or no descriptions)"
       else
-        Logger.info("Analyzing #{total} property descriptions with LLM...")
+        Logger.info("Analyzing #{total} property descriptions with LLM (with context)...")
       
       results = properties
       |> Enum.with_index(1)
@@ -1581,30 +1670,50 @@ defmodule RzeczywiscieWeb.AdminLive do
         send(parent, {:llm_progress, idx})
         Logger.info("[#{idx}/#{total}] Analyzing property ##{property.id}...")
 
+        # Build property context for smarter LLM analysis
+        market_avg = get_market_avg_for_property(property)
+        context = %{
+          price: property.price && Decimal.to_float(property.price),
+          area: property.area_sqm && Decimal.to_float(property.area_sqm),
+          district: property.district,
+          market_avg_price_per_sqm: market_avg,
+          transaction_type: property.transaction_type || "sprzedaż"
+        }
+
         # Wrap in a Task with timeout to prevent hanging
-        # Use analyze_description directly - we only want to analyze properties WITH descriptions
-        # (no fallback to title analysis)
+        # Use context-aware analysis for better investment scoring
         task = Task.async(fn ->
-          LLMAnalyzer.analyze_description(property.description)
+          LLMAnalyzer.analyze_description_with_context(property.description, context)
         end)
 
         # 35-second timeout (slightly more than API timeout)
         result = case Task.yield(task, 35_000) || Task.shutdown(task) do
           {:ok, {:ok, signals}} ->
             # Convert atom keys to string for llm_condition and llm_motivation
+            # Now saving ALL LLM-generated fields including enhanced ones
             updates = %{
+              # Basic fields
               llm_urgency: signals.urgency,
-              llm_condition: if(is_atom(signals.condition), do: Atom.to_string(signals.condition), else: signals.condition),
-              llm_motivation: if(is_atom(signals.seller_motivation), do: Atom.to_string(signals.seller_motivation), else: signals.seller_motivation),
-              llm_positive_signals: signals.positive_signals,
-              llm_red_flags: signals.red_flags,
+              llm_condition: atom_to_string(signals.condition),
+              llm_motivation: atom_to_string(signals.seller_motivation),
+              llm_positive_signals: signals.positive_signals || [],
+              llm_red_flags: signals.red_flags || [],
               llm_score: LLMAnalyzer.calculate_signal_score(signals),
-              llm_analyzed_at: DateTime.utc_now()
+              llm_analyzed_at: DateTime.utc_now(),
+              # Enhanced fields (NEW - previously thrown away!)
+              llm_investment_score: signals[:investment_score],
+              llm_summary: signals[:summary],
+              llm_hidden_costs: signals[:hidden_costs] || [],
+              llm_negotiation_hints: signals[:negotiation_hints] || [],
+              llm_monthly_fee: signals[:monthly_fee],
+              llm_year_built: signals[:year_built],
+              llm_floor_info: signals[:floor_info]
             }
 
             case RealEstate.update_property(property, updates) do
               {:ok, _} ->
-                Logger.info("  ✓ Property ##{property.id} analyzed successfully")
+                inv_score = signals[:investment_score]
+                Logger.info("  ✓ Property ##{property.id} analyzed (investment: #{inv_score || "?"}/10)")
                 :ok
               {:error, changeset} ->
                 Logger.error("  ✗ Failed to save analysis for ##{property.id}: #{inspect(changeset.errors)}")
@@ -1638,5 +1747,33 @@ defmodule RzeczywiscieWeb.AdminLive do
       end
     end
   end
+  
+  # Helper to convert atoms to strings safely
+  defp atom_to_string(val) when is_atom(val), do: Atom.to_string(val)
+  defp atom_to_string(val) when is_binary(val), do: val
+  defp atom_to_string(_), do: "unknown"
+  
+  # Get market average price per sqm for a property's district
+  defp get_market_avg_for_property(property) do
+    alias Rzeczywiscie.RealEstate.DealScorer
+    
+    case DealScorer.get_district_quality(property.district, property.transaction_type) do
+      %{avg_price_sqm: avg} when not is_nil(avg) -> avg
+      _ -> nil
+    end
+  end
+  
+  # Investment score styling helpers
+  defp investment_score_class(score) when is_integer(score) and score >= 8, do: "bg-success/20 border-success"
+  defp investment_score_class(score) when is_integer(score) and score >= 5, do: "bg-info/20 border-info"
+  defp investment_score_class(score) when is_integer(score) and score >= 3, do: "bg-warning/20 border-warning"
+  defp investment_score_class(score) when is_integer(score), do: "bg-error/20 border-error"
+  defp investment_score_class(_), do: "bg-base-200 border-base-content/30"
+  
+  defp investment_score_text_class(score) when is_integer(score) and score >= 8, do: "text-success"
+  defp investment_score_text_class(score) when is_integer(score) and score >= 5, do: "text-info"
+  defp investment_score_text_class(score) when is_integer(score) and score >= 3, do: "text-warning"
+  defp investment_score_text_class(score) when is_integer(score), do: "text-error"
+  defp investment_score_text_class(_), do: ""
 
 end

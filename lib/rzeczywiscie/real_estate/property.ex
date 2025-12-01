@@ -37,7 +37,7 @@ defmodule Rzeczywiscie.RealEstate.Property do
     field :active, :boolean, default: true
     field :last_seen_at, :utc_datetime
     
-    # LLM analysis results
+    # LLM analysis results (basic)
     field :llm_urgency, :integer, default: 0
     field :llm_condition, :string
     field :llm_motivation, :string
@@ -45,6 +45,15 @@ defmodule Rzeczywiscie.RealEstate.Property do
     field :llm_positive_signals, {:array, :string}, default: []
     field :llm_score, :integer, default: 0
     field :llm_analyzed_at, :utc_datetime
+    
+    # LLM analysis results (enhanced)
+    field :llm_investment_score, :integer  # 0-10, AI's overall investment rating
+    field :llm_summary, :string  # AI-generated 1-2 sentence summary
+    field :llm_hidden_costs, {:array, :string}, default: []
+    field :llm_negotiation_hints, {:array, :string}, default: []
+    field :llm_monthly_fee, :integer  # Czynsz in PLN
+    field :llm_year_built, :integer
+    field :llm_floor_info, :string  # e.g. "3/5" (floor/total floors)
 
     timestamps(type: :utc_datetime)
   end
@@ -82,7 +91,15 @@ defmodule Rzeczywiscie.RealEstate.Property do
       :llm_red_flags,
       :llm_positive_signals,
       :llm_score,
-      :llm_analyzed_at
+      :llm_analyzed_at,
+      # Enhanced LLM fields
+      :llm_investment_score,
+      :llm_summary,
+      :llm_hidden_costs,
+      :llm_negotiation_hints,
+      :llm_monthly_fee,
+      :llm_year_built,
+      :llm_floor_info
     ])
     |> validate_required([:source, :external_id, :title, :url])
     |> validate_inclusion(:source, ["olx", "otodom", "gratka"])
@@ -107,9 +124,18 @@ defmodule Rzeczywiscie.RealEstate.Property do
       :llm_red_flags,
       :llm_positive_signals,
       :llm_score,
-      :llm_analyzed_at
+      :llm_analyzed_at,
+      # Enhanced fields
+      :llm_investment_score,
+      :llm_summary,
+      :llm_hidden_costs,
+      :llm_negotiation_hints,
+      :llm_monthly_fee,
+      :llm_year_built,
+      :llm_floor_info
     ])
     |> validate_number(:llm_urgency, greater_than_or_equal_to: 0, less_than_or_equal_to: 10)
+    |> validate_number(:llm_investment_score, greater_than_or_equal_to: 0, less_than_or_equal_to: 10)
     |> validate_inclusion(:llm_condition, ["unknown", "needs_renovation", "to_finish", "good", "renovated", "new", nil])
     |> validate_inclusion(:llm_motivation, ["unknown", "standard", "motivated", "very_motivated", nil])
   end

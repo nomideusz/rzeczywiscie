@@ -54,9 +54,9 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
   - "musi się sprzedać", "likwidacja", "poniżej rynku" = very_motivated
   """
   
-  # Enhanced prompt for full description analysis
+  # Enhanced prompt for full description analysis with structured data extraction
   @description_prompt """
-  You are a Polish real estate investment analyst. Analyze this property listing description in detail.
+  You are a Polish real estate investment analyst. Analyze this property listing description.
   
   Extract ALL relevant signals for an investor looking for good deals.
   
@@ -70,52 +70,96 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
     "hidden_costs": [],
     "negotiation_hints": [],
     "investment_score": 0-10,
-    "summary": "1-2 sentence summary"
+    "summary": "1-2 sentence summary in Polish",
+    "monthly_fee": null or number,
+    "year_built": null or number,
+    "floor_info": null or "X/Y"
   }
   
-  Look for these signals in Polish descriptions:
+  EXTRACTION RULES:
   
-  URGENCY (affects urgency score):
-  - "pilne", "pilna sprzedaż" → urgency 7-8
-  - "wyjazd za granicę", "przeprowadzka" → urgency 6-7
-  - "likwidacja", "musi się sprzedać" → urgency 9-10
-  - "okazja", "super cena" → urgency 4-5
+  NUMERIC VALUES (extract if mentioned):
+  - monthly_fee: Extract czynsz/opłaty in PLN (e.g. "czynsz 450 zł" → 450)
+  - year_built: Extract year built (e.g. "z 1985 roku", "budynek z 2020" → 1985/2020)
+  - floor_info: Extract floor/total (e.g. "3 piętro z 5" → "3/5", "parter" → "0")
   
-  CONDITION (affects condition field):
+  URGENCY SIGNALS (0-10):
+  - 0: No urgency signals
+  - 3-5: "okazja", "do negocjacji"  
+  - 6-8: "pilne", "szybka sprzedaż", "wyjazd"
+  - 9-10: "musi się sprzedać", "likwidacja"
+  
+  CONDITION:
   - "do remontu", "wymaga remontu" → needs_renovation
   - "stan deweloperski", "do wykończenia" → to_finish
-  - "po generalnym remoncie", "odnowione w 2023" → renovated
+  - "po generalnym remoncie" → renovated
   - "nowe budownictwo", "od dewelopera" → new
+  - "dobry stan", "gotowe do zamieszkania" → good
   
-  RED FLAGS (add to red_flags array):
-  - High fees: "czynsz administracyjny", "opłaty", "fundusz remontowy"
-  - Legal: "spółdzielcze", "własnościowe", "księga wieczysta"
-  - Problems: "hałas", "ruchliwa ulica", "problem z sąsiadami"
-  - Hidden issues: "do negocjacji", "cena orientacyjna"
+  RED FLAGS:
+  - High fees (>500 PLN/month for apartment)
+  - Legal issues: "spółdzielcze własnościowe", "bez księgi wieczystej"
+  - Problems: "hałas", "ruchliwa ulica"
+  - Ground floor without garden
   
-  POSITIVE SIGNALS (add to positive_signals array):
-  - Location: "cicha okolica", "blisko centrum", "park w pobliżu"
-  - Features: "balkon", "taras", "ogródek", "piwnica", "miejsce parkingowe"
-  - Condition: "nowe okna", "wymieniona instalacja", "klimatyzacja"
-  - Transport: "tramwaj", "autobus", "metro", "dobra komunikacja"
+  POSITIVE SIGNALS:
+  - Location: "cicha okolica", "blisko centrum", "park"
+  - Features: "balkon", "taras", "ogród", "piwnica", "parking"
+  - Quality: "nowe okna", "klimatyzacja", "po remoncie"
+  - Transport: "tramwaj", "metro", "dobra komunikacja"
   
-  HIDDEN COSTS (add to hidden_costs array):
-  - Any monthly fees mentioned (czynsz, opłaty)
-  - Renovation costs implied
-  - Parking costs
+  HIDDEN COSTS (strings, e.g. "Czynsz 450 PLN/mies", "Brak miejsca parkingowego"):
+  - Monthly administration fees
+  - Required renovations
+  - Missing parking costs
   
-  NEGOTIATION HINTS (add to negotiation_hints array):
-  - "cena do negocjacji"
-  - "bezpośrednio" (no agent = more flexibility)
-  - Long time on market
-  - Multiple similar listings from same seller
+  NEGOTIATION HINTS:
+  - "cena do negocjacji", "bezpośrednio", long time on market
   
-  INVESTMENT SCORE (0-10):
-  - Consider: price vs quality, location, potential, urgency
-  - 8-10: Excellent opportunity
-  - 5-7: Good potential
-  - 3-4: Average
-  - 0-2: Risky or overpriced
+  SUMMARY: Write 1-2 sentences in Polish summarizing key investment points.
+  """
+  
+  # Context-aware prompt template (filled in dynamically)
+  @context_prompt_template """
+  You are a Polish real estate investment analyst. Analyze this property listing.
+  
+  PROPERTY CONTEXT:
+  - Listed Price: %{price} PLN
+  - Area: %{area} m²
+  - Price per m²: %{price_per_sqm} PLN/m²
+  - District: %{district}
+  - Market avg price/m² in this district: %{market_avg} PLN/m²
+  - Transaction type: %{transaction_type}
+  
+  Given this context, analyze the description and assess if this is a good deal.
+  
+  Respond ONLY with valid JSON in this exact format:
+  {
+    "urgency": 0-10,
+    "condition": "unknown" | "needs_renovation" | "to_finish" | "good" | "renovated" | "new",
+    "red_flags": [],
+    "positive_signals": [],
+    "seller_motivation": "unknown" | "standard" | "motivated" | "very_motivated",
+    "hidden_costs": [],
+    "negotiation_hints": [],
+    "investment_score": 0-10,
+    "summary": "1-2 sentence summary in Polish",
+    "monthly_fee": null or number,
+    "year_built": null or number,
+    "floor_info": null or "X/Y"
+  }
+  
+  INVESTMENT SCORE GUIDELINES (considering the property context):
+  - 8-10: Significantly below market price, motivated seller, good condition
+  - 5-7: Fair price with some upside potential
+  - 3-4: Average deal, at market price
+  - 0-2: Overpriced or significant red flags
+  
+  Be especially attentive to:
+  1. Is %{price_per_sqm} PLN/m² below or above market avg of %{market_avg} PLN/m²?
+  2. Hidden costs that would increase effective price
+  3. Renovation needs that would add costs
+  4. Urgency signals suggesting negotiation room
   """
   
   @doc """
@@ -152,6 +196,50 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
   end
   
   def analyze_description(_), do: {:error, :description_too_short}
+  
+  @doc """
+  Analyze a property description with full property context for smarter analysis.
+  Passes price, area, district and market data to help LLM make better investment judgments.
+  
+  Context map should include:
+  - :price - Listed price in PLN
+  - :area - Area in m²
+  - :district - District name
+  - :market_avg_price_per_sqm - Average price/m² in the district
+  - :transaction_type - "sprzedaż" or "wynajem"
+  
+  Returns {:ok, signals} or {:error, reason}.
+  """
+  def analyze_description_with_context(description, context) when is_binary(description) and byte_size(description) > 50 do
+    api_key = get_api_key()
+    
+    if api_key == "" do
+      {:error, :api_key_not_configured}
+    else
+      price = context[:price] || 0
+      area = context[:area] || 0
+      price_per_sqm = if area > 0, do: round(price / area), else: 0
+      market_avg = context[:market_avg_price_per_sqm] || 0
+      
+      # Build context-aware prompt
+      system_prompt = @context_prompt_template
+      |> String.replace("%{price}", format_number(price))
+      |> String.replace("%{area}", format_number(area))
+      |> String.replace("%{price_per_sqm}", format_number(price_per_sqm))
+      |> String.replace("%{district}", context[:district] || "Unknown")
+      |> String.replace("%{market_avg}", format_number(market_avg))
+      |> String.replace("%{transaction_type}", context[:transaction_type] || "sprzedaż")
+      
+      truncated = String.slice(description, 0, 3000)
+      call_openai(truncated, api_key, system_prompt, "Property description:\n\n")
+    end
+  end
+  
+  def analyze_description_with_context(_, _), do: {:error, :description_too_short}
+  
+  defp format_number(num) when is_number(num), do: :erlang.float_to_binary(num * 1.0, decimals: 0)
+  defp format_number(%Decimal{} = num), do: Decimal.to_string(num, :normal)
+  defp format_number(_), do: "0"
   
   @doc """
   Analyze a property with both title and description.
@@ -360,7 +448,7 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
   # Normalize signals to expected format with defaults
   defp normalize_signals(signals) when is_map(signals) do
     base = %{
-      urgency: Map.get(signals, "urgency", 0),
+      urgency: normalize_integer(Map.get(signals, "urgency", 0)),
       condition: normalize_condition(Map.get(signals, "condition", "unknown")),
       red_flags: Map.get(signals, "red_flags", []) |> List.wrap(),
       positive_signals: Map.get(signals, "positive_signals", []) |> List.wrap(),
@@ -373,14 +461,36 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
     |> maybe_add_field(signals, "negotiation_hints", :negotiation_hints, [])
     |> maybe_add_field(signals, "investment_score", :investment_score, nil)
     |> maybe_add_field(signals, "summary", :summary, nil)
+    # New extracted numeric fields
+    |> maybe_add_field(signals, "monthly_fee", :monthly_fee, nil)
+    |> maybe_add_field(signals, "year_built", :year_built, nil)
+    |> maybe_add_field(signals, "floor_info", :floor_info, nil)
   end
   
   defp normalize_signals(_), do: default_signals()
   
+  defp normalize_integer(val) when is_integer(val), do: val
+  defp normalize_integer(val) when is_float(val), do: round(val)
+  defp normalize_integer(val) when is_binary(val) do
+    case Integer.parse(val) do
+      {int, _} -> int
+      :error -> 0
+    end
+  end
+  defp normalize_integer(_), do: 0
+  
   defp maybe_add_field(map, signals, json_key, atom_key, default) do
     value = Map.get(signals, json_key, default)
-    if value != default do
-      Map.put(map, atom_key, if(is_list(default), do: List.wrap(value), else: value))
+    if value != nil and value != default do
+      normalized_value = case atom_key do
+        key when key in [:monthly_fee, :year_built, :investment_score] -> 
+          normalize_integer(value)
+        _ when is_list(default) -> 
+          List.wrap(value)
+        _ -> 
+          value
+      end
+      Map.put(map, atom_key, normalized_value)
     else
       map
     end
