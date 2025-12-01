@@ -202,7 +202,8 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
 
     # First, try patterns with the number BEFORE the unit (most common)
     # Match: "75 m²", "45.5m2", "100 mkw"
-    regex_before = ~r/(?<![0-9-])(\d{1,4}(?:[,\.]\d{1,2})?)\s*#{area_unit_pattern}/iu
+    # IMPORTANT: negative lookbehind must include dot/comma to avoid matching "89" from "60.89"
+    regex_before = ~r/(?<![0-9.,])(\d{1,4}(?:[,\.]\d{1,2})?)\s*#{area_unit_pattern}/iu
 
     case Regex.run(regex_before, text) do
       [_, number_str] ->
@@ -211,7 +212,8 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
 
       _ ->
         # Also try format with number separated: "75 m 2" or with space before
-        regex_spaced = ~r/(\d{1,4}(?:[,\.]\d{1,2})?)\s+m\s*[\^²2]/iu
+        # IMPORTANT: negative lookbehind must include dot/comma to avoid matching "89" from "60.89"
+        regex_spaced = ~r/(?<![0-9.,])(\d{1,4}(?:[,\.]\d{1,2})?)\s+m\s*[\^²2]/iu
 
         case Regex.run(regex_spaced, text) do
           [_, number_str] -> parse_area_number(number_str, max_area: 2000, min_area: 5)
