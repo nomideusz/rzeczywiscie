@@ -361,6 +361,66 @@ defmodule Rzeczywiscie.RealEstate do
   end
 
   @doc """
+  Backfill missing districts from city field.
+  
+  Many properties have city as "Kraków, Podgórze" but empty district.
+  This extracts the district from the city field.
+  
+  Returns count of updated properties.
+  """
+  def backfill_districts_from_city do
+    require Logger
+    
+    # Find properties with empty district but city containing comma (like "Kraków, Podgórze")
+    properties = Repo.all(
+      from p in Property,
+        where: p.active == true and
+               (is_nil(p.district) or p.district == "") and
+               not is_nil(p.city) and
+               fragment("? LIKE '%,%'", p.city)
+    )
+    
+    Logger.info("Found #{length(properties)} properties with district in city field")
+    
+    updated_count = Enum.reduce(properties, 0, fn property, count ->
+      # Extract district from city (part after comma)
+      case String.split(property.city, ",", parts: 2) do
+        [_city, district_part] ->
+          district = String.trim(district_part)
+          if district != "" do
+            case Repo.update(Property.changeset(property, %{district: district})) do
+              {:ok, _} -> 
+                count + 1
+              {:error, _} -> 
+                count
+            end
+          else
+            count
+          end
+        _ ->
+          count
+      end
+    end)
+    
+    Logger.info("Backfilled #{updated_count} districts from city field")
+    updated_count
+  end
+  
+  @doc """
+  Count properties missing district but having it in city field.
+  """
+  def count_missing_districts do
+    Repo.aggregate(
+      from(p in Property,
+        where: p.active == true and
+               (is_nil(p.district) or p.district == "") and
+               not is_nil(p.city) and
+               fragment("? LIKE '%,%'", p.city)),
+      :count, :id
+    )
+  end
+  
+  @doc """
   Preview misclassified listings without fixing them.
   Returns counts of properties that would be reclassified.
   """

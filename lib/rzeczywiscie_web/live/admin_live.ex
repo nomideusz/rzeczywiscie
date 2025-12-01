@@ -207,6 +207,10 @@ defmodule RzeczywiscieWeb.AdminLive do
                 class={"px-4 py-3 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @cleanup_running != nil, do: "border-base-content/30 opacity-50", else: "border-accent text-accent hover:bg-accent hover:text-accent-content"}"}>
                 <%= if @cleanup_running == :bad_descriptions, do: "⏳ Running...", else: "📝 Clear Bad Descriptions" %>
               </button>
+              <button phx-click="run_cleanup_task" phx-value-type="backfill_districts" disabled={@cleanup_running != nil || @db_stats.missing_districts == 0}
+                class={"px-4 py-3 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @cleanup_running != nil || @db_stats.missing_districts == 0, do: "border-base-content/30 opacity-50", else: "border-info text-info hover:bg-info hover:text-info-content"}"}>
+                <%= if @cleanup_running == :backfill_districts, do: "⏳ Running...", else: "📍 Fill #{@db_stats.missing_districts} Districts" %>
+              </button>
             </div>
           </div>
         </div>
@@ -935,6 +939,9 @@ defmodule RzeczywiscieWeb.AdminLive do
       ),
       :count, :id
     )
+    
+    # Count properties missing district but having it in city field
+    missing_districts = RealEstate.count_missing_districts()
 
     %{
       active: active,
@@ -943,7 +950,8 @@ defmodule RzeczywiscieWeb.AdminLive do
       geocoded: geocoded,
       duplicates: duplicates,
       stale: stale,
-      invalid_prices: invalid_prices
+      invalid_prices: invalid_prices,
+      missing_districts: missing_districts
     }
   end
 
@@ -1033,6 +1041,11 @@ defmodule RzeczywiscieWeb.AdminLive do
   defp run_cleanup_task(:bad_descriptions) do
     {:ok, count} = RealEstate.clear_bad_descriptions()
     "Cleared #{count} bad descriptions (CSS/garbage content)"
+  end
+  
+  defp run_cleanup_task(:backfill_districts) do
+    count = RealEstate.backfill_districts_from_city()
+    "Backfilled #{count} districts from city field"
   end
 
   defp run_geocode_task do
