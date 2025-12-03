@@ -53,11 +53,40 @@
   let nameInputElement = null  // Reference to name input for focus
   let hoveredSpecialPixel = null  // Info about hovered special pixel {name, type, color}
   let mousePosition = { x: 0, y: 0 }  // Track mouse position for tooltip
-  let invalidPlacementBlink = false  // Visual feedback for invalid unicorn placement
+  let invalidPlacementBlink = false  // Visual feedback for invalid placement
+  let selectedAnimalType = 'chicken'  // Which animal to place next (auto-selected from available)
   const CURSOR_THROTTLE_MS = 250
 
-  // Unicorn shape definition - colorful pixel art unicorn
-  // Each pixel has position offset and color
+  // ===========================================
+  // ANIMAL COLOR DEFINITIONS
+  // ===========================================
+  
+  // Chicken colors
+  const CHICKEN_COLORS = {
+    body: '#FDF6E3',      // Cream body
+    comb: '#D94B2B',      // Red comb/wattle
+    beak: '#FFB800',      // Yellow/orange beak
+    eye: '#1a1a1a',       // Black eye
+    legs: '#FF8C00',      // Orange legs
+  }
+
+  // Pegasus colors
+  const PEGASUS_COLORS = {
+    body: '#FDF6E3',      // Cream body
+    accent: '#D8CFC8',    // Light gray/mauve for ears, legs, wings
+    eye: '#8B6914',       // Brown eyes
+    wing: '#E8E0F0',      // Light wing color
+  }
+
+  // Whale colors
+  const WHALE_COLORS = {
+    body: '#00BFFF',      // Bright blue body
+    spout: '#87CEEB',     // Light blue water spout
+    belly: '#FDF6E3',     // Cream belly
+    eye: '#1a1a1a',       // Black eye
+  }
+
+  // Unicorn colors
   const UNICORN_COLORS = {
     horn: '#FFE135',      // Yellow horn
     body: '#FFFFFF',      // White body
@@ -163,7 +192,192 @@
   // Left-facing unicorn (mirror of right)
   const UNICORN_SHAPE_LEFT = UNICORN_SHAPE_RIGHT.map(p => ({ dx: -p.dx, dy: p.dy, type: p.type }))
 
-  // Get unicorn shape by direction
+  // ===========================================
+  // CHICKEN SHAPE (~25 pixels) - MOST COMMON
+  // ===========================================
+  const CHICKEN_SHAPE_RIGHT = [
+    // Comb (red)
+    { dx: 1, dy: -6, type: 'comb' },
+    { dx: 2, dy: -6, type: 'comb' },
+    // Head
+    { dx: 1, dy: -5, type: 'body' },
+    { dx: 2, dy: -5, type: 'body' },
+    // Beak (orange/yellow)
+    { dx: -1, dy: -4, type: 'beak' },
+    { dx: 0, dy: -4, type: 'beak' },
+    // Head with eye
+    { dx: 1, dy: -4, type: 'eye' },
+    // Wattle (red)
+    { dx: 0, dy: -3, type: 'comb' },
+    // Body
+    { dx: 1, dy: -3, type: 'body' },
+    { dx: 2, dy: -3, type: 'body' },
+    { dx: 3, dy: -3, type: 'body' },
+    // Body middle
+    { dx: 1, dy: -2, type: 'body' },
+    { dx: 2, dy: -2, type: 'body' },
+    { dx: 3, dy: -2, type: 'body' },
+    { dx: 4, dy: -2, type: 'body' },
+    // Body bottom
+    { dx: 1, dy: -1, type: 'body' },
+    { dx: 2, dy: -1, type: 'body' },
+    { dx: 3, dy: -1, type: 'body' },
+    { dx: 4, dy: -1, type: 'body' },
+    // Legs (orange)
+    { dx: 2, dy: 0, type: 'legs' },
+    { dx: 3, dy: 0, type: 'legs' },
+    { dx: 2, dy: 1, type: 'legs' },
+    { dx: 3, dy: 1, type: 'legs' },
+    { dx: 1, dy: 1, type: 'legs' },  // feet
+    { dx: 4, dy: 1, type: 'legs' },  // feet
+  ]
+  const CHICKEN_SHAPE_LEFT = CHICKEN_SHAPE_RIGHT.map(p => ({ dx: -p.dx, dy: p.dy, type: p.type }))
+
+  // ===========================================
+  // PEGASUS SHAPE (~40 pixels) - MEDIUM RARITY
+  // ===========================================
+  const PEGASUS_SHAPE_RIGHT = [
+    // Ears
+    { dx: 0, dy: -8, type: 'accent' },
+    { dx: 2, dy: -8, type: 'accent' },
+    { dx: 0, dy: -7, type: 'body' },
+    { dx: 1, dy: -7, type: 'body' },
+    { dx: 2, dy: -7, type: 'body' },
+    // Head
+    { dx: 0, dy: -6, type: 'body' },
+    { dx: 1, dy: -6, type: 'body' },
+    { dx: 2, dy: -6, type: 'body' },
+    // Eyes (brown)
+    { dx: 0, dy: -5, type: 'eye' },
+    { dx: 2, dy: -5, type: 'eye' },
+    // Face
+    { dx: 1, dy: -5, type: 'body' },
+    // Neck + wing top
+    { dx: 1, dy: -4, type: 'body' },
+    { dx: 2, dy: -4, type: 'body' },
+    { dx: 4, dy: -4, type: 'accent' },  // wing tip
+    { dx: 5, dy: -4, type: 'accent' },  // wing tip
+    // Neck + wing middle
+    { dx: 1, dy: -3, type: 'body' },
+    { dx: 2, dy: -3, type: 'body' },
+    { dx: 3, dy: -3, type: 'accent' },  // wing
+    { dx: 4, dy: -3, type: 'accent' },  // wing
+    { dx: 5, dy: -3, type: 'accent' },  // wing
+    { dx: 6, dy: -3, type: 'accent' },  // wing
+    // Body + tail
+    { dx: 1, dy: -2, type: 'body' },
+    { dx: 2, dy: -2, type: 'body' },
+    { dx: 3, dy: -2, type: 'body' },
+    { dx: 4, dy: -2, type: 'body' },
+    { dx: 5, dy: -2, type: 'body' },
+    { dx: 6, dy: -2, type: 'body' },
+    { dx: 7, dy: -2, type: 'accent' },  // tail
+    { dx: 1, dy: -1, type: 'body' },
+    { dx: 2, dy: -1, type: 'body' },
+    { dx: 3, dy: -1, type: 'body' },
+    { dx: 4, dy: -1, type: 'body' },
+    { dx: 5, dy: -1, type: 'body' },
+    { dx: 6, dy: -1, type: 'body' },
+    // Legs
+    { dx: 1, dy: 0, type: 'accent' },
+    { dx: 2, dy: 0, type: 'accent' },
+    { dx: 5, dy: 0, type: 'accent' },
+    { dx: 6, dy: 0, type: 'accent' },
+  ]
+  const PEGASUS_SHAPE_LEFT = PEGASUS_SHAPE_RIGHT.map(p => ({ dx: -p.dx, dy: p.dy, type: p.type }))
+
+  // ===========================================
+  // WHALE SHAPE (~40 pixels) - RARE
+  // ===========================================
+  const WHALE_SHAPE_RIGHT = [
+    // Water spout
+    { dx: 2, dy: -8, type: 'spout' },
+    { dx: 4, dy: -8, type: 'spout' },
+    { dx: 1, dy: -7, type: 'spout' },
+    { dx: 3, dy: -7, type: 'spout' },
+    { dx: 5, dy: -7, type: 'spout' },
+    { dx: 2, dy: -6, type: 'spout' },
+    { dx: 4, dy: -6, type: 'spout' },
+    { dx: 3, dy: -5, type: 'spout' },
+    // Head top
+    { dx: 1, dy: -4, type: 'body' },
+    { dx: 2, dy: -4, type: 'body' },
+    { dx: 3, dy: -4, type: 'body' },
+    { dx: 4, dy: -4, type: 'body' },
+    // Head with eye
+    { dx: 0, dy: -3, type: 'body' },
+    { dx: 1, dy: -3, type: 'eye' },
+    { dx: 2, dy: -3, type: 'body' },
+    { dx: 3, dy: -3, type: 'body' },
+    { dx: 4, dy: -3, type: 'body' },
+    { dx: 5, dy: -3, type: 'body' },
+    { dx: 6, dy: -3, type: 'body' },
+    // Body
+    { dx: 0, dy: -2, type: 'body' },
+    { dx: 1, dy: -2, type: 'body' },
+    { dx: 2, dy: -2, type: 'body' },
+    { dx: 3, dy: -2, type: 'body' },
+    { dx: 4, dy: -2, type: 'body' },
+    { dx: 5, dy: -2, type: 'body' },
+    { dx: 6, dy: -2, type: 'body' },
+    { dx: 7, dy: -2, type: 'body' },
+    { dx: 8, dy: -2, type: 'body' },
+    // Belly (cream) + tail start
+    { dx: 0, dy: -1, type: 'belly' },
+    { dx: 1, dy: -1, type: 'belly' },
+    { dx: 2, dy: -1, type: 'belly' },
+    { dx: 3, dy: -1, type: 'belly' },
+    { dx: 4, dy: -1, type: 'body' },
+    { dx: 5, dy: -1, type: 'body' },
+    { dx: 6, dy: -1, type: 'body' },
+    { dx: 7, dy: -1, type: 'body' },
+    { dx: 8, dy: -1, type: 'body' },
+    { dx: 9, dy: -1, type: 'body' },
+    // Bottom
+    { dx: 1, dy: 0, type: 'body' },
+    { dx: 2, dy: 0, type: 'body' },
+    { dx: 3, dy: 0, type: 'body' },
+    { dx: 4, dy: 0, type: 'body' },
+    { dx: 5, dy: 0, type: 'body' },
+    { dx: 6, dy: 0, type: 'body' },
+    { dx: 9, dy: 0, type: 'body' },  // tail fluke
+    { dx: 10, dy: 0, type: 'body' }, // tail fluke
+  ]
+  const WHALE_SHAPE_LEFT = WHALE_SHAPE_RIGHT.map(p => ({ dx: -p.dx, dy: p.dy, type: p.type }))
+
+  // ===========================================
+  // SHAPE & COLOR GETTERS
+  // ===========================================
+  
+  // Get shape by animal type and direction
+  function getAnimalShape(animalType, direction) {
+    const shapes = {
+      chicken: direction === 'left' ? CHICKEN_SHAPE_LEFT : CHICKEN_SHAPE_RIGHT,
+      pegasus: direction === 'left' ? PEGASUS_SHAPE_LEFT : PEGASUS_SHAPE_RIGHT,
+      whale: direction === 'left' ? WHALE_SHAPE_LEFT : WHALE_SHAPE_RIGHT,
+      unicorn: direction === 'left' ? UNICORN_SHAPE_LEFT : UNICORN_SHAPE_RIGHT,
+    }
+    return shapes[animalType] || shapes.unicorn
+  }
+
+  // Get colors by animal type
+  function getAnimalColors(animalType) {
+    const colors = {
+      chicken: CHICKEN_COLORS,
+      pegasus: PEGASUS_COLORS,
+      whale: WHALE_COLORS,
+      unicorn: UNICORN_COLORS,
+    }
+    return colors[animalType] || colors.unicorn
+  }
+
+  // Get emoji by animal type
+  function getAnimalEmoji(animalType) {
+    const emojis = { chicken: '🐔', pegasus: '🪽', whale: '🐋', unicorn: '🦄' }
+    return emojis[animalType] || '🦄'
+  }
+
+  // Legacy function for unicorn compatibility
   function getUnicornShape(direction) {
     return direction === 'left' ? UNICORN_SHAPE_LEFT : UNICORN_SHAPE_RIGHT
   }
@@ -175,12 +389,12 @@
     return parts[1] || 'right'
   }
 
-  // Check if a position is part of any unicorn shape
-  function getUnicornAtPosition(x, y) {
+  // Check if a position is part of any special animal shape
+  function getSpecialPixelAtPosition(x, y) {
     for (const pixel of pixels) {
-      if (pixel.is_special && pixel.special_type?.startsWith('unicorn')) {
-        const direction = getUnicornDirection(pixel.special_type)
-        const shape = getUnicornShape(direction)
+      if (pixel.is_special) {
+        const [animalType, direction] = (pixel.special_type || 'unicorn:right').split(':')
+        const shape = getAnimalShape(animalType, direction || 'right')
         for (const offset of shape) {
           if (pixel.x + offset.dx === x && pixel.y + offset.dy === y) {
             return pixel
@@ -189,6 +403,11 @@
       }
     }
     return null
+  }
+  
+  // Legacy alias for compatibility
+  function getUnicornAtPosition(x, y) {
+    return getSpecialPixelAtPosition(x, y)
   }
 
   // Generate device fingerprint based on stable hardware characteristics
@@ -353,6 +572,18 @@
     (15 - secondsRemaining) / 15                               // Normal (15s)
   )
 
+  // Auto-select the rarest available animal (unicorn > whale > pegasus > chicken)
+  $: {
+    const specials = userStats.special_pixels_available || {}
+    if (specials['unicorn'] > 0) selectedAnimalType = 'unicorn'
+    else if (specials['whale'] > 0) selectedAnimalType = 'whale'
+    else if (specials['pegasus'] > 0) selectedAnimalType = 'pegasus'
+    else if (specials['chicken'] > 0) selectedAnimalType = 'chicken'
+  }
+
+  // Check if any special animal is available
+  $: hasAnySpecialAvailable = Object.values(userStats.special_pixels_available || {}).some(c => c > 0)
+
   // Calculate responsive pixel size based on available space
   function calculatePixelSize() {
     if (!canvasContainer) return
@@ -476,68 +707,91 @@
     // Reset shadow before drawing special pixels
     ctx.shadowBlur = 0
 
-    // Draw special pixels as shapes (unicorns, etc.)
+    // Draw special pixels as shapes (all animals)
     pixels.forEach(pixel => {
       if (!pixel.is_special) return
 
-      if (pixel.special_type?.startsWith('unicorn')) {
-        // Rainbow glow effect
-        const hue = (Date.now() / 20) % 360
-        ctx.shadowBlur = 15
+      // Parse special_type to get animal type and direction
+      // Format: "chicken:right", "pegasus:left", "whale:right", "unicorn:left"
+      const [animalType, direction] = (pixel.special_type || 'unicorn:right').split(':')
+      const shape = getAnimalShape(animalType, direction || 'right')
+      const colors = getAnimalColors(animalType)
+      
+      // Glow effect - rainbow for unicorn, colored for others
+      const hue = (Date.now() / 20) % 360
+      ctx.shadowBlur = 15
+      if (animalType === 'unicorn') {
         ctx.shadowColor = `hsl(${hue}, 100%, 60%)`
+      } else if (animalType === 'whale') {
+        ctx.shadowColor = '#00BFFF'
+      } else if (animalType === 'chicken') {
+        ctx.shadowColor = '#FFB800'
+      } else if (animalType === 'pegasus') {
+        ctx.shadowColor = '#E8D8F0'  // Light purple glow for pegasus
+      }
+      
+      shape.forEach(offset => {
+        const px = (pixel.x + offset.dx) * cellSize + 1
+        const py = (pixel.y + offset.dy) * cellSize + 1
+        const color = colors[offset.type] || '#FFFFFF'
         
-        // Get correct shape based on direction
-        const direction = getUnicornDirection(pixel.special_type)
-        const shape = getUnicornShape(direction)
-        
-        shape.forEach(offset => {
-          const px = (pixel.x + offset.dx) * cellSize + 1
-          const py = (pixel.y + offset.dy) * cellSize + 1
-          const color = UNICORN_COLORS[offset.type] || '#FFFFFF'
-          
-          // For white/body pixels, add a subtle outline so they're visible
-          if (offset.type === 'body') {
-            ctx.fillStyle = '#E8E0F0' // Very light lavender tint
-            ctx.fillRect(px - 1, py - 1, cellSize, cellSize)
-          }
-          
-          ctx.fillStyle = color
-          ctx.fillRect(px, py, cellSize - 2, cellSize - 2)
-        })
-        
-        // Draw claimer name directly on the unicorn with shining effect
-        if (pixel.claimer_name) {
-          ctx.shadowBlur = 0
-          
-          // Calculate unicorn center position based on direction
-          // Right-facing: body at dx:3-4, Left-facing: body at dx:-3 to -4
-          const bodyOffsetX = direction === 'left' ? -3 : 3
-          const centerX = (pixel.x + bodyOffsetX) * cellSize + cellSize / 2
-          const centerY = (pixel.y - 3) * cellSize + cellSize / 2
-          
-          // Dynamic font size based on cell size, small but readable
-          const fontSize = Math.max(8, Math.min(cellSize * 0.9, 14))
-          
-          // Rainbow shining text effect
-          const textHue = (Date.now() / 15 + pixel.x * 10) % 360
-          
-          ctx.font = `bold ${fontSize}px "Segoe UI", system-ui, sans-serif`
-          ctx.textAlign = 'center'
-          ctx.textBaseline = 'middle'
-          
-          // Glowing outline for visibility
-          ctx.shadowBlur = 6
-          ctx.shadowColor = `hsl(${textHue}, 100%, 70%)`
-          ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)'
-          ctx.lineWidth = 2.5
-          ctx.strokeText(pixel.claimer_name, centerX, centerY)
-          
-          // Shining rainbow fill
-          ctx.fillStyle = `hsl(${textHue}, 100%, 85%)`
-          ctx.fillText(pixel.claimer_name, centerX, centerY)
-          
-          ctx.shadowBlur = 0
+        // For light/body pixels, add a subtle outline so they're visible
+        if (offset.type === 'body' || offset.type === 'belly') {
+          ctx.fillStyle = animalType === 'unicorn' ? '#E8E0F0' : '#F5F0E8'
+          ctx.fillRect(px - 1, py - 1, cellSize, cellSize)
         }
+        
+        ctx.fillStyle = color
+        ctx.fillRect(px, py, cellSize - 2, cellSize - 2)
+      })
+      
+      // Draw claimer name with shining effect
+      if (pixel.claimer_name) {
+        ctx.shadowBlur = 0
+        
+        // Calculate center position based on animal type and direction
+        let bodyOffsetX, bodyOffsetY
+        if (animalType === 'unicorn') {
+          bodyOffsetX = direction === 'left' ? -3 : 3
+          bodyOffsetY = -3
+        } else if (animalType === 'whale') {
+          bodyOffsetX = direction === 'left' ? -4 : 4
+          bodyOffsetY = -2
+        } else if (animalType === 'pegasus') {
+          bodyOffsetX = direction === 'left' ? -3 : 3
+          bodyOffsetY = -2
+        } else { // chicken
+          bodyOffsetX = direction === 'left' ? -2 : 2
+          bodyOffsetY = -2
+        }
+        
+        const centerX = (pixel.x + bodyOffsetX) * cellSize + cellSize / 2
+        const centerY = (pixel.y + bodyOffsetY) * cellSize + cellSize / 2
+        
+        // Dynamic font size based on cell size, small but readable
+        const fontSize = Math.max(8, Math.min(cellSize * 0.9, 14))
+        
+        // Shining text effect - rainbow for unicorn, gold for others
+        const textHue = animalType === 'unicorn' 
+          ? (Date.now() / 15 + pixel.x * 10) % 360 
+          : 45 // gold
+        
+        ctx.font = `bold ${fontSize}px "Segoe UI", system-ui, sans-serif`
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        
+        // Glowing outline for visibility
+        ctx.shadowBlur = 6
+        ctx.shadowColor = `hsl(${textHue}, 100%, 70%)`
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)'
+        ctx.lineWidth = 2.5
+        ctx.strokeText(pixel.claimer_name, centerX, centerY)
+        
+        // Shining fill
+        ctx.fillStyle = `hsl(${textHue}, 100%, 85%)`
+        ctx.fillText(pixel.claimer_name, centerX, centerY)
+        
+        ctx.shadowBlur = 0
       }
     })
 
@@ -587,36 +841,48 @@
           }
         }
         ctx.shadowBlur = 0
-      } else if (!pendingSpecialPixel && Object.values(userStats.special_pixels_available || {}).some(c => c > 0)) {
-        // Draw colorful unicorn shape preview following cursor (when unicorn is available)
-        const isValidPosition = isUnicornPositionValid(hoveredPixel.x, hoveredPixel.y, unicornDirection)
+      } else if (!pendingSpecialPixel && hasAnySpecialAvailable) {
+        // Draw animal shape preview following cursor (when any special is available)
+        const isValidPosition = isAnimalPositionValid(hoveredPixel.x, hoveredPixel.y, selectedAnimalType, unicornDirection)
         ctx.globalAlpha = 0.6
         
+        const colors = getAnimalColors(selectedAnimalType)
+        
         if (isValidPosition && !invalidPlacementBlink) {
-          // Valid position - show rainbow glow
-          const hue = (Date.now() / 20) % 360
-          ctx.shadowBlur = 12
-          ctx.shadowColor = `hsl(${hue}, 100%, 60%)`
+          // Valid position - show glow based on animal type
+          if (selectedAnimalType === 'unicorn') {
+            ctx.shadowBlur = 12
+            ctx.shadowColor = `hsl(${(Date.now() / 20) % 360}, 100%, 60%)`
+          } else if (selectedAnimalType === 'whale') {
+            ctx.shadowBlur = 12
+            ctx.shadowColor = '#00BFFF'
+          } else if (selectedAnimalType === 'chicken') {
+            ctx.shadowBlur = 12
+            ctx.shadowColor = '#FFB800'
+          } else if (selectedAnimalType === 'pegasus') {
+            ctx.shadowBlur = 12
+            ctx.shadowColor = '#E8D8F0'  // Light purple glow for pegasus
+          }
         } else {
           // Invalid position or blink - show red glow
           ctx.shadowBlur = 12
           ctx.shadowColor = 'rgba(239, 68, 68, 0.8)'
         }
         
-        const previewShape = getUnicornShape(unicornDirection)
+        const previewShape = getAnimalShape(selectedAnimalType, unicornDirection)
         previewShape.forEach(offset => {
           const px = hoveredPixel.x + offset.dx
           const py = hoveredPixel.y + offset.dy
           if (px >= 0 && px < width && py >= 0 && py < height) {
-            let color = UNICORN_COLORS[offset.type] || '#FFFFFF'
+            let color = colors[offset.type] || '#FFFFFF'
             
             // Tint red if invalid
             if (!isValidPosition || invalidPlacementBlink) {
               color = '#EF4444'  // Red color for invalid position
             }
             
-            if (offset.type === 'body' && (isValidPosition && !invalidPlacementBlink)) {
-              ctx.fillStyle = '#E8E0F0'
+            if ((offset.type === 'body' || offset.type === 'belly') && (isValidPosition && !invalidPlacementBlink)) {
+              ctx.fillStyle = selectedAnimalType === 'unicorn' ? '#E8E0F0' : '#F5F0E8'
               ctx.fillRect(px * cellSize, py * cellSize, cellSize, cellSize)
             }
             ctx.fillStyle = color
@@ -638,21 +904,37 @@
       ctx.globalAlpha = 1.0
     }
 
-    // Draw locked pending unicorn position (when placing)
+    // Draw locked pending animal position (when placing)
     if (pendingSpecialPixel) {
-      const hue = (Date.now() / 20) % 360
-      ctx.shadowBlur = 15
-      ctx.shadowColor = `hsl(${hue}, 100%, 60%)`
+      const colors = getAnimalColors(selectedAnimalType)
+      
+      // Set glow based on animal type
+      if (selectedAnimalType === 'unicorn') {
+        ctx.shadowBlur = 15
+        ctx.shadowColor = `hsl(${(Date.now() / 20) % 360}, 100%, 60%)`
+      } else if (selectedAnimalType === 'whale') {
+        ctx.shadowBlur = 15
+        ctx.shadowColor = '#00BFFF'
+      } else if (selectedAnimalType === 'chicken') {
+        ctx.shadowBlur = 15
+        ctx.shadowColor = '#FFB800'
+      } else if (selectedAnimalType === 'pegasus') {
+        ctx.shadowBlur = 15
+        ctx.shadowColor = '#E8D8F0'
+      }
+      
       ctx.globalAlpha = unicornPositionValid ? 0.9 : 0.4
       
-      const previewShape = getUnicornShape(unicornDirection)
+      const previewShape = getAnimalShape(selectedAnimalType, unicornDirection)
       previewShape.forEach(offset => {
         const px = pendingSpecialPixel.x + offset.dx
         const py = pendingSpecialPixel.y + offset.dy
         if (px >= 0 && px < width && py >= 0 && py < height) {
-          const color = UNICORN_COLORS[offset.type] || '#FFFFFF'
-          if (offset.type === 'body') {
-            ctx.fillStyle = unicornPositionValid ? '#E8E0F0' : '#FFE0E0'
+          const color = colors[offset.type] || '#FFFFFF'
+          if (offset.type === 'body' || offset.type === 'belly') {
+            ctx.fillStyle = unicornPositionValid 
+              ? (selectedAnimalType === 'unicorn' ? '#E8E0F0' : '#F5F0E8') 
+              : '#FFE0E0'
             ctx.fillRect(px * cellSize, py * cellSize, cellSize, cellSize)
           }
           ctx.fillStyle = unicornPositionValid ? color : '#FF6666'
@@ -732,9 +1014,9 @@
     }
   }
 
-  // Check if unicorn position is valid (no overlapping pixels)
-  function isUnicornPositionValid(x, y, direction) {
-    const shape = getUnicornShape(direction)
+  // Check if animal position is valid (no overlapping pixels)
+  function isAnimalPositionValid(x, y, animalType, direction) {
+    const shape = getAnimalShape(animalType, direction)
     for (const offset of shape) {
       const px = x + offset.dx
       const py = y + offset.dy
@@ -751,9 +1033,14 @@
     return true
   }
 
+  // Legacy alias for compatibility
+  function isUnicornPositionValid(x, y, direction) {
+    return isAnimalPositionValid(x, y, selectedAnimalType, direction)
+  }
+
   // Reactive check for position validity - also triggers redraw
   $: unicornPositionValid = pendingSpecialPixel 
-    ? isUnicornPositionValid(pendingSpecialPixel.x, pendingSpecialPixel.y, unicornDirection)
+    ? isAnimalPositionValid(pendingSpecialPixel.x, pendingSpecialPixel.y, selectedAnimalType, unicornDirection)
     : true
   
   // Calculate screen position for the inline control panel
@@ -812,7 +1099,8 @@
         x: pendingSpecialPixel.x,
         y: pendingSpecialPixel.y,
         name: claimerName.trim(),
-        direction: unicornDirection
+        direction: unicornDirection,
+        animal_type: selectedAnimalType
       })
       pendingSpecialPixel = null
       claimerName = ''
@@ -1383,12 +1671,14 @@
             </div>
 
             <!-- Current Mode & Available Pixels -->
-            {#if Object.values(userStats.special_pixels_available || {}).some(c => c > 0)}
+            {#if hasAnySpecialAvailable}
               <div class="pt-2 border-t border-neutral-200">
                 <div class="text-[10px] font-bold text-neutral-900 mb-1 flex items-center gap-1">
-                  <span class="bg-gradient-to-r from-purple-600 via-pink-500 to-purple-600 bg-clip-text text-transparent">Next click: 🦄</span>
+                  <span class="{selectedAnimalType === 'unicorn' ? 'bg-gradient-to-r from-purple-600 via-pink-500 to-purple-600 bg-clip-text text-transparent' : 'text-neutral-900'}">
+                    Next click: {getAnimalEmoji(selectedAnimalType)}
+                  </span>
                 </div>
-                <div class="text-[9px] text-neutral-400">Tap canvas to place unicorn</div>
+                <div class="text-[9px] text-neutral-400">Tap canvas to place {selectedAnimalType}</div>
               </div>
             {:else if userStats.mega_pixels_available > 0 || userStats.massive_pixels_available > 0}
               <div class="pt-2 border-t border-neutral-200">
@@ -1453,11 +1743,11 @@
           </div>
 
           <!-- Current Mode & Available Pixels -->
-          {#if Object.values(userStats.special_pixels_available || {}).some(c => c > 0)}
+          {#if hasAnySpecialAvailable}
             <div class="mt-3 pt-2 border-t border-neutral-200">
-              <div class="text-xs font-bold text-center py-2 px-3 bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded">
-                <div class="bg-gradient-to-r from-purple-600 via-pink-500 to-purple-600 bg-clip-text text-transparent">
-                  Next: 🦄 Unicorn
+              <div class="text-xs font-bold text-center py-2 px-3 {selectedAnimalType === 'unicorn' ? 'bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200' : selectedAnimalType === 'whale' ? 'bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200' : selectedAnimalType === 'pegasus' ? 'bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200' : 'bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200'} rounded">
+                <div class="{selectedAnimalType === 'unicorn' ? 'bg-gradient-to-r from-purple-600 via-pink-500 to-purple-600 bg-clip-text text-transparent' : 'text-neutral-900'}">
+                  Next: {getAnimalEmoji(selectedAnimalType)} {selectedAnimalType.charAt(0).toUpperCase() + selectedAnimalType.slice(1)}
                 </div>
                 <div class="text-[10px] text-neutral-500 mt-0.5 font-normal">Click canvas to place</div>
               </div>
@@ -1558,7 +1848,7 @@
               disabled={!claimerName.trim() || !unicornPositionValid}
               class="flex-1 px-2 py-1.5 bg-neutral-900 text-white text-xs font-bold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed hover:bg-neutral-800"
             >
-              Place 🦄
+              Place {getAnimalEmoji(selectedAnimalType)}
             </button>
           </div>
           

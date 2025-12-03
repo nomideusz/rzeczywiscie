@@ -91,7 +91,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
       {:noreply, put_flash(socket, :error, "Position already occupied")}
     else
       case PixelCanvas.place_pixel(x, y, color, user_id) do
-        {:ok, pixel} ->
+        {:ok, pixel, lucky_animal: lucky_animal} ->
           # Update pixels map with the newly placed pixel
           pixels = Map.put(socket.assigns.pixels, {x, y}, %{
             color: color,
@@ -139,6 +139,15 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
            |> assign(:stats, stats)
            |> assign(:user_stats, user_stats)
            |> assign(:milestone_progress, milestone_progress)
+
+          # Show celebration if lucky animal won!
+          socket = case lucky_animal do
+            "chicken" -> put_flash(socket, :info, "🍀 LUCKY! You found a Chicken! 🐔✨")
+            "pegasus" -> put_flash(socket, :info, "🍀 LUCKY! You found a Pegasus! 🪽✨")
+            "whale" -> put_flash(socket, :info, "🍀 RARE! You found a Whale! 🐋✨")
+            "unicorn" -> put_flash(socket, :info, "🍀 LEGENDARY! You found a Unicorn! 🦄✨")
+            _ -> socket
+          end
 
           {:noreply, socket}
 
@@ -289,8 +298,8 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
     user_id = socket.assigns.user_id
     user_stats = socket.assigns.user_stats
     
-    # Determine which special pixel type to use (find first available)
-    special_type = 
+    # Use the animal type sent from frontend, or find first available
+    special_type = params["animal_type"] || 
       Enum.find_value(user_stats.special_pixels_available || %{}, fn {type, count} ->
         if count > 0, do: type, else: nil
       end) || "unicorn"
@@ -349,7 +358,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
          |> assign(:user_stats, user_stats)
          |> assign(:milestone_progress, milestone_progress)
          |> assign(:pixel_mode, :normal)
-         |> put_flash(:info, "#{String.capitalize(to_string(special_type))} claimed by #{name}! 🦄")}
+         |> put_flash(:info, "#{animal_emoji(special_type)} #{String.capitalize(to_string(special_type))} claimed by #{name}!")}
 
       {:error, :no_special_pixel_available} ->
         {:noreply, put_flash(socket, :error, "You don't have this special pixel available")}
@@ -657,6 +666,12 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
 
   defp get_seconds_remaining(:ok), do: 0
   defp get_seconds_remaining({:error, seconds}), do: seconds
+
+  defp animal_emoji("chicken"), do: "🐔"
+  defp animal_emoji("pegasus"), do: "🪽"
+  defp animal_emoji("whale"), do: "🐋"
+  defp animal_emoji("unicorn"), do: "🦄"
+  defp animal_emoji(_), do: "✨"
 
   defp format_error(changeset) do
     errors =
