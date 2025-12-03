@@ -5,9 +5,10 @@ defmodule Rzeczywiscie.Friends do
 
   import Ecto.Query, warn: false
   alias Rzeczywiscie.Repo
-  alias Rzeczywiscie.Friends.{Photo, Room}
+  alias Rzeczywiscie.Friends.{Photo, Room, Message}
 
   @max_photos 100
+  @max_messages 50
 
   # --- PubSub ---
 
@@ -176,6 +177,49 @@ defmodule Rzeczywiscie.Friends do
       content_type: photo.content_type,
       file_size: photo.file_size,
       uploaded_at: photo.inserted_at
+    }
+  end
+
+  # --- Messages ---
+
+  @doc """
+  List messages in a room.
+  """
+  def list_messages(room_id, limit \\ @max_messages) do
+    Message
+    |> where([m], m.room_id == ^room_id)
+    |> order_by([m], asc: m.inserted_at)
+    |> limit(^limit)
+    |> Repo.all()
+    |> Enum.map(&message_to_map/1)
+  end
+
+  @doc """
+  Create a new message in a room and broadcast it.
+  """
+  def create_message(attrs, room_code) do
+    %Message{}
+    |> Message.changeset(attrs)
+    |> Repo.insert()
+    |> case do
+      {:ok, message} ->
+        message_map = message_to_map(message)
+        broadcast(room_code, :new_message, message_map)
+        {:ok, message_map}
+
+      error ->
+        error
+    end
+  end
+
+  # Convert Message struct to map for LiveView
+  defp message_to_map(message) do
+    %{
+      id: message.id,
+      user_id: message.user_id,
+      user_color: message.user_color,
+      content: message.content,
+      sent_at: message.inserted_at
     }
   end
 end

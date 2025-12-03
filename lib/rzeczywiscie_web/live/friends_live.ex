@@ -2,7 +2,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
   use RzeczywiscieWeb, :live_view
   import RzeczywiscieWeb.Layouts
   alias Rzeczywiscie.Friends
-  alias Rzeczywiscie.Friends.{Room, Presence}
+  alias Rzeczywiscie.Friends.Presence
 
   def mount(%{"room" => room_code}, _session, socket) do
     mount_room(socket, room_code)
@@ -17,24 +17,19 @@ defmodule RzeczywiscieWeb.FriendsLive do
     user_color = generate_user_color(user_id)
     session_id = generate_session_id()
 
-    # Get or create room
     room = case Friends.get_room_by_code(room_code) do
       nil -> Friends.get_or_create_lobby()
       r -> r
     end
 
     if connected?(socket) do
-      # Subscribe to room updates
       Friends.subscribe(room.code)
-      
-      # Subscribe to presence
       Phoenix.PubSub.subscribe(Rzeczywiscie.PubSub, "friends:presence:#{room.code}")
-      
-      # Track presence
       Presence.track_user(self(), room.code, user_id, user_color)
     end
 
     photos = Friends.list_photos(room.id)
+    messages = Friends.list_messages(room.id)
     viewers = if connected?(socket), do: Presence.list_users(room.code), else: []
 
     socket =
@@ -46,12 +41,15 @@ defmodule RzeczywiscieWeb.FriendsLive do
       |> assign(:page_title, "#{room.emoji} #{room.name || room.code}")
       |> assign(:photos, photos)
       |> assign(:photo_count, Friends.count_photos(room.id))
+      |> assign(:messages, messages)
+      |> assign(:message_input, "")
       |> assign(:viewers, viewers)
       |> assign(:uploading, false)
       |> assign(:show_room_modal, false)
-      |> assign(:new_room_code, "")
       |> assign(:join_room_code, "")
+      |> assign(:new_room_name, "")
       |> stream(:photos, photos)
+      |> stream(:messages, messages)
       |> allow_upload(:photo,
         accept: ~w(.jpg .jpeg .png .gif .webp),
         max_entries: 1,
@@ -65,27 +63,21 @@ defmodule RzeczywiscieWeb.FriendsLive do
 
   def handle_params(%{"room" => room_code}, _uri, socket) do
     if socket.assigns.room.code != room_code do
-      # Switch rooms
       old_room = socket.assigns.room
-      
-      # Unsubscribe from old room
       Friends.unsubscribe(old_room.code)
       Phoenix.PubSub.unsubscribe(Rzeczywiscie.PubSub, "friends:presence:#{old_room.code}")
       
-      # Get new room
       room = case Friends.get_room_by_code(room_code) do
         nil -> Friends.get_or_create_lobby()
         r -> r
       end
       
-      # Subscribe to new room
       Friends.subscribe(room.code)
       Phoenix.PubSub.subscribe(Rzeczywiscie.PubSub, "friends:presence:#{room.code}")
-      
-      # Track presence in new room
       Presence.track_user(self(), room.code, socket.assigns.user_id, socket.assigns.user_color)
       
       photos = Friends.list_photos(room.id)
+      messages = Friends.list_messages(room.id)
       viewers = Presence.list_users(room.code)
       
       {:noreply,
@@ -94,244 +86,249 @@ defmodule RzeczywiscieWeb.FriendsLive do
        |> assign(:page_title, "#{room.emoji} #{room.name || room.code}")
        |> assign(:photos, photos)
        |> assign(:photo_count, Friends.count_photos(room.id))
+       |> assign(:messages, messages)
        |> assign(:viewers, viewers)
-       |> stream(:photos, photos, reset: true)}
+       |> stream(:photos, photos, reset: true)
+       |> stream(:messages, messages, reset: true)}
     else
       {:noreply, socket}
     end
   end
 
-  def handle_params(_params, _uri, socket) do
-    {:noreply, socket}
-  end
+  def handle_params(_params, _uri, socket), do: {:noreply, socket}
 
   def render(assigns) do
     ~H"""
     <.app flash={@flash} current_path={@current_path}>
       <div class="min-h-screen bg-gradient-to-br from-base-100 via-base-100 to-error/5">
-        <!-- Header Section -->
+        <!-- Header -->
         <div class="border-b-4 border-base-content bg-base-100">
-          <div class="container mx-auto px-4 py-6">
-            <div class="flex flex-col gap-4">
-              <!-- Room Info & Viewers -->
-              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div class="flex items-center gap-4">
-                  <!-- Room Selector -->
-                  <button
-                    phx-click="toggle-room-modal"
-                    class="flex items-center gap-2 px-4 py-2 border-4 border-base-content bg-base-100 hover:bg-base-content hover:text-base-100 transition-colors font-bold uppercase text-sm"
-                  >
-                    <span class="text-2xl">{@room.emoji}</span>
-                    <span>{@room.name || @room.code}</span>
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                  
-                  <!-- Live Viewers -->
-                  <div class="flex items-center gap-2">
-                    <div class="flex -space-x-2">
-                      <%= for {viewer, idx} <- Enum.with_index(Enum.take(@viewers, 5)) do %>
-                        <div
-                          class="w-8 h-8 rounded-full border-2 border-base-100 flex items-center justify-center text-xs font-bold animate-pulse"
-                          style={"background-color: #{viewer.user_color}; animation-delay: #{idx * 100}ms"}
-                          title={String.slice(viewer.user_id, 0, 8)}
-                        >
-                        </div>
-                      <% end %>
-                      <%= if length(@viewers) > 5 do %>
-                        <div class="w-8 h-8 rounded-full border-2 border-base-100 bg-base-content text-base-100 flex items-center justify-center text-xs font-bold">
-                          +{length(@viewers) - 5}
-                        </div>
-                      <% end %>
-                    </div>
-                    <span class="text-xs font-bold uppercase tracking-wide opacity-70">
-                      👀 {length(@viewers)} viewing
-                    </span>
+          <div class="container mx-auto px-4 py-4">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div class="flex items-center gap-4">
+                <!-- Room Selector -->
+                <button
+                  type="button"
+                  phx-click="open-room-modal"
+                  class="flex items-center gap-2 px-4 py-2 border-4 border-base-content bg-base-100 hover:bg-base-content hover:text-base-100 transition-colors font-bold uppercase text-sm"
+                >
+                  <span class="text-xl">{@room.emoji}</span>
+                  <span class="hidden sm:inline">{@room.name || @room.code}</span>
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                
+                <!-- Live Viewers -->
+                <div class="flex items-center gap-2">
+                  <div class="flex -space-x-2">
+                    <%= for {viewer, idx} <- Enum.with_index(Enum.take(@viewers, 4)) do %>
+                      <div
+                        class="w-7 h-7 rounded-full border-2 border-base-100"
+                        style={"background-color: #{viewer.user_color}; animation: pulse 2s infinite; animation-delay: #{idx * 150}ms"}
+                      ></div>
+                    <% end %>
+                    <%= if length(@viewers) > 4 do %>
+                      <div class="w-7 h-7 rounded-full border-2 border-base-100 bg-base-content text-base-100 flex items-center justify-center text-[10px] font-bold">
+                        +{length(@viewers) - 4}
+                      </div>
+                    <% end %>
                   </div>
-                </div>
-
-                <!-- Upload Button -->
-                <div class="flex-shrink-0">
-                  <form id="upload-form" phx-submit="save" phx-change="validate" class="relative">
-                    <label
-                      for={@uploads.photo.ref}
-                      class={[
-                        "group cursor-pointer flex items-center gap-3 px-5 py-3 border-4 border-base-content",
-                        "font-bold uppercase tracking-wide transition-all text-sm",
-                        @uploading && "bg-base-content text-base-100",
-                        not @uploading && "bg-error text-error-content hover:translate-x-1 hover:translate-y-1"
-                      ]}
-                    >
-                      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="square" stroke-width="2.5" d="M12 4v16m8-8H4" />
-                      </svg>
-                      <%= if @uploading do %>
-                        <span>Uploading...</span>
-                      <% else %>
-                        <span>Add Photo</span>
-                      <% end %>
-                      <div class="absolute inset-0 bg-base-content translate-x-1 translate-y-1 -z-10"></div>
-                    </label>
-                    <.live_file_input upload={@uploads.photo} class="hidden" />
-                  </form>
+                  <span class="text-xs font-bold opacity-60">👀 {length(@viewers)}</span>
                 </div>
               </div>
 
-              <!-- Stats Bar -->
-              <div class="flex items-center gap-4 text-xs font-bold uppercase tracking-wide opacity-60">
-                <span>{@photo_count} photos</span>
-                <span>•</span>
-                <span>Room: {@room.code}</span>
-              </div>
+              <!-- Upload Button -->
+              <form id="upload-form" phx-submit="save" phx-change="validate" class="relative flex-shrink-0">
+                <label
+                  for={@uploads.photo.ref}
+                  class={[
+                    "cursor-pointer flex items-center gap-2 px-4 py-2 border-4 border-base-content font-bold uppercase text-sm transition-all",
+                    @uploading && "bg-base-content text-base-100",
+                    not @uploading && "bg-error text-error-content hover:translate-x-1 hover:translate-y-1"
+                  ]}
+                >
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="square" stroke-width="2.5" d="M12 4v16m8-8H4" />
+                  </svg>
+                  <span class="hidden sm:inline"><%= if @uploading, do: "Uploading...", else: "Photo" %></span>
+                </label>
+                <.live_file_input upload={@uploads.photo} class="hidden" />
+                <div class="absolute inset-0 bg-base-content translate-x-1 translate-y-1 -z-10"></div>
+              </form>
             </div>
           </div>
         </div>
 
         <!-- Upload Progress -->
         <%= for entry <- @uploads.photo.entries do %>
-          <div class="border-b-4 border-base-content bg-base-200/50">
-            <div class="container mx-auto px-4 py-4">
-              <div class="flex items-center gap-4">
-                <div class="flex-1 bg-base-300 h-3 border-2 border-base-content">
+          <div class="border-b-2 border-base-content/20 bg-base-200/50">
+            <div class="container mx-auto px-4 py-2">
+              <div class="flex items-center gap-3">
+                <div class="flex-1 bg-base-300 h-2 border border-base-content">
                   <div class="bg-error h-full transition-all" style={"width: #{entry.progress}%"}></div>
                 </div>
-                <span class="text-sm font-bold uppercase">{entry.progress}%</span>
-                <button type="button" phx-click="cancel-upload" phx-value-ref={entry.ref} class="p-1 hover:bg-base-content hover:text-base-100">
-                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="square" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+                <span class="text-xs font-bold">{entry.progress}%</span>
+                <button type="button" phx-click="cancel-upload" phx-value-ref={entry.ref} class="text-error">✕</button>
               </div>
-              <%= for err <- upload_errors(@uploads.photo, entry) do %>
-                <p class="text-error text-sm font-bold mt-2">{error_to_string(err)}</p>
-              <% end %>
             </div>
           </div>
         <% end %>
 
-        <!-- Photos Grid -->
-        <div class="container mx-auto px-4 py-8">
-          <%= if @photos == [] do %>
-            <div class="flex flex-col items-center justify-center py-24 text-center">
-              <div class="text-6xl mb-6">{@room.emoji}</div>
-              <h3 class="text-2xl font-black uppercase tracking-tight mb-2 opacity-50">No Photos Yet</h3>
-              <p class="text-sm opacity-50 max-w-md mb-6">
-                Be the first to share a photo in {@room.name || @room.code}!
-              </p>
-              <p class="text-xs font-mono opacity-30">
-                Share this room: kruk.live/friends/{@room.code}
-              </p>
-            </div>
-          <% else %>
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" id="photos-grid" phx-update="stream">
-              <%= for {dom_id, photo} <- @streams.photos do %>
-                <div
-                  id={dom_id}
-                  class="group relative border-4 border-base-content bg-base-100 overflow-hidden hover:translate-x-1 hover:translate-y-1 transition-transform"
-                >
-                  <div class="absolute inset-0 bg-base-content translate-x-1 translate-y-1 -z-10"></div>
-                  
-                  <!-- Delete Button -->
-                  <%= if photo.user_id == @user_id do %>
-                    <button
-                      type="button"
-                      phx-click="delete-photo"
-                      phx-value-id={photo.id}
-                      data-confirm="Delete this photo?"
-                      class="absolute top-2 right-2 z-10 p-2 bg-error text-error-content border-2 border-base-content opacity-0 group-hover:opacity-100 transition-opacity hover:bg-base-content hover:text-base-100"
+        <!-- Main Content: Photos + Chat -->
+        <div class="container mx-auto px-4 py-6">
+          <div class="grid lg:grid-cols-3 gap-6">
+            <!-- Photos Grid (2/3) -->
+            <div class="lg:col-span-2">
+              <%= if @photos == [] do %>
+                <div class="flex flex-col items-center justify-center py-16 text-center border-4 border-dashed border-base-content/20">
+                  <div class="text-5xl mb-4">{@room.emoji}</div>
+                  <h3 class="text-xl font-black uppercase mb-2 opacity-50">No Photos Yet</h3>
+                  <p class="text-sm opacity-40 mb-4">Share the first photo in this room!</p>
+                  <p class="text-xs font-mono opacity-30">kruk.live/friends/{@room.code}</p>
+                </div>
+              <% else %>
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3" id="photos-grid" phx-update="stream">
+                  <%= for {dom_id, photo} <- @streams.photos do %>
+                    <div
+                      id={dom_id}
+                      class="group relative border-4 border-base-content bg-base-100 overflow-hidden hover:translate-x-0.5 hover:translate-y-0.5 transition-transform"
                     >
-                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="square" stroke-width="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-                  <% end %>
-                  
-                  <!-- Image -->
-                  <div class="aspect-square overflow-hidden bg-base-200">
-                    <img
-                      src={photo.data_url}
-                      alt="Shared photo"
-                      class="w-full h-full object-cover transition-transform group-hover:scale-105"
-                      loading="lazy"
-                    />
-                  </div>
-                  
-                  <!-- Photo Info -->
-                  <div class="p-3 border-t-4 border-base-content bg-base-100">
-                    <div class="flex items-center justify-between">
-                      <div class="flex items-center gap-2">
-                        <div
-                          class="w-4 h-4 border-2 border-base-content rounded-full"
-                          style={"background-color: #{photo.user_color}"}
-                        ></div>
-                        <span class="text-xs font-bold uppercase tracking-wide text-base-content/70">
-                          {String.slice(photo.user_id, 0, 8)}
-                        </span>
+                      <div class="absolute inset-0 bg-base-content translate-x-1 translate-y-1 -z-10"></div>
+                      
+                      <%= if photo.user_id == @user_id do %>
+                        <button
+                          type="button"
+                          phx-click="delete-photo"
+                          phx-value-id={photo.id}
+                          data-confirm="Delete?"
+                          class="absolute top-1 right-1 z-10 p-1.5 bg-error/90 text-error-content text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                        >✕</button>
+                      <% end %>
+                      
+                      <div class="aspect-square overflow-hidden bg-base-200">
+                        <img src={photo.data_url} alt="" class="w-full h-full object-cover" loading="lazy" />
                       </div>
-                      <span class="text-xs font-bold uppercase tracking-wide text-base-content/50">
-                        {format_time(photo.uploaded_at)}
-                      </span>
+                      
+                      <div class="p-2 border-t-2 border-base-content bg-base-100 flex items-center gap-2">
+                        <div class="w-3 h-3 rounded-full border border-base-content" style={"background-color: #{photo.user_color}"}></div>
+                        <span class="text-[10px] font-bold opacity-50">{format_time(photo.uploaded_at)}</span>
+                      </div>
                     </div>
-                  </div>
+                  <% end %>
                 </div>
               <% end %>
             </div>
-          <% end %>
+
+            <!-- Chat Panel (1/3) -->
+            <div class="lg:col-span-1">
+              <div class="border-4 border-base-content bg-base-100 h-[500px] flex flex-col">
+                <!-- Chat Header -->
+                <div class="p-3 border-b-2 border-base-content bg-base-200/50">
+                  <h3 class="font-black uppercase text-sm">💬 Chat</h3>
+                </div>
+
+                <!-- Messages -->
+                <div class="flex-1 overflow-y-auto p-3 space-y-3" id="messages-container" phx-update="stream" phx-hook="ScrollToBottom">
+                  <%= for {dom_id, message} <- @streams.messages do %>
+                    <div id={dom_id} class="flex gap-2">
+                      <div class="w-6 h-6 rounded-full border border-base-content flex-shrink-0" style={"background-color: #{message.user_color}"}></div>
+                      <div class="flex-1 min-w-0">
+                        <div class="text-[10px] font-bold opacity-40 mb-0.5">
+                          {String.slice(message.user_id, 0, 6)} · {format_time(message.sent_at)}
+                        </div>
+                        <div class="text-sm break-words">{message.content}</div>
+                      </div>
+                    </div>
+                  <% end %>
+                  <%= if @messages == [] do %>
+                    <div class="text-center text-sm opacity-40 py-8">
+                      No messages yet.<br/>Say hi! 👋
+                    </div>
+                  <% end %>
+                </div>
+
+                <!-- Message Input -->
+                <form phx-submit="send-message" class="p-3 border-t-2 border-base-content">
+                  <div class="flex gap-2">
+                    <input
+                      type="text"
+                      name="content"
+                      value={@message_input}
+                      phx-change="update-message"
+                      placeholder="Type a message..."
+                      autocomplete="off"
+                      class="flex-1 px-3 py-2 border-2 border-base-content text-sm bg-base-100 focus:outline-none focus:bg-base-200"
+                    />
+                    <button type="submit" class="px-4 py-2 border-2 border-base-content bg-base-content text-base-100 font-bold text-sm hover:bg-primary hover:border-primary transition-colors">
+                      Send
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Room Modal -->
         <%= if @show_room_modal do %>
-          <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-base-content/50" phx-click="toggle-room-modal">
-            <div class="bg-base-100 border-4 border-base-content p-6 max-w-md w-full" phx-click-away="toggle-room-modal">
-              <h2 class="text-2xl font-black uppercase tracking-tight mb-6">Switch Room</h2>
+          <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+            <div class="bg-base-100 border-4 border-base-content p-6 max-w-sm w-full shadow-2xl" phx-click-away="close-room-modal">
+              <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-black uppercase">Rooms</h2>
+                <button type="button" phx-click="close-room-modal" class="text-2xl leading-none hover:opacity-60">×</button>
+              </div>
               
               <!-- Current Room -->
-              <div class="mb-6 p-4 border-2 border-base-content/20 bg-base-200/50">
-                <div class="text-xs font-bold uppercase tracking-wide opacity-50 mb-1">Current</div>
-                <div class="flex items-center gap-2">
-                  <span class="text-2xl">{@room.emoji}</span>
-                  <span class="font-bold">{@room.name || @room.code}</span>
+              <div class="mb-6 p-3 border-2 border-base-content/20 bg-base-200/30">
+                <div class="text-[10px] font-bold uppercase opacity-40 mb-1">Current Room</div>
+                <div class="flex items-center gap-2 font-bold">
+                  <span class="text-xl">{@room.emoji}</span>
+                  <span>{@room.name || @room.code}</span>
                 </div>
+                <div class="text-xs font-mono opacity-40 mt-1">kruk.live/friends/{@room.code}</div>
               </div>
 
-              <!-- Join Existing Room -->
-              <div class="mb-6">
-                <label class="text-xs font-bold uppercase tracking-wide opacity-70 mb-2 block">Join Room</label>
-                <form phx-submit="join-room" class="flex gap-2">
+              <!-- Join Room -->
+              <form phx-submit="join-room" class="mb-4">
+                <label class="text-xs font-bold uppercase opacity-60 mb-2 block">Join Room</label>
+                <div class="flex gap-2">
                   <input
                     type="text"
                     name="code"
                     value={@join_room_code}
                     phx-change="update-join-code"
                     placeholder="room-code"
-                    class="flex-1 px-4 py-2 border-2 border-base-content font-mono text-sm bg-base-100 focus:outline-none focus:bg-base-200"
+                    class="flex-1 px-3 py-2 border-2 border-base-content font-mono text-sm bg-base-100"
                   />
-                  <button type="submit" class="px-4 py-2 border-2 border-base-content bg-base-content text-base-100 font-bold uppercase text-sm hover:bg-primary hover:border-primary transition-colors">
-                    Join
+                  <button type="submit" class="px-4 py-2 border-2 border-base-content bg-base-content text-base-100 font-bold text-sm">
+                    Go
                   </button>
-                </form>
-              </div>
+                </div>
+              </form>
 
-              <!-- Create New Room -->
-              <div class="mb-6">
-                <label class="text-xs font-bold uppercase tracking-wide opacity-70 mb-2 block">Create New Room</label>
-                <form phx-submit="create-room" class="flex gap-2">
+              <!-- Create Room -->
+              <form phx-submit="create-room" class="mb-4">
+                <label class="text-xs font-bold uppercase opacity-60 mb-2 block">Create New</label>
+                <div class="flex gap-2">
                   <input
                     type="text"
                     name="name"
-                    placeholder="Room name (optional)"
-                    class="flex-1 px-4 py-2 border-2 border-base-content text-sm bg-base-100 focus:outline-none focus:bg-base-200"
+                    value={@new_room_name}
+                    phx-change="update-room-name"
+                    placeholder="Room name"
+                    class="flex-1 px-3 py-2 border-2 border-base-content text-sm bg-base-100"
                   />
-                  <button type="submit" class="px-4 py-2 border-2 border-base-content bg-error text-error-content font-bold uppercase text-sm hover:bg-base-content hover:text-base-100 transition-colors">
+                  <button type="submit" class="px-4 py-2 border-2 border-error bg-error text-error-content font-bold text-sm">
                     Create
                   </button>
-                </form>
-              </div>
+                </div>
+              </form>
 
-              <!-- Back to Lobby -->
+              <!-- Lobby -->
               <%= if @room.code != "lobby" do %>
                 <button
+                  type="button"
                   phx-click="go-to-lobby"
                   class="w-full px-4 py-3 border-2 border-base-content font-bold uppercase text-sm hover:bg-base-content hover:text-base-100 transition-colors"
                 >
@@ -348,13 +345,8 @@ defmodule RzeczywiscieWeb.FriendsLive do
 
   # --- Events ---
 
-  def handle_event("validate", _params, socket) do
-    {:noreply, socket}
-  end
-
-  def handle_event("save", _params, socket) do
-    {:noreply, socket}
-  end
+  def handle_event("validate", _params, socket), do: {:noreply, socket}
+  def handle_event("save", _params, socket), do: {:noreply, socket}
 
   def handle_event("cancel-upload", %{"ref" => ref}, socket) do
     {:noreply, cancel_upload(socket, :photo, ref)}
@@ -365,65 +357,69 @@ defmodule RzeczywiscieWeb.FriendsLive do
     room = socket.assigns.room
     
     case Friends.get_photo(photo_id) do
-      nil ->
-        {:noreply, put_flash(socket, :error, "Photo not found")}
-      
+      nil -> {:noreply, put_flash(socket, :error, "Photo not found")}
       photo ->
         if photo.user_id == socket.assigns.user_id do
           case Friends.delete_photo(photo_id, room.code) do
             {:ok, _} ->
               Friends.broadcast(room.code, :photo_deleted_from_session, %{id: photo_id}, socket.assigns.session_id)
-              
               {:noreply,
                socket
                |> assign(:photo_count, max(0, socket.assigns.photo_count - 1))
                |> stream_delete(:photos, %{id: photo_id})
-               |> put_flash(:info, "🗑️ Photo deleted")}
-            
+               |> put_flash(:info, "Deleted")}
             {:error, _} ->
-              {:noreply, put_flash(socket, :error, "Failed to delete photo")}
+              {:noreply, put_flash(socket, :error, "Failed")}
           end
         else
-          {:noreply, put_flash(socket, :error, "You can only delete your own photos")}
+          {:noreply, put_flash(socket, :error, "Not yours")}
         end
     end
   end
 
-  def handle_event("toggle-room-modal", _params, socket) do
-    {:noreply, assign(socket, :show_room_modal, !socket.assigns.show_room_modal)}
+  def handle_event("open-room-modal", _params, socket) do
+    {:noreply, assign(socket, :show_room_modal, true)}
+  end
+
+  def handle_event("close-room-modal", _params, socket) do
+    {:noreply, assign(socket, :show_room_modal, false)}
   end
 
   def handle_event("update-join-code", %{"code" => code}, socket) do
     {:noreply, assign(socket, :join_room_code, code)}
   end
 
+  def handle_event("update-room-name", %{"name" => name}, socket) do
+    {:noreply, assign(socket, :new_room_name, name)}
+  end
+
   def handle_event("join-room", %{"code" => code}, socket) do
-    code = code |> String.trim() |> String.downcase()
-    
+    code = code |> String.trim() |> String.downcase() |> String.replace(~r/[^a-z0-9-]/, "")
     if code != "" do
       {:noreply,
        socket
        |> assign(:show_room_modal, false)
+       |> assign(:join_room_code, "")
        |> push_navigate(to: ~p"/friends/#{code}")}
     else
-      {:noreply, put_flash(socket, :error, "Please enter a room code")}
+      {:noreply, put_flash(socket, :error, "Enter a room code")}
     end
   end
 
   def handle_event("create-room", %{"name" => name}, socket) do
     code = Friends.generate_room_code()
-    name = if name == "", do: nil, else: name
-    emoji = Enum.random(~w(📸 🎉 🌟 🔥 💫 🎨 🌈 ✨ 🎭 🎪))
+    name = if name == "", do: nil, else: String.trim(name)
+    emoji = Enum.random(~w(📸 🎉 🌟 🔥 💫 🎨 🌈 ✨ 🎭 🎪 🍕 🎸 🌮 🍿))
     
     case Friends.create_room(%{code: code, name: name, emoji: emoji, created_by: socket.assigns.user_id}) do
       {:ok, _room} ->
         {:noreply,
          socket
          |> assign(:show_room_modal, false)
+         |> assign(:new_room_name, "")
          |> push_navigate(to: ~p"/friends/#{code}")}
-      
       {:error, _} ->
-        {:noreply, put_flash(socket, :error, "Failed to create room")}
+        {:noreply, put_flash(socket, :error, "Failed to create")}
     end
   end
 
@@ -432,6 +428,35 @@ defmodule RzeczywiscieWeb.FriendsLive do
      socket
      |> assign(:show_room_modal, false)
      |> push_navigate(to: ~p"/friends/lobby")}
+  end
+
+  def handle_event("update-message", %{"content" => content}, socket) do
+    {:noreply, assign(socket, :message_input, content)}
+  end
+
+  def handle_event("send-message", %{"content" => content}, socket) do
+    content = String.trim(content)
+    room = socket.assigns.room
+    
+    if content != "" do
+      case Friends.create_message(%{
+        user_id: socket.assigns.user_id,
+        user_color: socket.assigns.user_color,
+        content: content,
+        room_id: room.id
+      }, room.code) do
+        {:ok, message} ->
+          Friends.broadcast(room.code, :new_message_from_session, message, socket.assigns.session_id)
+          {:noreply,
+           socket
+           |> assign(:message_input, "")
+           |> stream_insert(:messages, message)}
+        {:error, _} ->
+          {:noreply, put_flash(socket, :error, "Failed to send")}
+      end
+    else
+      {:noreply, socket}
+    end
   end
 
   # --- Progress Handler ---
@@ -443,17 +468,14 @@ defmodule RzeczywiscieWeb.FriendsLive do
         base64 = Base.encode64(binary)
         content_type = entry.client_type || "image/jpeg"
         file_size = byte_size(binary)
-        data_url = "data:#{content_type};base64,#{base64}"
-        {:ok, %{data_url: data_url, content_type: content_type, file_size: file_size}}
+        {:ok, %{data_url: "data:#{content_type};base64,#{base64}", content_type: content_type, file_size: file_size}}
       end)
 
     room = socket.assigns.room
-    user_id = socket.assigns.user_id
-    user_color = socket.assigns.user_color
 
     case Friends.create_photo(%{
-      user_id: user_id,
-      user_color: user_color,
+      user_id: socket.assigns.user_id,
+      user_color: socket.assigns.user_color,
       image_data: photo_result.data_url,
       content_type: photo_result.content_type,
       file_size: photo_result.file_size,
@@ -461,19 +483,14 @@ defmodule RzeczywiscieWeb.FriendsLive do
     }, room.code) do
       {:ok, photo} ->
         Friends.broadcast(room.code, :new_photo_from_session, photo, socket.assigns.session_id)
-        
         {:noreply,
          socket
          |> assign(:uploading, false)
          |> assign(:photo_count, socket.assigns.photo_count + 1)
          |> stream_insert(:photos, photo, at: 0)
-         |> put_flash(:info, "📸 Photo shared!")}
-
-      {:error, _changeset} ->
-        {:noreply,
-         socket
-         |> assign(:uploading, false)
-         |> put_flash(:error, "Failed to save photo")}
+         |> put_flash(:info, "📸 Shared!")}
+      {:error, _} ->
+        {:noreply, socket |> assign(:uploading, false) |> put_flash(:error, "Failed")}
     end
   end
 
@@ -494,9 +511,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
     end
   end
 
-  def handle_info({:new_photo, _photo}, socket) do
-    {:noreply, socket}
-  end
+  def handle_info({:new_photo, _}, socket), do: {:noreply, socket}
 
   def handle_info({:photo_deleted_from_session, %{id: id}, from_session_id}, socket) do
     if from_session_id != socket.assigns.session_id do
@@ -509,12 +524,19 @@ defmodule RzeczywiscieWeb.FriendsLive do
     end
   end
 
-  def handle_info({:photo_deleted, %{id: _id}}, socket) do
-    {:noreply, socket}
+  def handle_info({:photo_deleted, _}, socket), do: {:noreply, socket}
+
+  def handle_info({:new_message_from_session, message, from_session_id}, socket) do
+    if from_session_id != socket.assigns.session_id do
+      {:noreply, stream_insert(socket, :messages, message)}
+    else
+      {:noreply, socket}
+    end
   end
 
-  # Presence updates
-  def handle_info(%{event: "presence_diff", payload: _diff}, socket) do
+  def handle_info({:new_message, _}, socket), do: {:noreply, socket}
+
+  def handle_info(%{event: "presence_diff", payload: _}, socket) do
     viewers = Presence.list_users(socket.assigns.room.code)
     {:noreply, assign(socket, :viewers, viewers)}
   end
@@ -534,15 +556,10 @@ defmodule RzeczywiscieWeb.FriendsLive do
   defp generate_user_color(user_id) do
     hash = :crypto.hash(:md5, user_id)
     <<r, g, b, _::binary>> = hash
-    r = rem(r, 156) + 100
-    g = rem(g, 156) + 100
-    b = rem(b, 156) + 100
-    "rgb(#{r}, #{g}, #{b})"
+    "rgb(#{rem(r, 156) + 100}, #{rem(g, 156) + 100}, #{rem(b, 156) + 100})"
   end
 
-  defp generate_session_id do
-    :crypto.strong_rand_bytes(16) |> Base.encode16(case: :lower)
-  end
+  defp generate_session_id, do: :crypto.strong_rand_bytes(16) |> Base.encode16(case: :lower)
 
   defp format_time(datetime) do
     now = DateTime.utc_now()
@@ -553,15 +570,11 @@ defmodule RzeczywiscieWeb.FriendsLive do
     end
     diff = DateTime.diff(now, datetime, :second)
     cond do
-      diff < 60 -> "just now"
-      diff < 3600 -> "#{div(diff, 60)}m ago"
-      diff < 86400 -> "#{div(diff, 3600)}h ago"
-      true -> "#{div(diff, 86400)}d ago"
+      diff < 60 -> "now"
+      diff < 3600 -> "#{div(diff, 60)}m"
+      diff < 86400 -> "#{div(diff, 3600)}h"
+      true -> "#{div(diff, 86400)}d"
     end
   end
-
-  defp error_to_string(:too_large), do: "File too large (max 10MB)"
-  defp error_to_string(:too_many_files), do: "Too many files"
-  defp error_to_string(:not_accepted), do: "Invalid file type (use JPG, PNG, GIF, or WebP)"
-  defp error_to_string(err), do: "Error: #{inspect(err)}"
 end
+

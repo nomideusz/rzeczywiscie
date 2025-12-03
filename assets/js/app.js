@@ -38,6 +38,20 @@ const Hooks = {
                 clearTimeout(this.timeout)
             }
         }
+    },
+    ScrollToBottom: {
+        mounted() {
+            this.scrollToBottom()
+            // Watch for new messages
+            this.observer = new MutationObserver(() => this.scrollToBottom())
+            this.observer.observe(this.el, { childList: true, subtree: true })
+        },
+        scrollToBottom() {
+            this.el.scrollTop = this.el.scrollHeight
+        },
+        destroyed() {
+            if (this.observer) this.observer.disconnect()
+        }
     }
 }
 
