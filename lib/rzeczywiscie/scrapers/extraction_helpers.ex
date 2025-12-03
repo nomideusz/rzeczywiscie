@@ -99,11 +99,86 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
   end
 
   @doc """
-  Check if text is invalid description (CSS, navigation, or too short).
+  Check if text is Otodom metadata table format (not a real description).
+  Example: "Powierzchnia:55 m²Liczba pokoi:2 Ogrzewanie:miejskie..."
+  """
+  def is_otodom_metadata?(nil), do: false
+  def is_otodom_metadata?(text) when is_binary(text) do
+    # Must have at least 2 of these patterns to be metadata
+    metadata_patterns = [
+      ~r/Powierzchnia:\s*\d+/i,
+      ~r/Liczba pokoi:\s*\d+/i,
+      ~r/Ogrzewanie:/i,
+      ~r/Piętro:/i,
+      ~r/Stan wykończenia:/i,
+      ~r/Dostępne od:/i,
+      ~r/Czynsz:/i,
+      ~r/Kaucja:/i,
+      ~r/Typ ogłoszeniodawcy:/i,
+      ~r/Informacje dodatkowe:/i
+    ]
+    
+    matches = Enum.count(metadata_patterns, &Regex.match?(&1, text))
+    matches >= 2
+  end
+
+  @doc """
+  Parse Otodom metadata to extract structured fields.
+  Returns a map with extracted data.
+  """
+  def parse_otodom_metadata(nil), do: %{}
+  def parse_otodom_metadata(text) when is_binary(text) do
+    %{}
+    |> maybe_extract(:monthly_fee, text, ~r/Czynsz:\s*([\d\s]+)\s*zł/i)
+    |> maybe_extract(:deposit, text, ~r/Kaucja:\s*([\d\s]+)\s*zł/i)
+    |> maybe_extract(:floor_info, text, ~r/Piętro:\s*([^\s]+(?:\/\d+)?)/i)
+    |> maybe_extract(:available_from, text, ~r/Dostępne od:\s*([\d-]+)/i)
+    |> maybe_extract(:condition, text, ~r/Stan wykończenia:\s*([^D]+?)(?:Dostępne|Czynsz|Kaucja|Typ|$)/i)
+    |> maybe_extract_agency(text)
+    |> maybe_extract_amenities(text)
+  end
+  
+  defp maybe_extract(map, key, text, regex) do
+    case Regex.run(regex, text) do
+      [_, value] -> 
+        cleaned = value |> String.replace(~r/\s+/, "") |> String.trim()
+        case key do
+          k when k in [:monthly_fee, :deposit] ->
+            case Integer.parse(cleaned) do
+              {num, _} -> Map.put(map, key, num)
+              :error -> map
+            end
+          _ -> 
+            Map.put(map, key, String.trim(value))
+        end
+      _ -> map
+    end
+  end
+  
+  defp maybe_extract_agency(map, text) do
+    cond do
+      String.contains?(text, "biuro nieruchomości") -> Map.put(map, :is_agency, true)
+      String.contains?(text, "prywatny") -> Map.put(map, :is_agency, false)
+      true -> map
+    end
+  end
+  
+  defp maybe_extract_amenities(map, text) do
+    case Regex.run(~r/Informacje dodatkowe:\s*(.+?)$/i, text) do
+      [_, amenities] -> Map.put(map, :amenities, String.trim(amenities))
+      _ -> map
+    end
+  end
+
+  @doc """
+  Check if text is invalid description (CSS, navigation, metadata-only, or too short).
   """
   def is_invalid_description?(nil), do: true
   def is_invalid_description?(text) when is_binary(text) do
-    String.length(text) < 50 or is_css_content?(text) or is_navigation_content?(text)
+    String.length(text) < 50 or 
+      is_css_content?(text) or 
+      is_navigation_content?(text) or
+      is_otodom_metadata?(text)
   end
 
   # Minimum valid prices to avoid extracting room counts or erroneous values

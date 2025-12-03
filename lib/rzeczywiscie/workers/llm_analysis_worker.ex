@@ -60,35 +60,56 @@ defmodule Rzeczywiscie.Workers.LLMAnalysisWorker do
 
   defp run_llm_analysis(limit) do
     alias Rzeczywiscie.Services.LLMAnalyzer
+    alias Rzeczywiscie.Scrapers.ExtractionHelpers
     
     # Get properties with descriptions pending analysis
     all_properties = from(p in Property,
       where: p.active == true and 
              not is_nil(p.description) and 
-             fragment("length(?)", p.description) > 100 and
+             fragment("length(?)", p.description) > 50 and
              is_nil(p.llm_analyzed_at),
       order_by: [desc: p.inserted_at],
-      limit: ^(limit * 2)  # Fetch more, filter CSS garbage
+      limit: ^(limit * 2)  # Fetch more, filter garbage
     )
     |> Repo.all()
     
-    # Filter out CSS garbage
-    {valid_properties, css_garbage} = Enum.split_with(all_properties, &is_valid_description?(&1.description))
+    # Categorize properties by description type
+    {css_garbage, rest} = Enum.split_with(all_properties, fn p ->
+      ExtractionHelpers.is_css_content?(p.description) or 
+      ExtractionHelpers.is_navigation_content?(p.description)
+    end)
     
-    # Mark CSS garbage as analyzed
+    {metadata_only, valid_properties} = Enum.split_with(rest, fn p ->
+      ExtractionHelpers.is_otodom_metadata?(p.description)
+    end)
+    
+    # Mark CSS/navigation garbage as analyzed
     Enum.each(css_garbage, fn p ->
       RealEstate.update_property(p, %{
         llm_analyzed_at: DateTime.utc_now(),
         llm_score: 0,
-        llm_summary: "Skipped: description contains CSS/invalid content"
+        llm_summary: "Skipped: description contains CSS/navigation garbage"
       })
+    end)
+    
+    # Process Otodom metadata - extract useful fields without LLM
+    metadata_count = Enum.reduce(metadata_only, 0, fn p, acc ->
+      metadata = ExtractionHelpers.parse_otodom_metadata(p.description)
+      updates = build_metadata_updates(metadata)
+      
+      case RealEstate.update_property(p, updates) do
+        {:ok, _} -> 
+          Logger.info("  📋 Property ##{p.id} - extracted metadata (no real description)")
+          acc + 1
+        {:error, _} -> acc
+      end
     end)
     
     properties = Enum.take(valid_properties, limit)
     total = length(properties)
     
-    if total == 0 do
-      "No properties pending analysis"
+    if total == 0 and metadata_count == 0 do
+      "No properties pending analysis (#{length(css_garbage)} garbage skipped)"
     else
       successful = properties
       |> Enum.with_index(1)
@@ -109,9 +130,30 @@ defmodule Rzeczywiscie.Workers.LLMAnalysisWorker do
         end
       end)
       
-      "#{successful}/#{total} analyzed"
+      result = "#{successful}/#{total} analyzed"
+      result = if metadata_count > 0, do: result <> ", #{metadata_count} metadata-only", else: result
+      result = if length(css_garbage) > 0, do: result <> ", #{length(css_garbage)} garbage skipped", else: result
+      result
     end
   end
+  
+  # Build updates from parsed Otodom metadata
+  defp build_metadata_updates(metadata) do
+    base = %{
+      llm_analyzed_at: DateTime.utc_now(),
+      llm_score: 3,  # Neutral score - can't assess deal quality without real description
+      llm_summary: "Tylko metadane - brak pełnego opisu nieruchomości",
+      llm_listing_quality: 2  # Low quality - metadata only
+    }
+    
+    base
+    |> maybe_add_metadata(:llm_monthly_fee, metadata[:monthly_fee])
+    |> maybe_add_metadata(:llm_floor_info, metadata[:floor_info])
+    |> maybe_add_metadata(:llm_is_agency, metadata[:is_agency])
+  end
+  
+  defp maybe_add_metadata(updates, _key, nil), do: updates
+  defp maybe_add_metadata(updates, key, value), do: Map.put(updates, key, value)
 
   defp build_context(property) do
     alias Rzeczywiscie.RealEstate.DealScorer
@@ -269,40 +311,6 @@ defmodule Rzeczywiscie.Workers.LLMAnalysisWorker do
   defp atom_to_string(val) when is_atom(val), do: Atom.to_string(val)
   defp atom_to_string(val) when is_binary(val), do: val
   defp atom_to_string(_), do: "unknown"
-
-  defp is_valid_description?(nil), do: false
-  defp is_valid_description?(desc) when byte_size(desc) < 50, do: false
-  defp is_valid_description?(desc) do
-    desc_lower = String.downcase(desc)
-    first_100 = String.slice(desc_lower, 0, 100)
-    
-    # CSS patterns
-    css_patterns = ["@media", "@keyframes", ".css-", "{text-decoration", "{display:", 
-                    "{color:", "{background", ":hover{", "!important", "var(--",
-                    "oklch(", "rgba(", "font-family:", "font-size:"]
-    
-    has_css = Enum.any?(css_patterns, &String.contains?(first_100, &1))
-    
-    # Navigation/footer/UI patterns (Otodom/OLX garbage content)
-    navigation_patterns = [
-      "wynajmujęnieruchomości", "nieruchomościmieszkania", "mieszkaniakawalerki",
-      "kawalerkidomy", "domypokoje", "pokojedzialki", "działkilokale",
-      "popularne lokalizacje", "popularne biura nieruchomości", 
-      "biura nieruchomości w", "przewodnik wynajmującego", "raport z rynku najmu",
-      "warszawawrocławkraków", "krakówpoznańgdańsk", "gdańskłódźgdynia",
-      # OLX history/stats/login patterns
-      "historia i statystyki", "ostatnia aktualizacja:", "datazmianacena",
-      "zaloguj się lub załóż konto", "zaloguj się i sprawdź", "dostęp do pełnej historii",
-      "załóż konto, aby", "xxxxxxxxxxxx"
-    ]
-    
-    has_navigation = Enum.any?(navigation_patterns, &String.contains?(desc_lower, &1))
-    
-    css_char_ratio = (String.graphemes(desc) 
-      |> Enum.count(fn c -> c in ["{", "}", ":", ";"] end)) / max(String.length(desc), 1)
-    
-    not has_css and not has_navigation and css_char_ratio < 0.05
-  end
 
   @doc """
   Manually trigger the LLM analysis job.
