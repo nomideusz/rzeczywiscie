@@ -673,11 +673,8 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
   defp get_seconds_remaining(:ok), do: 0
   defp get_seconds_remaining({:error, seconds}), do: seconds
 
-  defp animal_emoji("chicken"), do: "🐔"
-  defp animal_emoji("pegasus"), do: "🪽"
-  defp animal_emoji("whale"), do: "🐋"
   defp animal_emoji("unicorn"), do: "🦄"
-  defp animal_emoji(_), do: "✨"
+  defp animal_emoji(_), do: "🦄"
 
   defp format_error(changeset) do
     errors =
