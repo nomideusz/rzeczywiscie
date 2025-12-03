@@ -10,12 +10,14 @@ defmodule RzeczywiscieWeb.FriendsLive do
 
     user_id = get_or_create_user_id(socket)
     user_color = generate_user_color(user_id)
+    session_id = generate_session_id()
     photos = Friends.list_photos()
 
     socket =
       socket
       |> assign(:user_id, user_id)
       |> assign(:user_color, user_color)
+      |> assign(:session_id, session_id)
       |> assign(:page_title, "Friends")
       |> assign(:photos, photos)
       |> assign(:photo_count, Friends.count_photos())
@@ -206,6 +208,9 @@ defmodule RzeczywiscieWeb.FriendsLive do
         if photo.user_id == socket.assigns.user_id do
           case Friends.delete_photo(photo_id) do
             {:ok, _} ->
+              # Broadcast deletion with session_id
+              Friends.broadcast(:photo_deleted_from_session, %{id: photo_id}, socket.assigns.session_id)
+              
               {:noreply,
                socket
                |> assign(:photo_count, max(0, socket.assigns.photo_count - 1))
@@ -238,7 +243,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
     user_id = socket.assigns.user_id
     user_color = socket.assigns.user_color
 
-    # Save to database
+    # Save to database (create_photo broadcasts automatically, but we'll also track session)
     case Friends.create_photo(%{
       user_id: user_id,
       user_color: user_color,
@@ -247,6 +252,9 @@ defmodule RzeczywiscieWeb.FriendsLive do
       file_size: photo_result.file_size
     }) do
       {:ok, photo} ->
+        # Broadcast with session_id so other tabs know to show it
+        Friends.broadcast(:new_photo_from_session, photo, socket.assigns.session_id)
+        
         {:noreply,
          socket
          |> assign(:uploading, false)
@@ -266,10 +274,10 @@ defmodule RzeczywiscieWeb.FriendsLive do
     {:noreply, assign(socket, :uploading, true)}
   end
 
-  # Handle new photos from other users (broadcast from context)
-  def handle_info({:new_photo, photo}, socket) do
-    # Only add if not from this user (we already added it locally)
-    if photo.user_id != socket.assigns.user_id do
+  # Handle new photos from other sessions (with session_id tracking)
+  def handle_info({:new_photo_from_session, photo, from_session_id}, socket) do
+    # Only add if not from this specific session (we already added it locally)
+    if from_session_id != socket.assigns.session_id do
       {:noreply,
        socket
        |> assign(:photo_count, socket.assigns.photo_count + 1)
@@ -279,11 +287,28 @@ defmodule RzeczywiscieWeb.FriendsLive do
     end
   end
 
-  def handle_info({:photo_deleted, %{id: id}}, socket) do
-    {:noreply,
-     socket
-     |> assign(:photo_count, max(0, socket.assigns.photo_count - 1))
-     |> stream_delete(:photos, %{id: id})}
+  # Handle new photos from context (fallback for old broadcasts)
+  def handle_info({:new_photo, _photo}, socket) do
+    # Ignore - we now use :new_photo_from_session for real-time updates
+    {:noreply, socket}
+  end
+
+  # Handle photo deletion from other sessions
+  def handle_info({:photo_deleted_from_session, %{id: id}, from_session_id}, socket) do
+    if from_session_id != socket.assigns.session_id do
+      {:noreply,
+       socket
+       |> assign(:photo_count, max(0, socket.assigns.photo_count - 1))
+       |> stream_delete(:photos, %{id: id})}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  # Handle photo deletion from context (fallback)
+  def handle_info({:photo_deleted, %{id: _id}}, socket) do
+    # Ignore - we now use :photo_deleted_from_session for real-time updates
+    {:noreply, socket}
   end
 
   def handle_info({:user_photos_deleted, %{user_id: _user_id}}, socket) do
@@ -318,6 +343,10 @@ defmodule RzeczywiscieWeb.FriendsLive do
     b = rem(b, 156) + 100
     
     "rgb(#{r}, #{g}, #{b})"
+  end
+
+  defp generate_session_id do
+    :crypto.strong_rand_bytes(16) |> Base.encode16(case: :lower)
   end
 
   defp format_time(datetime) do

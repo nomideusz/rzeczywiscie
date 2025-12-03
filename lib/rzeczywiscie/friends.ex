@@ -25,6 +25,13 @@ defmodule Rzeczywiscie.Friends do
   end
 
   @doc """
+  Broadcast photo events with session_id to filter out sender.
+  """
+  def broadcast(event, payload, session_id) do
+    Phoenix.PubSub.broadcast(Rzeczywiscie.PubSub, @topic, {event, payload, session_id})
+  end
+
+  @doc """
   List all photos, most recent first.
   Limited to the most recent photos for performance.
   """
