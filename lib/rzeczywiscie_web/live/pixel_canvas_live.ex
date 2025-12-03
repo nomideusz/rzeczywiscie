@@ -91,7 +91,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
       {:noreply, put_flash(socket, :error, "Position already occupied")}
     else
       case PixelCanvas.place_pixel(x, y, color, user_id) do
-        {:ok, pixel, lucky_animal: lucky_animal} ->
+        {:ok, pixel, lucky_unicorn: lucky_unicorn} ->
           # Update pixels map with the newly placed pixel
           pixels = Map.put(socket.assigns.pixels, {x, y}, %{
             color: color,
@@ -140,13 +140,11 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
            |> assign(:user_stats, user_stats)
            |> assign(:milestone_progress, milestone_progress)
 
-          # Show celebration if lucky animal won!
-          socket = case lucky_animal do
-            "chicken" -> put_flash(socket, :info, "🍀 LUCKY! You found a Chicken! 🐔✨")
-            "pegasus" -> put_flash(socket, :info, "🍀 LUCKY! You found a Pegasus! 🪽✨")
-            "whale" -> put_flash(socket, :info, "🍀 RARE! You found a Whale! 🐋✨")
-            "unicorn" -> put_flash(socket, :info, "🍀 LEGENDARY! You found a Unicorn! 🦄✨")
-            _ -> socket
+          # Show celebration if lucky unicorn won!
+          socket = if lucky_unicorn do
+            put_flash(socket, :info, "🍀 LEGENDARY! You found a Unicorn! 🦄✨")
+          else
+            socket
           end
 
           {:noreply, socket}
