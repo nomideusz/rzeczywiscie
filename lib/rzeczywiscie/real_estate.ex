@@ -577,13 +577,17 @@ defmodule Rzeczywiscie.RealEstate do
     # Find descriptions with CSS/JS patterns
     bad_patterns = [".css-", "{color:", "{font-", "font-weight:", "text-align:"]
     
-    # Navigation/footer patterns (Otodom menu content concatenated)
+    # Navigation/footer/UI patterns (Otodom/OLX garbage content)
     navigation_patterns = [
       "WynajmujęNieruchomości", "NieruchomościMieszkania", "MieszkaniaKawalerki",
       "KawalerkiDomy", "DomyPokoje", "PokojeDziałki", "DziałkiLokale",
       "Popularne lokalizacje", "Popularne biura nieruchomości",
       "Biura nieruchomości w", "Przewodnik wynajmującego", "Raport z rynku najmu",
-      "WarszawaWrocławKraków", "KrakówPoznańGdańsk", "GdańskŁódźGdynia"
+      "WarszawaWrocławKraków", "KrakówPoznańGdańsk", "GdańskŁódźGdynia",
+      # OLX history/stats/login patterns
+      "Historia i statystyki", "Ostatnia aktualizacja:", "DataZmianaCena",
+      "Zaloguj się lub załóż konto", "Zaloguj się i sprawdź", "dostęp do pełnej historii",
+      "załóż konto, aby", "XXXXXXXXXXXX"
     ]
     
     # Get properties with bad descriptions

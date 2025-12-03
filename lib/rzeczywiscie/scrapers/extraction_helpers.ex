@@ -50,11 +50,11 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
   end
 
   @doc """
-  Check if text looks like website navigation/footer content.
+  Check if text looks like website navigation/footer/UI content.
   """
   def is_navigation_content?(nil), do: false
   def is_navigation_content?(text) when is_binary(text) do
-    # Detect common navigation patterns from Otodom/OLX
+    # Detect common navigation/UI patterns from Otodom/OLX
     navigation_patterns = [
       # Otodom navigation patterns (concatenated menu items)
       ~r/WynajmujęNieruchomości/i,
@@ -78,7 +78,21 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
       # Cookie/legal patterns
       ~r/Polityka prywatności/i,
       ~r/Regulamin serwisu/i,
-      ~r/Pliki cookie/i
+      ~r/Pliki cookie/i,
+      # OLX history/stats section
+      ~r/Historia i statystyki/i,
+      ~r/Ostatnia aktualizacja:/i,
+      ~r/DataZmianaCena/i,
+      ~r/Zaloguj się lub załóż konto/i,
+      ~r/Zaloguj się i sprawdź/i,
+      ~r/dostęp do pełnej historii/i,
+      # OLX login/account prompts
+      ~r/załóż konto, aby/i,
+      ~r/XXXX+/,  # Placeholder characters
+      # CSS class patterns in text
+      ~r/\.css-[a-z0-9]+:focus-visible/i,
+      ~r/outline:\d+px solid/i,
+      ~r/margin-left:\d+px/i
     ]
     
     Enum.any?(navigation_patterns, &Regex.match?(&1, text))

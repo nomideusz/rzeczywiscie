@@ -219,13 +219,17 @@ defmodule Rzeczywiscie.Workers.LLMAnalysisWorker do
     
     has_css = Enum.any?(css_patterns, &String.contains?(first_100, &1))
     
-    # Navigation/footer patterns (Otodom menu content)
+    # Navigation/footer/UI patterns (Otodom/OLX garbage content)
     navigation_patterns = [
       "wynajmujęnieruchomości", "nieruchomościmieszkania", "mieszkaniakawalerki",
       "kawalerkidomy", "domypokoje", "pokojedzialki", "działkilokale",
       "popularne lokalizacje", "popularne biura nieruchomości", 
       "biura nieruchomości w", "przewodnik wynajmującego", "raport z rynku najmu",
-      "warszawawrocławkraków", "krakówpoznańgdańsk", "gdańskłódźgdynia"
+      "warszawawrocławkraków", "krakówpoznańgdańsk", "gdańskłódźgdynia",
+      # OLX history/stats/login patterns
+      "historia i statystyki", "ostatnia aktualizacja:", "datazmianacena",
+      "zaloguj się lub załóż konto", "zaloguj się i sprawdź", "dostęp do pełnej historii",
+      "załóż konto, aby", "xxxxxxxxxxxx"
     ]
     
     has_navigation = Enum.any?(navigation_patterns, &String.contains?(desc_lower, &1))
