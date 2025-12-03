@@ -37,6 +37,8 @@ defmodule RzeczywiscieWeb.FriendsLive do
       |> assign(:user_id, user_id)
       |> assign(:user_color, user_color)
       |> assign(:user_name, nil)
+      |> assign(:device_fingerprint, nil)
+      |> assign(:is_linked_device, false)
       |> assign(:session_id, session_id)
       |> assign(:room, room)
       |> assign(:page_title, "#{room.emoji} #{room.name || room.code}")
@@ -48,11 +50,15 @@ defmodule RzeczywiscieWeb.FriendsLive do
       |> assign(:uploading, false)
       |> assign(:show_room_modal, false)
       |> assign(:show_name_modal, false)
+      |> assign(:show_link_modal, false)
       |> assign(:show_lightbox, false)
       |> assign(:lightbox_photo, nil)
       |> assign(:join_room_code, "")
       |> assign(:new_room_name, "")
       |> assign(:name_input, "")
+      |> assign(:link_code, nil)
+      |> assign(:link_code_input, "")
+      |> assign(:link_error, nil)
       |> stream(:photos, photos)
       |> stream(:messages, messages)
       |> allow_upload(:photo,
@@ -349,12 +355,17 @@ defmodule RzeczywiscieWeb.FriendsLive do
                 <div class="w-12 h-12 rounded-full border-2 border-base-content" style={"background-color: #{@user_color}"}></div>
                 <div>
                   <div class="font-bold">{@user_name || String.slice(@user_id, 0, 6)}</div>
-                  <div class="text-xs opacity-40">ID: {String.slice(@user_id, 0, 8)}</div>
+                  <div class="text-xs opacity-40 flex items-center gap-1">
+                    ID: {String.slice(@user_id, 0, 8)}
+                    <%= if @is_linked_device do %>
+                      <span class="text-success">🔗</span>
+                    <% end %>
+                  </div>
                 </div>
               </div>
 
               <!-- Change Name -->
-              <form phx-submit="save-name">
+              <form phx-submit="save-name" class="mb-6">
                 <label class="text-xs font-bold uppercase opacity-60 mb-2 block">Display Name</label>
                 <div class="flex gap-2">
                   <input
@@ -372,6 +383,109 @@ defmodule RzeczywiscieWeb.FriendsLive do
                 </div>
                 <p class="text-xs opacity-40 mt-2">Your name is stored locally and shown with your messages and photos.</p>
               </form>
+
+              <!-- Link Devices -->
+              <div class="pt-4 border-t-2 border-base-content/20">
+                <button
+                  type="button"
+                  phx-click="open-link-modal"
+                  class="w-full px-4 py-3 border-2 border-base-content font-bold uppercase text-sm hover:bg-base-content hover:text-base-100 transition-colors flex items-center justify-center gap-2"
+                >
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                  </svg>
+                  <%= if @is_linked_device do %>
+                    Manage Linked Devices
+                  <% else %>
+                    Link Another Device
+                  <% end %>
+                </button>
+              </div>
+            </div>
+          </div>
+        <% end %>
+
+        <!-- Link Device Modal -->
+        <%= if @show_link_modal do %>
+          <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+            <div class="bg-base-100 border-4 border-base-content p-6 max-w-sm w-full shadow-2xl" phx-click-away="close-link-modal">
+              <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-black uppercase">Link Devices</h2>
+                <button type="button" phx-click="close-link-modal" class="text-2xl leading-none hover:opacity-60">×</button>
+              </div>
+
+              <p class="text-sm opacity-60 mb-6">
+                Use the same account on multiple devices (phone, tablet, computer). Your messages and photos will be shared across all linked devices.
+              </p>
+
+              <%= if @is_linked_device do %>
+                <!-- Already Linked State -->
+                <div class="mb-6 p-4 border-2 border-success/30 bg-success/10">
+                  <div class="flex items-center gap-2 text-success font-bold mb-2">
+                    <span class="text-xl">🔗</span>
+                    <span>Device Linked</span>
+                  </div>
+                  <p class="text-sm opacity-60">This device is linked to account {String.slice(@user_id, 0, 8)}...</p>
+                </div>
+                
+                <button
+                  type="button"
+                  phx-click="unlink-device"
+                  data-confirm="Unlink this device? You'll get a new identity."
+                  class="w-full px-4 py-3 border-2 border-error text-error font-bold uppercase text-sm hover:bg-error hover:text-error-content transition-colors"
+                >
+                  Unlink This Device
+                </button>
+              <% else %>
+                <!-- Option 1: Generate Code (to link FROM this device) -->
+                <div class="mb-6">
+                  <h3 class="font-bold uppercase text-sm mb-3">📱 On your main device:</h3>
+                  <%= if @link_code do %>
+                    <div class="p-4 border-2 border-base-content bg-base-200 text-center">
+                      <div class="text-3xl font-mono font-black tracking-widest mb-2">{@link_code}</div>
+                      <p class="text-xs opacity-50">Enter this code on your other device. Valid for 5 minutes.</p>
+                    </div>
+                  <% else %>
+                    <button
+                      type="button"
+                      phx-click="generate-link-code"
+                      class="w-full px-4 py-3 border-2 border-base-content bg-base-content text-base-100 font-bold uppercase text-sm hover:bg-primary hover:border-primary transition-colors"
+                    >
+                      Generate Link Code
+                    </button>
+                  <% end %>
+                </div>
+
+                <div class="flex items-center gap-4 mb-6">
+                  <div class="flex-1 border-t border-base-content/20"></div>
+                  <span class="text-xs opacity-40 uppercase font-bold">or</span>
+                  <div class="flex-1 border-t border-base-content/20"></div>
+                </div>
+
+                <!-- Option 2: Enter Code (to link TO another device) -->
+                <div>
+                  <h3 class="font-bold uppercase text-sm mb-3">📲 On your new device:</h3>
+                  <form phx-submit="submit-link-code">
+                    <div class="flex gap-2">
+                      <input
+                        type="text"
+                        name="code"
+                        value={@link_code_input}
+                        phx-change="update-link-code-input"
+                        placeholder="ABCD12"
+                        maxlength="6"
+                        class="flex-1 px-3 py-2 border-2 border-base-content text-sm bg-base-100 font-mono uppercase tracking-widest text-center"
+                      />
+                      <button type="submit" class="px-4 py-2 border-2 border-base-content bg-base-content text-base-100 font-bold text-sm">
+                        Link
+                      </button>
+                    </div>
+                    <%= if @link_error do %>
+                      <p class="text-xs text-error mt-2">{@link_error}</p>
+                    <% end %>
+                  </form>
+                </div>
+              <% end %>
             </div>
           </div>
         <% end %>
@@ -451,29 +565,47 @@ defmodule RzeczywiscieWeb.FriendsLive do
 
   # --- Events ---
 
-  def handle_event("set_user_id", %{"user_id" => device_user_id} = params, socket) do
+  def handle_event("set_user_id", %{"user_id" => device_fingerprint} = params, socket) do
     # Client sends device-specific user_id (fingerprint based on hardware)
     old_user_id = socket.assigns.user_id
     room = socket.assigns.room
     user_name = params["user_name"]
+    client_linked_id = params["linked_user_id"]
 
-    if old_user_id != device_user_id do
-      # Update presence with new device-based user_id
+    # Check if this device is linked to another account (server-side check)
+    server_linked_id = Friends.get_linked_user_id(device_fingerprint)
+    
+    # Use server link first, then client stored link, then fingerprint
+    {actual_user_id, is_linked} = cond do
+      server_linked_id != nil -> {server_linked_id, true}
+      client_linked_id != nil && client_linked_id != "" -> {client_linked_id, true}
+      true -> {device_fingerprint, false}
+    end
+
+    if old_user_id != actual_user_id do
+      # Update presence with the resolved user_id
       Presence.untrack(self(), room.code, old_user_id)
 
-      # Generate new color based on device fingerprint (consistent across browsers)
-      new_user_color = generate_user_color(device_user_id)
+      # Generate color based on the actual user_id (consistent across linked devices)
+      new_user_color = generate_user_color(actual_user_id)
 
-      # Track with new device-based user_id
-      Presence.track_user(self(), room.code, device_user_id, new_user_color)
+      # Track with resolved user_id
+      Presence.track_user(self(), room.code, actual_user_id, new_user_color)
 
       {:noreply,
        socket
-       |> assign(:user_id, device_user_id)
+       |> assign(:user_id, actual_user_id)
        |> assign(:user_color, new_user_color)
-       |> assign(:user_name, user_name)}
+       |> assign(:user_name, user_name)
+       |> assign(:device_fingerprint, device_fingerprint)
+       |> assign(:is_linked_device, is_linked)
+       |> push_event("linked_user_id", %{user_id: actual_user_id, is_linked: is_linked})}
     else
-      {:noreply, assign(socket, :user_name, user_name)}
+      {:noreply,
+       socket
+       |> assign(:user_name, user_name)
+       |> assign(:device_fingerprint, device_fingerprint)
+       |> assign(:is_linked_device, is_linked)}
     end
   end
 
@@ -598,6 +730,115 @@ defmodule RzeczywiscieWeb.FriendsLive do
      |> assign(:user_name, name)
      |> assign(:show_name_modal, false)
      |> push_event("save_user_name", %{name: name})}
+  end
+
+  # --- Device Linking Events ---
+
+  def handle_event("open-link-modal", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:show_name_modal, false)
+     |> assign(:show_link_modal, true)
+     |> assign(:link_code, nil)
+     |> assign(:link_code_input, "")
+     |> assign(:link_error, nil)}
+  end
+
+  def handle_event("close-link-modal", _params, socket) do
+    {:noreply, assign(socket, :show_link_modal, false)}
+  end
+
+  def handle_event("generate-link-code", _params, socket) do
+    case Friends.generate_link_code(socket.assigns.user_id) do
+      {:ok, code} ->
+        {:noreply, socket |> assign(:link_code, code) |> assign(:link_error, nil)}
+      {:error, _} ->
+        {:noreply, assign(socket, :link_error, "Failed to generate code")}
+    end
+  end
+
+  def handle_event("update-link-code-input", %{"code" => code}, socket) do
+    {:noreply, assign(socket, :link_code_input, String.upcase(code))}
+  end
+
+  def handle_event("submit-link-code", %{"code" => code}, socket) do
+    device_fingerprint = socket.assigns.device_fingerprint
+    
+    if device_fingerprint == nil do
+      {:noreply, assign(socket, :link_error, "Device not identified yet")}
+    else
+      case Friends.link_device(code, device_fingerprint) do
+        {:ok, master_user_id} ->
+          old_user_id = socket.assigns.user_id
+          room = socket.assigns.room
+          
+          # Update presence if user_id changed
+          if old_user_id != master_user_id do
+            Presence.untrack(self(), room.code, old_user_id)
+            new_user_color = generate_user_color(master_user_id)
+            Presence.track_user(self(), room.code, master_user_id, new_user_color)
+            
+            {:noreply,
+             socket
+             |> assign(:user_id, master_user_id)
+             |> assign(:user_color, new_user_color)
+             |> assign(:is_linked_device, true)
+             |> assign(:show_link_modal, false)
+             |> assign(:link_error, nil)
+             |> push_event("linked_user_id", %{user_id: master_user_id, is_linked: true})
+             |> put_flash(:info, "✅ Device linked successfully!")}
+          else
+            {:noreply,
+             socket
+             |> assign(:is_linked_device, true)
+             |> assign(:show_link_modal, false)
+             |> put_flash(:info, "✅ Already using this account!")}
+          end
+          
+        {:error, :invalid_code} ->
+          {:noreply, assign(socket, :link_error, "Invalid code")}
+          
+        {:error, :expired_code} ->
+          {:noreply, assign(socket, :link_error, "Code expired")}
+          
+        {:error, _} ->
+          {:noreply, assign(socket, :link_error, "Failed to link")}
+      end
+    end
+  end
+
+  def handle_event("unlink-device", _params, socket) do
+    device_fingerprint = socket.assigns.device_fingerprint
+    
+    if device_fingerprint do
+      Friends.unlink_device(device_fingerprint)
+      
+      # Revert to device fingerprint as user_id
+      old_user_id = socket.assigns.user_id
+      room = socket.assigns.room
+      
+      if old_user_id != device_fingerprint do
+        Presence.untrack(self(), room.code, old_user_id)
+        new_user_color = generate_user_color(device_fingerprint)
+        Presence.track_user(self(), room.code, device_fingerprint, new_user_color)
+        
+        {:noreply,
+         socket
+         |> assign(:user_id, device_fingerprint)
+         |> assign(:user_color, new_user_color)
+         |> assign(:is_linked_device, false)
+         |> assign(:show_link_modal, false)
+         |> push_event("linked_user_id", %{user_id: nil, is_linked: false})
+         |> put_flash(:info, "Device unlinked")}
+      else
+        {:noreply,
+         socket
+         |> assign(:is_linked_device, false)
+         |> assign(:show_link_modal, false)}
+      end
+    else
+      {:noreply, socket}
+    end
   end
 
   # --- Room Events ---

@@ -5,7 +5,7 @@ defmodule Rzeczywiscie.Friends do
 
   import Ecto.Query, warn: false
   alias Rzeczywiscie.Repo
-  alias Rzeczywiscie.Friends.{Photo, Room, Message}
+  alias Rzeczywiscie.Friends.{Photo, Room, Message, DeviceLink, LinkCode}
 
   @max_photos 100
   @max_messages 50
@@ -248,5 +248,134 @@ defmodule Rzeczywiscie.Friends do
       content: message.content,
       sent_at: message.inserted_at
     }
+  end
+
+  # --- Device Linking ---
+
+  @doc """
+  Get the master user_id for a device fingerprint.
+  Returns the linked master_user_id if one exists, otherwise nil.
+  """
+  def get_linked_user_id(device_fingerprint) do
+    case Repo.get_by(DeviceLink, device_fingerprint: device_fingerprint) do
+      nil -> nil
+      link -> link.master_user_id
+    end
+  end
+
+  @doc """
+  Generate a link code for a user.
+  Deletes any existing codes for this user first.
+  """
+  def generate_link_code(user_id) do
+    # Delete existing codes for this user
+    LinkCode
+    |> where([c], c.user_id == ^user_id)
+    |> Repo.delete_all()
+
+    # Generate new code
+    code = LinkCode.generate_code()
+    expires_at = LinkCode.expiration_time()
+
+    %LinkCode{}
+    |> LinkCode.changeset(%{code: code, user_id: user_id, expires_at: expires_at})
+    |> Repo.insert()
+    |> case do
+      {:ok, link_code} -> {:ok, link_code.code}
+      error -> error
+    end
+  end
+
+  @doc """
+  Validate a link code and create a device link.
+  Returns {:ok, master_user_id} on success, {:error, reason} on failure.
+  """
+  def link_device(code, device_fingerprint) do
+    code = String.upcase(String.trim(code))
+    now = DateTime.utc_now()
+
+    case Repo.get_by(LinkCode, code: code) do
+      nil ->
+        {:error, :invalid_code}
+
+      link_code ->
+        if DateTime.compare(link_code.expires_at, now) == :lt do
+          # Code expired, delete it
+          Repo.delete(link_code)
+          {:error, :expired_code}
+        else
+          master_user_id = link_code.user_id
+
+          # Check if this device is already linked to a different user
+          case Repo.get_by(DeviceLink, device_fingerprint: device_fingerprint) do
+            nil ->
+              # Create new link
+              create_device_link(device_fingerprint, master_user_id, link_code)
+
+            existing_link ->
+              if existing_link.master_user_id == master_user_id do
+                # Already linked to the same user
+                Repo.delete(link_code)
+                {:ok, master_user_id}
+              else
+                # Update existing link to new master
+                existing_link
+                |> DeviceLink.changeset(%{master_user_id: master_user_id})
+                |> Repo.update()
+                |> case do
+                  {:ok, _} ->
+                    Repo.delete(link_code)
+                    {:ok, master_user_id}
+                  error ->
+                    error
+                end
+              end
+          end
+        end
+    end
+  end
+
+  defp create_device_link(device_fingerprint, master_user_id, link_code) do
+    %DeviceLink{}
+    |> DeviceLink.changeset(%{device_fingerprint: device_fingerprint, master_user_id: master_user_id})
+    |> Repo.insert()
+    |> case do
+      {:ok, _} ->
+        Repo.delete(link_code)
+        {:ok, master_user_id}
+      error ->
+        error
+    end
+  end
+
+  @doc """
+  Unlink a device (remove the device link).
+  """
+  def unlink_device(device_fingerprint) do
+    DeviceLink
+    |> where([d], d.device_fingerprint == ^device_fingerprint)
+    |> Repo.delete_all()
+
+    :ok
+  end
+
+  @doc """
+  Get all devices linked to a user.
+  """
+  def get_linked_devices(master_user_id) do
+    DeviceLink
+    |> where([d], d.master_user_id == ^master_user_id)
+    |> Repo.all()
+  end
+
+  @doc """
+  Clean up expired link codes.
+  """
+  def cleanup_expired_codes do
+    now = DateTime.utc_now()
+
+    LinkCode
+    |> where([c], c.expires_at < ^now)
+    |> Repo.delete_all()
   end
 end

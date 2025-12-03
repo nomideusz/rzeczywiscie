@@ -138,23 +138,42 @@ const Hooks = {
     FriendsApp: {
         mounted() {
             // Generate device fingerprint
-            const deviceId = generateDeviceFingerprint()
+            this.deviceId = generateDeviceFingerprint()
             
-            // Load user name from localStorage (keyed by device ID for consistency)
-            const storedName = localStorage.getItem(`friends_user_name_${deviceId}`)
+            // Load linked user ID from localStorage (if previously linked)
+            const linkedUserId = localStorage.getItem(`friends_linked_user_id_${this.deviceId}`)
             
-            // Send device ID and stored name to server
+            // Load user name from localStorage (keyed by actual user ID for consistency)
+            const effectiveUserId = linkedUserId || this.deviceId
+            const storedName = localStorage.getItem(`friends_user_name_${effectiveUserId}`)
+            
+            // Send device ID, linked ID, and stored name to server
             this.pushEvent("set_user_id", { 
-                user_id: deviceId,
+                user_id: this.deviceId,
+                linked_user_id: linkedUserId,
                 user_name: storedName
             })
             
             // Listen for save_user_name event from server
             this.handleEvent("save_user_name", ({ name }) => {
+                const effectiveId = localStorage.getItem(`friends_linked_user_id_${this.deviceId}`) || this.deviceId
                 if (name) {
-                    localStorage.setItem(`friends_user_name_${deviceId}`, name)
+                    localStorage.setItem(`friends_user_name_${effectiveId}`, name)
                 } else {
-                    localStorage.removeItem(`friends_user_name_${deviceId}`)
+                    localStorage.removeItem(`friends_user_name_${effectiveId}`)
+                }
+            })
+            
+            // Listen for linked_user_id event from server (when device is linked/unlinked)
+            this.handleEvent("linked_user_id", ({ user_id, is_linked }) => {
+                if (is_linked && user_id) {
+                    // Store the linked user ID
+                    localStorage.setItem(`friends_linked_user_id_${this.deviceId}`, user_id)
+                    console.log(`Device linked to account: ${user_id}`)
+                } else {
+                    // Remove linked user ID (unlinked)
+                    localStorage.removeItem(`friends_linked_user_id_${this.deviceId}`)
+                    console.log('Device unlinked')
                 }
             })
             
