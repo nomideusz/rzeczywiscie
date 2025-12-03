@@ -26,6 +26,7 @@ defmodule RzeczywiscieWeb.Router do
       live "/world", LiveWorldLive
       live "/pixels", PixelCanvasLive
       live "/friends", FriendsLive
+      live "/friends/:room", FriendsLive
       live "/real-estate", RealEstateLive
       live "/favorites", FavoritesLive
       live "/admin", AdminLive

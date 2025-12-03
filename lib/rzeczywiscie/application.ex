@@ -15,6 +15,7 @@ defmodule Rzeczywiscie.Application do
       {DNSCluster, query: Application.get_env(:rzeczywiscie, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Rzeczywiscie.PubSub},
       RzeczywiscieWeb.Presence,
+      Rzeczywiscie.Friends.Presence,
       Rzeczywiscie.KanbanState,
       Rzeczywiscie.DrawingState,
       # Start a worker by calling: Rzeczywiscie.Worker.start_link(arg)

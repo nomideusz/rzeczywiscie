@@ -1,42 +1,113 @@
 defmodule Rzeczywiscie.Friends do
   @moduledoc """
-  The Friends context - manages photo sharing with real-time broadcasting.
+  The Friends context - manages photo sharing with rooms and real-time broadcasting.
   """
 
   import Ecto.Query, warn: false
   alias Rzeczywiscie.Repo
-  alias Rzeczywiscie.Friends.Photo
+  alias Rzeczywiscie.Friends.{Photo, Room}
 
-  @topic "friends:photos"
   @max_photos 100
 
+  # --- PubSub ---
+
+  defp topic(room_code), do: "friends:room:#{room_code}"
+
   @doc """
-  Subscribe to photo updates.
+  Subscribe to a room's updates.
   """
-  def subscribe do
-    Phoenix.PubSub.subscribe(Rzeczywiscie.PubSub, @topic)
+  def subscribe(room_code) do
+    Phoenix.PubSub.subscribe(Rzeczywiscie.PubSub, topic(room_code))
   end
 
   @doc """
-  Broadcast photo events to all subscribed clients.
+  Unsubscribe from a room.
   """
-  def broadcast(event, payload) do
-    Phoenix.PubSub.broadcast(Rzeczywiscie.PubSub, @topic, {event, payload})
+  def unsubscribe(room_code) do
+    Phoenix.PubSub.unsubscribe(Rzeczywiscie.PubSub, topic(room_code))
   end
 
   @doc """
-  Broadcast photo events with session_id to filter out sender.
+  Broadcast event to a room.
   """
-  def broadcast(event, payload, session_id) do
-    Phoenix.PubSub.broadcast(Rzeczywiscie.PubSub, @topic, {event, payload, session_id})
+  def broadcast(room_code, event, payload) do
+    Phoenix.PubSub.broadcast(Rzeczywiscie.PubSub, topic(room_code), {event, payload})
   end
 
   @doc """
-  List all photos, most recent first.
-  Limited to the most recent photos for performance.
+  Broadcast event to a room with session_id for filtering.
   """
-  def list_photos(limit \\ @max_photos) do
+  def broadcast(room_code, event, payload, session_id) do
+    Phoenix.PubSub.broadcast(Rzeczywiscie.PubSub, topic(room_code), {event, payload, session_id})
+  end
+
+  # --- Rooms ---
+
+  @doc """
+  Get or create the default lobby room.
+  """
+  def get_or_create_lobby do
+    case Repo.get_by(Room, code: "lobby") do
+      nil ->
+        {:ok, room} = create_room(%{code: "lobby", name: "Lobby", emoji: "🏠"})
+        room
+      room ->
+        room
+    end
+  end
+
+  @doc """
+  Get a room by code.
+  """
+  def get_room_by_code(code) do
+    Repo.get_by(Room, code: code)
+  end
+
+  @doc """
+  Get a room by ID.
+  """
+  def get_room(id), do: Repo.get(Room, id)
+
+  @doc """
+  Create a new room.
+  """
+  def create_room(attrs) do
+    %Room{}
+    |> Room.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc """
+  List recent rooms (for discovery).
+  """
+  def list_recent_rooms(limit \\ 10) do
+    Room
+    |> order_by([r], desc: r.updated_at)
+    |> limit(^limit)
+    |> Repo.all()
+  end
+
+  @doc """
+  Generate a unique room code.
+  """
+  def generate_room_code do
+    code = Room.generate_code()
+    # Check if it exists, regenerate if so
+    if get_room_by_code(code) do
+      generate_room_code()
+    else
+      code
+    end
+  end
+
+  # --- Photos ---
+
+  @doc """
+  List photos in a room.
+  """
+  def list_photos(room_id, limit \\ @max_photos) do
     Photo
+    |> where([p], p.room_id == ^room_id)
     |> order_by([p], desc: p.inserted_at)
     |> limit(^limit)
     |> Repo.all()
@@ -49,16 +120,16 @@ defmodule Rzeczywiscie.Friends do
   def get_photo(id), do: Repo.get(Photo, id)
 
   @doc """
-  Create a new photo and broadcast it to all connected users.
+  Create a new photo in a room and broadcast it.
   """
-  def create_photo(attrs) do
+  def create_photo(attrs, room_code) do
     %Photo{}
     |> Photo.changeset(attrs)
     |> Repo.insert()
     |> case do
       {:ok, photo} ->
         photo_map = photo_to_map(photo)
-        broadcast(:new_photo, photo_map)
+        broadcast(room_code, :new_photo, photo_map)
         {:ok, photo_map}
 
       error ->
@@ -69,7 +140,7 @@ defmodule Rzeczywiscie.Friends do
   @doc """
   Delete a photo and broadcast the deletion.
   """
-  def delete_photo(id) do
+  def delete_photo(id, room_code) do
     case Repo.get(Photo, id) do
       nil ->
         {:error, :not_found}
@@ -77,7 +148,7 @@ defmodule Rzeczywiscie.Friends do
       photo ->
         case Repo.delete(photo) do
           {:ok, _} ->
-            broadcast(:photo_deleted, %{id: id})
+            broadcast(room_code, :photo_deleted, %{id: id})
             {:ok, id}
 
           error ->
@@ -87,53 +158,12 @@ defmodule Rzeczywiscie.Friends do
   end
 
   @doc """
-  Delete all photos from a specific user.
+  Count photos in a room.
   """
-  def delete_user_photos(user_id) do
-    {count, _} =
-      Photo
-      |> where([p], p.user_id == ^user_id)
-      |> Repo.delete_all()
-
-    broadcast(:user_photos_deleted, %{user_id: user_id})
-    {:ok, count}
-  end
-
-  @doc """
-  Get photo count.
-  """
-  def count_photos do
-    Repo.aggregate(Photo, :count, :id)
-  end
-
-  @doc """
-  Get photo count for a specific user.
-  """
-  def count_user_photos(user_id) do
+  def count_photos(room_id) do
     Photo
-    |> where([p], p.user_id == ^user_id)
+    |> where([p], p.room_id == ^room_id)
     |> Repo.aggregate(:count, :id)
-  end
-
-  @doc """
-  Cleanup old photos, keeping only the most recent ones.
-  """
-  def cleanup_old_photos(keep_count \\ @max_photos) do
-    # Get IDs of photos to keep
-    keep_ids =
-      Photo
-      |> order_by([p], desc: p.inserted_at)
-      |> limit(^keep_count)
-      |> select([p], p.id)
-      |> Repo.all()
-
-    # Delete all photos not in the keep list
-    {deleted_count, _} =
-      Photo
-      |> where([p], p.id not in ^keep_ids)
-      |> Repo.delete_all()
-
-    {:ok, deleted_count}
   end
 
   # Convert Photo struct to map for LiveView
@@ -149,4 +179,3 @@ defmodule Rzeczywiscie.Friends do
     }
   end
 end
-

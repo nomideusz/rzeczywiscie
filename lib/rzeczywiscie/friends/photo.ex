@@ -9,13 +9,15 @@ defmodule Rzeczywiscie.Friends.Photo do
     field :content_type, :string, default: "image/jpeg"
     field :file_size, :integer
 
+    belongs_to :room, Rzeczywiscie.Friends.Room
+
     timestamps()
   end
 
   @doc false
   def changeset(photo, attrs) do
     photo
-    |> cast(attrs, [:user_id, :user_color, :image_data, :content_type, :file_size])
+    |> cast(attrs, [:user_id, :user_color, :image_data, :content_type, :file_size, :room_id])
     |> validate_required([:user_id, :user_color, :image_data])
   end
 end
