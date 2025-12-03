@@ -4,7 +4,6 @@ defmodule RzeczywiscieWeb.RealEstateLive do
 
   require Logger
   alias Rzeczywiscie.RealEstate
-  alias Rzeczywiscie.Workers.GeocodingWorker
   alias Rzeczywiscie.Services.AirQuality
 
   # Temporary assigns: properties don't accumulate in LiveView state
@@ -109,24 +108,6 @@ defmodule RzeczywiscieWeb.RealEstateLive do
       |> load_properties(load_map: socket.assigns.map_loaded)
 
     {:noreply, socket}
-  end
-
-  @impl true
-  def handle_event("trigger_geocoding", _params, socket) do
-    Logger.info("Manual geocoding triggered")
-
-    case GeocodingWorker.trigger(batch_size: 50, delay_ms: 500) do
-      {:ok, _job} ->
-        {:noreply,
-         put_flash(
-           socket,
-           :info,
-           "Geocoding job started. Coordinates will be added to properties."
-         )}
-
-      {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Failed to start geocoding: #{inspect(reason)}")}
-    end
   end
 
   @impl true

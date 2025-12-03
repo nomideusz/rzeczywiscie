@@ -149,6 +149,8 @@ defmodule Rzeczywiscie.RealEstate do
   end
 
   defp apply_sorting(query, column, direction) do
+    alias Rzeczywiscie.AirQuality.Cache
+    
     # Convert direction string to atom
     direction_atom = case direction do
       "asc" -> :asc
@@ -157,28 +159,42 @@ defmodule Rzeczywiscie.RealEstate do
     end
 
     # Handle special case for price_per_sqm (calculated field)
-    if column == "price_per_sqm" do
-      case direction_atom do
-        :asc ->
-          order_by(query, [p], [asc_nulls_last: fragment("CASE WHEN ? > 0 THEN ? / ? ELSE NULL END", p.area_sqm, p.price, p.area_sqm)])
-        :desc ->
-          order_by(query, [p], [desc_nulls_last: fragment("CASE WHEN ? > 0 THEN ? / ? ELSE NULL END", p.area_sqm, p.price, p.area_sqm)])
-      end
-    else
-      # Convert string column to atom, defaulting to :inserted_at if invalid
-      column_atom = try do
-        String.to_existing_atom(column)
-      rescue
-        ArgumentError -> :inserted_at
-      end
+    cond do
+      column == "price_per_sqm" ->
+        case direction_atom do
+          :asc ->
+            order_by(query, [p], [asc_nulls_last: fragment("CASE WHEN ? > 0 THEN ? / ? ELSE NULL END", p.area_sqm, p.price, p.area_sqm)])
+          :desc ->
+            order_by(query, [p], [desc_nulls_last: fragment("CASE WHEN ? > 0 THEN ? / ? ELSE NULL END", p.area_sqm, p.price, p.area_sqm)])
+        end
 
-      # Apply ordering with NULL handling (NULLs last for both directions)
-      case direction_atom do
-        :asc ->
-          order_by(query, [p], [asc_nulls_last: field(p, ^column_atom)])
-        :desc ->
-          order_by(query, [p], [desc_nulls_last: field(p, ^column_atom)])
-      end
+      column == "aqi" ->
+        # Join with AQI cache table and sort by aqi value
+        query = query
+        |> join(:left, [p], c in Cache, on: fragment("ROUND(?::numeric, 2)", p.latitude) == c.lat and fragment("ROUND(?::numeric, 2)", p.longitude) == c.lng)
+        
+        case direction_atom do
+          :asc ->
+            order_by(query, [p, c], [asc_nulls_last: c.aqi])
+          :desc ->
+            order_by(query, [p, c], [desc_nulls_last: c.aqi])
+        end
+
+      true ->
+        # Convert string column to atom, defaulting to :inserted_at if invalid
+        column_atom = try do
+          String.to_existing_atom(column)
+        rescue
+          ArgumentError -> :inserted_at
+        end
+
+        # Apply ordering with NULL handling (NULLs last for both directions)
+        case direction_atom do
+          :asc ->
+            order_by(query, [p], [asc_nulls_last: field(p, ^column_atom)])
+          :desc ->
+            order_by(query, [p], [desc_nulls_last: field(p, ^column_atom)])
+        end
     end
   end
 

@@ -26,12 +26,6 @@
     switchView('map')
   }
 
-  function triggerGeocode() {
-    if (confirm('Start geocoding? This will add coordinates to up to 50 properties using Google Geocoding API.')) {
-      live.pushEvent('trigger_geocoding', {})
-    }
-  }
-
   // Calculate percentages for stats
   $: coordsPercent = stats.total_count > 0 ? Math.round((stats.with_coords / stats.total_count) * 100) : 0
   $: aqiPercent = stats.total_count > 0 ? Math.round((stats.with_aqi / stats.total_count) * 100) : 0
@@ -74,15 +68,8 @@
           </p>
         </div>
 
-        <!-- View Toggle & Actions - Compact on mobile -->
+        <!-- View Toggle -->
         <div class="flex flex-wrap gap-2">
-          <button
-            onclick={triggerGeocode}
-            class="px-2 md:px-4 py-1.5 md:py-2 text-[10px] md:text-xs font-bold uppercase tracking-wide border-2 border-success text-success hover:bg-success hover:text-success-content transition-colors cursor-pointer"
-          >
-            📍 <span class="hidden sm:inline">Geocode</span>
-          </button>
-
           <div class="flex border-2 border-base-content">
             <button
               class="px-2 md:px-4 py-1.5 md:py-2 text-[10px] md:text-xs font-bold uppercase tracking-wide transition-colors cursor-pointer {currentView === 'table' ? 'bg-base-content text-base-100' : 'hover:bg-base-content hover:text-base-100'}"

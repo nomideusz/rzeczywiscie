@@ -586,7 +586,11 @@
                   zł/m² {sortColumn === 'price_per_sqm' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
                 </button>
               </th>
-              <th class="px-2 py-2 text-center text-[10px] font-bold uppercase tracking-wide w-10">AQI</th>
+              <th class="px-2 py-2 text-center text-[10px] font-bold uppercase tracking-wide w-10">
+                <button onclick={() => handleSort('aqi')} class="hover:text-primary cursor-pointer">
+                  AQI {sortColumn === 'aqi' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                </button>
+              </th>
               <th class="px-2 py-2 text-right text-[10px] font-bold uppercase tracking-wide w-14">
                 <button onclick={() => handleSort('inserted_at')} class="hover:text-primary cursor-pointer">
                   Age {sortColumn === 'inserted_at' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
@@ -666,9 +670,6 @@
                         {/if}
                         {property.title}
                         <span class="text-primary opacity-0 group-hover:opacity-100 transition-opacity">↗</span>
-                        {#if property.description && property.description.length > 50}
-                          <span class="text-info ml-1" title="Has description">📝</span>
-                        {/if}
                         {#if property.llm_motivation && property.llm_motivation !== 'standard' && property.llm_motivation !== 'unknown'}
                           <span class="ml-1" title="Seller: {property.llm_motivation}">{getLlmMotivationIcon(property.llm_motivation)}</span>
                         {/if}
@@ -842,9 +843,6 @@
               {/if}
               {property.title}
               <span class="text-primary opacity-0 group-hover:opacity-100 transition-opacity">↗</span>
-              {#if property.description && property.description.length > 50}
-                <span class="text-info ml-1 text-sm" title="Has description">📝</span>
-              {/if}
             </a>
 
             <!-- Location -->
