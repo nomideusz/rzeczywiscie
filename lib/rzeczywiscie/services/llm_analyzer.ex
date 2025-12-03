@@ -520,10 +520,22 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
     |> maybe_add_field(signals, "negotiation_hints", :negotiation_hints, [])
     |> maybe_add_field(signals, "investment_score", :investment_score, nil)
     |> maybe_add_field(signals, "summary", :summary, nil)
-    # New extracted numeric fields
+    # Extracted numeric fields
     |> maybe_add_field(signals, "monthly_fee", :monthly_fee, nil)
     |> maybe_add_field(signals, "year_built", :year_built, nil)
     |> maybe_add_field(signals, "floor_info", :floor_info, nil)
+    # Location extraction fields
+    |> maybe_add_field(signals, "street", :street, nil)
+    |> maybe_add_field(signals, "extracted_city", :extracted_city, nil)
+    |> maybe_add_field(signals, "extracted_district", :extracted_district, nil)
+    # Data quality fields
+    |> maybe_add_field(signals, "data_issues", :data_issues, [])
+    |> maybe_add_field(signals, "corrected_area", :corrected_area, nil)
+    |> maybe_add_field(signals, "corrected_rooms", :corrected_rooms, nil)
+    |> maybe_add_field(signals, "corrected_transaction_type", :corrected_transaction_type, nil)
+    # Agency and quality detection
+    |> maybe_add_field(signals, "is_agency", :is_agency, nil)
+    |> maybe_add_field(signals, "listing_quality", :listing_quality, nil)
     # Clean up summary to remove "Unknown" location references
     |> clean_summary()
   end
