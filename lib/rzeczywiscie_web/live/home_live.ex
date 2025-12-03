@@ -82,6 +82,13 @@ defmodule RzeczywiscieWeb.HomeLive do
                 <span class="relative z-10">🎨 Pixels</span>
                 <div class="absolute inset-0 bg-base-content translate-x-1 translate-y-1 -z-10"></div>
               </a>
+              <a
+                href={~p"/friends"}
+                class="group relative px-4 sm:px-6 py-3 sm:py-4 bg-error text-error-content font-bold text-sm sm:text-base tracking-wide uppercase border-4 border-base-content hover:translate-x-1 hover:translate-y-1 transition-transform text-center"
+              >
+                <span class="relative z-10">📸 Friends</span>
+                <div class="absolute inset-0 bg-base-content translate-x-1 translate-y-1 -z-10"></div>
+              </a>
             </div>
           </div>
 
@@ -434,6 +441,64 @@ defmodule RzeczywiscieWeb.HomeLive do
               class="inline-block px-6 py-3 bg-warning text-warning-content font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors"
             >
               Launch →
+            </a>
+          </div>
+        </div>
+
+        <!-- Friends Photos Card - Brutalist -->
+        <div class="group relative border-4 border-base-content bg-base-100 p-8 hover:translate-x-1 hover:translate-y-1 transition-transform lg:mt-12">
+          <!-- Accent bar -->
+          <div class="absolute top-0 left-0 w-2 h-full bg-error"></div>
+
+          <!-- Number badge -->
+          <div class="absolute top-4 right-4 w-12 h-12 border-2 border-base-content flex items-center justify-center font-black text-xl">
+            06
+          </div>
+
+          <div class="pr-16">
+            <!-- Icon - geometric -->
+            <div class="w-20 h-20 border-4 border-error mb-6 flex items-center justify-center">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                class="h-10 w-10"
+                stroke="currentColor"
+                stroke-width="2.5"
+              >
+                <path
+                  stroke-linecap="square"
+                  stroke-linejoin="miter"
+                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                />
+              </svg>
+            </div>
+
+            <h3 class="text-4xl font-black mb-4 tracking-tight uppercase">
+              Friends<br />Photos
+            </h3>
+
+            <p class="text-base opacity-70 mb-6 leading-relaxed">
+              Share photos with friends in real-time. Upload images and watch them appear instantly for everyone connected.
+            </p>
+
+            <!-- Tags - raw style -->
+            <div class="flex flex-wrap gap-2 mb-8">
+              <span class="px-3 py-1 text-xs uppercase tracking-wider bg-error text-error-content font-bold">
+                📸 Photos
+              </span>
+              <span class="px-3 py-1 text-xs uppercase tracking-wider border-2 border-base-content font-bold">
+                Real-time
+              </span>
+              <span class="px-3 py-1 text-xs uppercase tracking-wider bg-base-content text-base-100 font-bold">
+                Social
+              </span>
+            </div>
+
+            <a
+              href={~p"/friends"}
+              class="inline-block px-6 py-3 bg-error text-error-content font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors"
+            >
+              Share →
             </a>
           </div>
         </div>

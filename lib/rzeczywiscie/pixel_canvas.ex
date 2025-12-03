@@ -478,24 +478,19 @@ defmodule Rzeczywiscie.PixelCanvas do
             stats.special_pixels_available
           end
 
-        case stats
-             |> UserPixelStats.changeset(%{
-               pixels_placed_count: new_count,
-               mega_pixels_available: new_mega_count,
-               mega_last_unlock_at: mega_last_unlock,
-               massive_pixels_available: new_massive_count,
-               last_unlock_at: last_unlock,
-               special_pixels_available: updated_specials
-             })
-             |> Repo.update() do
-          {:ok, _} ->
-            # Return lucky unicorn status only if save succeeded
-            lucky_unicorn
+        stats
+        |> UserPixelStats.changeset(%{
+          pixels_placed_count: new_count,
+          mega_pixels_available: new_mega_count,
+          mega_last_unlock_at: mega_last_unlock,
+          massive_pixels_available: new_massive_count,
+          last_unlock_at: last_unlock,
+          special_pixels_available: updated_specials
+        })
+        |> Repo.update()
 
-          {:error, _changeset} ->
-            # Don't claim lucky unicorn if the stats update failed
-            false
-        end
+        # Return whether user won a lucky unicorn
+        lucky_unicorn
 
       :mega ->
         # Mega pixel used - decrement available, increment used count
@@ -509,16 +504,14 @@ defmodule Rzeczywiscie.PixelCanvas do
             {stats.massive_pixels_available, stats.last_unlock_at}
           end
 
-        # Explicitly capture result (even though we return false regardless)
-        _update_result =
-          stats
-          |> UserPixelStats.changeset(%{
-            mega_pixels_available: stats.mega_pixels_available - 1,
-            mega_pixels_used_count: new_used_count,
-            massive_pixels_available: new_massive_count,
-            last_unlock_at: last_unlock
-          })
-          |> Repo.update()
+        stats
+        |> UserPixelStats.changeset(%{
+          mega_pixels_available: stats.mega_pixels_available - 1,
+          mega_pixels_used_count: new_used_count,
+          massive_pixels_available: new_massive_count,
+          last_unlock_at: last_unlock
+        })
+        |> Repo.update()
 
         # No lucky unicorn for mega pixels
         false
