@@ -178,7 +178,7 @@ defmodule RzeczywiscieWeb.AdminLive do
               <h2 class="text-sm font-bold uppercase tracking-wide">🔧 Manual Actions</h2>
               <p class="text-[10px] opacity-60">Run tasks manually if needed</p>
             </div>
-            <span class={"transition-transform #{if @show_manual, do: "rotate-180"}}"}>▼</span>
+            <span class={"transition-transform #{if @show_manual, do: "rotate-180"}"}>▼</span>
           </button>
           
           <%= if @show_manual do %>
