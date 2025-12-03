@@ -180,11 +180,11 @@ defmodule Rzeczywiscie.Workers.LLMAnalysisWorker do
       llm_negotiation_hints: signals[:negotiation_hints] || [],
       llm_monthly_fee: signals[:monthly_fee],
       llm_year_built: signals[:year_built],
-      llm_floor_info: signals[:floor_info]
-      # New fields - DISABLED until migration runs
-      # llm_data_issues: signals[:data_issues] || [],
-      # llm_listing_quality: signals[:listing_quality],
-      # llm_is_agency: signals[:is_agency]
+      llm_floor_info: signals[:floor_info],
+      # Data quality fields
+      llm_data_issues: signals[:data_issues] || [],
+      llm_listing_quality: signals[:listing_quality],
+      llm_is_agency: signals[:is_agency]
     }
     
     # Add street if LLM extracted it and property doesn't already have one
@@ -252,11 +252,10 @@ defmodule Rzeczywiscie.Workers.LLMAnalysisWorker do
       {:ok, _} ->
         extras = []
         extras = if signals[:street], do: ["street: #{signals[:street]}" | extras], else: extras
-        # Disabled until migration runs:
-        # extras = if signals[:data_issues] && length(signals[:data_issues]) > 0, do: ["#{length(signals[:data_issues])} issues" | extras], else: extras
-        # extras = if signals[:is_agency] == true, do: ["agency" | extras], else: extras
+        extras = if signals[:data_issues] && length(signals[:data_issues]) > 0, do: ["#{length(signals[:data_issues])} issues" | extras], else: extras
+        extras = if signals[:is_agency] == true, do: ["agency" | extras], else: extras
         extras_str = if length(extras) > 0, do: ", #{Enum.join(extras, ", ")}", else: ""
-        Logger.info("  ✓ Property ##{property.id} analyzed (inv: #{signals[:investment_score] || "?"}/10#{extras_str})")
+        Logger.info("  ✓ Property ##{property.id} analyzed (inv: #{signals[:investment_score] || "?"}/10, quality: #{signals[:listing_quality] || "?"}#{extras_str})")
         :ok
       {:error, changeset} ->
         Logger.error("  ✗ Failed to save: #{inspect(changeset.errors)}")
