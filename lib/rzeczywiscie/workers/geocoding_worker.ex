@@ -34,7 +34,7 @@ defmodule Rzeczywiscie.Workers.GeocodingWorker do
       # Count how many will use cached coordinates vs API
       cached_count = Enum.count(properties, fn p ->
         has_street? = p.street && p.street != "" && String.length(p.street) > 3
-        !has_street? && Geocoding.district_cached?(p.district)
+        !has_street? && (Geocoding.location_cached?(p.district) || Geocoding.location_cached?(p.city))
       end)
       api_count = length(properties) - cached_count
       
@@ -43,7 +43,7 @@ defmodule Rzeczywiscie.Workers.GeocodingWorker do
       results =
         Enum.map(properties, fn property ->
           has_street? = property.street && property.street != "" && String.length(property.street) > 3
-          needs_api? = has_street? || !Geocoding.district_cached?(property.district)
+          needs_api? = has_street? || (!Geocoding.location_cached?(property.district) && !Geocoding.location_cached?(property.city))
           
           result = geocode_property(property)
 
