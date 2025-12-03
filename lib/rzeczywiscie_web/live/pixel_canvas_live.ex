@@ -197,6 +197,9 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
         # Schedule cooldown update (mega pixel has 45s cooldown)
         Process.send_after(self(), :update_cooldown, 1000)
 
+        # Reset to normal mode if no more mega pixels available
+        new_mode = if user_stats.mega_pixels_available == 0, do: :normal, else: socket.assigns.pixel_mode
+
         {:noreply,
          socket
          |> assign(:pixels, pixels)
@@ -206,6 +209,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
          |> assign(:stats, stats)
          |> assign(:user_stats, user_stats)
          |> assign(:milestone_progress, milestone_progress)
+         |> assign(:pixel_mode, new_mode)
          |> put_flash(:info, "Mega pixel placed! ⭐")}
 
       {:error, {:cooldown, _seconds}} ->
@@ -258,6 +262,9 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
         # Schedule cooldown update (massive pixel has 120s cooldown)
         Process.send_after(self(), :update_cooldown, 1000)
 
+        # Reset to normal mode if no more massive pixels available
+        new_mode = if user_stats.massive_pixels_available == 0, do: :normal, else: socket.assigns.pixel_mode
+
         {:noreply,
          socket
          |> assign(:pixels, pixels)
@@ -267,6 +274,7 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
          |> assign(:stats, stats)
          |> assign(:user_stats, user_stats)
          |> assign(:milestone_progress, milestone_progress)
+         |> assign(:pixel_mode, new_mode)
          |> put_flash(:info, "Massive pixel placed! 🌈")}
 
       {:error, {:cooldown, _seconds}} ->

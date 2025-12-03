@@ -1000,12 +1000,24 @@
         }
       }
       // Place massive pixel if mode is active and available
-      else if (pixelMode === "massive" && userStats.massive_pixels_available > 0) {
-        live.pushEvent("place_massive_pixel", { x, y })
+      else if (pixelMode === "massive") {
+        if (userStats.massive_pixels_available > 0) {
+          live.pushEvent("place_massive_pixel", { x, y })
+        } else {
+          // User is in massive mode but has none - show error blink, don't fall through
+          invalidPlacementBlink = true
+          setTimeout(() => { invalidPlacementBlink = false }, 500)
+        }
       }
       // Place mega pixel if mode is active and available
-      else if (pixelMode === "mega" && userStats.mega_pixels_available > 0) {
-        live.pushEvent("place_mega_pixel", { x, y })
+      else if (pixelMode === "mega") {
+        if (userStats.mega_pixels_available > 0) {
+          live.pushEvent("place_mega_pixel", { x, y })
+        } else {
+          // User is in mega mode but has none - show error blink, don't fall through
+          invalidPlacementBlink = true
+          setTimeout(() => { invalidPlacementBlink = false }, 500)
+        }
       }
       // Place normal pixel
       else {
@@ -1332,12 +1344,24 @@
           }
         }
         // Place massive pixel if mode is active and available
-        else if (pixelMode === "massive" && userStats.massive_pixels_available > 0) {
-          live.pushEvent("place_massive_pixel", { x, y })
+        else if (pixelMode === "massive") {
+          if (userStats.massive_pixels_available > 0) {
+            live.pushEvent("place_massive_pixel", { x, y })
+          } else {
+            // User is in massive mode but has none - show error blink
+            invalidPlacementBlink = true
+            setTimeout(() => { invalidPlacementBlink = false }, 500)
+          }
         }
         // Place mega pixel if mode is active and available
-        else if (pixelMode === "mega" && userStats.mega_pixels_available > 0) {
-          live.pushEvent("place_mega_pixel", { x, y })
+        else if (pixelMode === "mega") {
+          if (userStats.mega_pixels_available > 0) {
+            live.pushEvent("place_mega_pixel", { x, y })
+          } else {
+            // User is in mega mode but has none - show error blink
+            invalidPlacementBlink = true
+            setTimeout(() => { invalidPlacementBlink = false }, 500)
+          }
         }
         // Place normal pixel
         else {
