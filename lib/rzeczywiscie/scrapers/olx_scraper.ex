@@ -913,6 +913,11 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
       String.contains?(text_lower, "wolnostojący") -> "dom"
       String.contains?(text_lower, "parter + piętro") -> "dom"
       String.contains?(text_lower, "z ogrodem") && not String.contains?(text_lower, "mieszkan") -> "dom"
+      String.contains?(text_lower, "siedlisko") -> "dom"
+      String.contains?(text_lower, "gospodarstwo") -> "dom"
+      String.contains?(text_lower, "zagroda") -> "dom"
+      String.contains?(text_lower, "chałupa") -> "dom"
+      String.contains?(text_lower, "leśniczówka") -> "dom"
 
       # Room (pokój) / Student accommodation (stancja)
       String.contains?(text_lower, "pokój ") -> "pokój"

@@ -1451,6 +1451,10 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
       String.contains?(url_lower, "segment") -> "dom"
       String.contains?(url_lower, "szeregowiec") -> "dom"
       String.contains?(url_lower, "jednorodzinny") -> "dom"
+      String.contains?(url_lower, "siedlisko") -> "dom"
+      String.contains?(url_lower, "gospodarstwo") -> "dom"
+      String.contains?(url_lower, "zagroda") -> "dom"
+      String.contains?(url_lower, "dworek") -> "dom"
 
       # Room patterns
       String.match?(url_lower, ~r/\bpokoj\b/) -> "pokój"
@@ -1634,6 +1638,12 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
       String.contains?(text_lower, "jednorodzinny") -> "dom"
       String.contains?(text_lower, "wolnostojący") -> "dom"
       String.contains?(text_lower, "rezydencja") -> "dom"
+      String.contains?(text_lower, "siedlisko") -> "dom"
+      String.contains?(text_lower, "gospodarstwo") -> "dom"
+      String.contains?(text_lower, "zagroda") -> "dom"
+      String.contains?(text_lower, "chałupa") -> "dom"
+      String.contains?(text_lower, "leśniczówka") -> "dom"
+      String.contains?(text_lower, "dworek") -> "dom"
 
       # Room (pokój)
       String.contains?(text_lower, "pokój ") -> "pokój"
