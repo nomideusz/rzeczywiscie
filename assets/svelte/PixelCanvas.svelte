@@ -353,9 +353,6 @@
     (15 - secondsRemaining) / 15                               // Normal (15s)
   )
 
-  // Check if unicorn is available
-  $: hasUnicornAvailable = (userStats.special_pixels_available?.unicorn || 0) > 0
-
   // Calculate responsive pixel size based on available space
   function calculatePixelSize() {
     if (!canvasContainer) return
@@ -479,7 +476,7 @@
     // Reset shadow before drawing special pixels
     ctx.shadowBlur = 0
 
-    // Draw special pixels as shapes (all animals)
+    // Draw special pixels as shapes (unicorns, etc.)
     pixels.forEach(pixel => {
       if (!pixel.is_special) return
 
@@ -590,7 +587,7 @@
           }
         }
         ctx.shadowBlur = 0
-      } else if (!pendingSpecialPixel && hasUnicornAvailable) {
+      } else if (!pendingSpecialPixel && Object.values(userStats.special_pixels_available || {}).some(c => c > 0)) {
         // Draw colorful unicorn shape preview following cursor (when unicorn is available)
         const isValidPosition = isUnicornPositionValid(hoveredPixel.x, hoveredPixel.y, unicornDirection)
         ctx.globalAlpha = 0.6
@@ -721,24 +718,12 @@
         }
       }
       // Place massive pixel if mode is active and available
-      else if (pixelMode === "massive") {
-        if (userStats.massive_pixels_available > 0) {
-          live.pushEvent("place_massive_pixel", { x, y })
-        } else {
-          // User is in massive mode but has none - show error blink, don't fall through
-          invalidPlacementBlink = true
-          setTimeout(() => { invalidPlacementBlink = false }, 500)
-        }
+      else if (pixelMode === "massive" && userStats.massive_pixels_available > 0) {
+        live.pushEvent("place_massive_pixel", { x, y })
       }
       // Place mega pixel if mode is active and available
-      else if (pixelMode === "mega") {
-        if (userStats.mega_pixels_available > 0) {
-          live.pushEvent("place_mega_pixel", { x, y })
-        } else {
-          // User is in mega mode but has none - show error blink, don't fall through
-          invalidPlacementBlink = true
-          setTimeout(() => { invalidPlacementBlink = false }, 500)
-        }
+      else if (pixelMode === "mega" && userStats.mega_pixels_available > 0) {
+        live.pushEvent("place_mega_pixel", { x, y })
       }
       // Place normal pixel
       else {
@@ -1059,24 +1044,12 @@
           }
         }
         // Place massive pixel if mode is active and available
-        else if (pixelMode === "massive") {
-          if (userStats.massive_pixels_available > 0) {
-            live.pushEvent("place_massive_pixel", { x, y })
-          } else {
-            // User is in massive mode but has none - show error blink
-            invalidPlacementBlink = true
-            setTimeout(() => { invalidPlacementBlink = false }, 500)
-          }
+        else if (pixelMode === "massive" && userStats.massive_pixels_available > 0) {
+          live.pushEvent("place_massive_pixel", { x, y })
         }
         // Place mega pixel if mode is active and available
-        else if (pixelMode === "mega") {
-          if (userStats.mega_pixels_available > 0) {
-            live.pushEvent("place_mega_pixel", { x, y })
-          } else {
-            // User is in mega mode but has none - show error blink
-            invalidPlacementBlink = true
-            setTimeout(() => { invalidPlacementBlink = false }, 500)
-          }
+        else if (pixelMode === "mega" && userStats.mega_pixels_available > 0) {
+          live.pushEvent("place_mega_pixel", { x, y })
         }
         // Place normal pixel
         else {
@@ -1410,7 +1383,7 @@
             </div>
 
             <!-- Current Mode & Available Pixels -->
-            {#if hasUnicornAvailable}
+            {#if Object.values(userStats.special_pixels_available || {}).some(c => c > 0)}
               <div class="pt-2 border-t border-neutral-200">
                 <div class="text-[10px] font-bold text-neutral-900 mb-1 flex items-center gap-1">
                   <span class="bg-gradient-to-r from-purple-600 via-pink-500 to-purple-600 bg-clip-text text-transparent">Next click: 🦄</span>
@@ -1480,7 +1453,7 @@
           </div>
 
           <!-- Current Mode & Available Pixels -->
-          {#if hasUnicornAvailable}
+          {#if Object.values(userStats.special_pixels_available || {}).some(c => c > 0)}
             <div class="mt-3 pt-2 border-t border-neutral-200">
               <div class="text-xs font-bold text-center py-2 px-3 bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded">
                 <div class="bg-gradient-to-r from-purple-600 via-pink-500 to-purple-600 bg-clip-text text-transparent">

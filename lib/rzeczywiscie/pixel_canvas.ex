@@ -532,7 +532,7 @@ defmodule Rzeczywiscie.PixelCanvas do
     # Count all pixels for milestone progress (unicorns count as their full shape)
     total_pixels = total_pixel_coverage()
     
-    # Define milestones: more achievable thresholds for small communities
+    # Define milestones: every 1000 pixels unlocks a Unicorn
     milestones = [
       %{threshold: 100, reward: "unicorn", name: "First Herd 🦄"},
       %{threshold: 250, reward: "unicorn", name: "Growing Herd 🦄"},
@@ -567,7 +567,7 @@ defmodule Rzeczywiscie.PixelCanvas do
     # Count all pixels for milestone checks (unicorns count as their full shape)
     total_pixels = total_pixel_coverage()
     
-    # Milestones to check - more achievable thresholds for small communities
+    # Milestones to check (lower thresholds for early engagement)
     milestones_to_check = [
       %{type: "pixels_100", threshold: 100, reward: "unicorn"},
       %{type: "pixels_250", threshold: 250, reward: "unicorn"},
