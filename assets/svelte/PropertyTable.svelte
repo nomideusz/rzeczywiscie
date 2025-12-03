@@ -675,7 +675,7 @@
                         {/if}
                       </a>
                       <div class="text-[11px] opacity-60 mt-0.5">
-                        {property.city || '—'}{property.district ? ` · ${property.district}` : ''}{property.street ? ` · ${property.street}` : ''}{property.rooms ? ` · ${property.rooms}p` : ''}
+                        {property.city || '—'}{property.district && !property.city?.includes(property.district) ? ` · ${property.district}` : ''}{property.street ? ` · ${property.street}` : ''}{property.rooms ? ` · ${property.rooms}p` : ''}
                       </div>
                       <!-- LLM Summary (if available) -->
                       {#if property.llm_summary && !property.llm_summary.includes('Skipped')}
@@ -847,7 +847,7 @@
 
             <!-- Location -->
             <div class="text-sm opacity-70 mb-3">
-              📍 {property.city || '—'}{property.district ? `, ${property.district}` : ''}{property.street ? ` · ${property.street}` : ''}
+              📍 {property.city || '—'}{property.district && !property.city?.includes(property.district) ? `, ${property.district}` : ''}{property.street ? ` · ${property.street}` : ''}
             </div>
 
             <!-- Stats -->
