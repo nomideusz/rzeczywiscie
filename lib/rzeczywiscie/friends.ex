@@ -173,6 +173,7 @@ defmodule Rzeczywiscie.Friends do
       id: photo.id,
       user_id: photo.user_id,
       user_color: photo.user_color,
+      user_name: photo.user_name,
       data_url: photo.image_data,
       content_type: photo.content_type,
       file_size: photo.file_size,
@@ -212,12 +213,38 @@ defmodule Rzeczywiscie.Friends do
     end
   end
 
+  @doc """
+  Get a single message by ID.
+  """
+  def get_message(id), do: Repo.get(Message, id)
+
+  @doc """
+  Delete a message and broadcast the deletion.
+  """
+  def delete_message(id, room_code) do
+    case Repo.get(Message, id) do
+      nil ->
+        {:error, :not_found}
+
+      message ->
+        case Repo.delete(message) do
+          {:ok, _} ->
+            broadcast(room_code, :message_deleted, %{id: id})
+            {:ok, id}
+
+          error ->
+            error
+        end
+    end
+  end
+
   # Convert Message struct to map for LiveView
   defp message_to_map(message) do
     %{
       id: message.id,
       user_id: message.user_id,
       user_color: message.user_color,
+      user_name: message.user_name,
       content: message.content,
       sent_at: message.inserted_at
     }

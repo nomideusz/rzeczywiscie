@@ -5,6 +5,7 @@ defmodule Rzeczywiscie.Friends.Photo do
   schema "friends_photos" do
     field :user_id, :string
     field :user_color, :string
+    field :user_name, :string
     field :image_data, :string
     field :content_type, :string, default: "image/jpeg"
     field :file_size, :integer
@@ -17,8 +18,9 @@ defmodule Rzeczywiscie.Friends.Photo do
   @doc false
   def changeset(photo, attrs) do
     photo
-    |> cast(attrs, [:user_id, :user_color, :image_data, :content_type, :file_size, :room_id])
+    |> cast(attrs, [:user_id, :user_color, :user_name, :image_data, :content_type, :file_size, :room_id])
     |> validate_required([:user_id, :user_color, :image_data, :room_id])
+    |> validate_length(:user_name, max: 20)
   end
 end
 

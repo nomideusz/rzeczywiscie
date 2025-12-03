@@ -36,6 +36,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
       socket
       |> assign(:user_id, user_id)
       |> assign(:user_color, user_color)
+      |> assign(:user_name, nil)
       |> assign(:session_id, session_id)
       |> assign(:room, room)
       |> assign(:page_title, "#{room.emoji} #{room.name || room.code}")
@@ -46,8 +47,12 @@ defmodule RzeczywiscieWeb.FriendsLive do
       |> assign(:viewers, viewers)
       |> assign(:uploading, false)
       |> assign(:show_room_modal, false)
+      |> assign(:show_name_modal, false)
+      |> assign(:show_lightbox, false)
+      |> assign(:lightbox_photo, nil)
       |> assign(:join_room_code, "")
       |> assign(:new_room_name, "")
+      |> assign(:name_input, "")
       |> stream(:photos, photos)
       |> stream(:messages, messages)
       |> allow_upload(:photo,
@@ -104,7 +109,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
   def render(assigns) do
     ~H"""
     <.app flash={@flash} current_path={@current_path}>
-      <div class="min-h-screen bg-gradient-to-br from-base-100 via-base-100 to-error/5">
+      <div id="friends-container" class="min-h-screen bg-gradient-to-br from-base-100 via-base-100 to-error/5" phx-hook="FriendsApp">
         <!-- Header -->
         <div class="border-b-4 border-base-content bg-base-100">
           <div class="container mx-auto px-4 py-4">
@@ -120,6 +125,19 @@ defmodule RzeczywiscieWeb.FriendsLive do
                   <span class="hidden sm:inline">{@room.name || @room.code}</span>
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                
+                <!-- User Name / Profile -->
+                <button
+                  type="button"
+                  phx-click="open-name-modal"
+                  class="flex items-center gap-2 px-3 py-2 border-2 border-base-content/30 hover:border-base-content transition-colors text-sm"
+                >
+                  <div class="w-5 h-5 rounded-full border border-base-content" style={"background-color: #{@user_color}"}></div>
+                  <span class="font-bold">{@user_name || String.slice(@user_id, 0, 6)}</span>
+                  <svg class="w-3 h-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                   </svg>
                 </button>
                 
@@ -182,7 +200,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
         <!-- Main Content: Photos + Chat -->
         <div class="container mx-auto px-4 py-6">
           <div class="grid lg:grid-cols-3 gap-6">
-            <!-- Photos Grid (2/3) -->
+            <!-- Photos Grid (2/3) - Masonry Layout -->
             <div class="lg:col-span-2">
               <%= if @photos == [] do %>
                 <div class="flex flex-col items-center justify-center py-16 text-center border-4 border-dashed border-base-content/20">
@@ -192,11 +210,11 @@ defmodule RzeczywiscieWeb.FriendsLive do
                   <p class="text-xs font-mono opacity-30">kruk.live/friends/{@room.code}</p>
                 </div>
               <% else %>
-                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3" id="photos-grid" phx-update="stream">
+                <div class="columns-2 sm:columns-3 gap-3 space-y-3" id="photos-grid" phx-update="stream">
                   <%= for {dom_id, photo} <- @streams.photos do %>
                     <div
                       id={dom_id}
-                      class="group relative border-4 border-base-content bg-base-100 overflow-hidden hover:translate-x-0.5 hover:translate-y-0.5 transition-transform"
+                      class="group relative border-4 border-base-content bg-base-100 overflow-hidden hover:translate-x-0.5 hover:translate-y-0.5 transition-transform break-inside-avoid"
                     >
                       <div class="absolute inset-0 bg-base-content translate-x-1 translate-y-1 -z-10"></div>
                       
@@ -210,13 +228,21 @@ defmodule RzeczywiscieWeb.FriendsLive do
                         >✕</button>
                       <% end %>
                       
-                      <div class="aspect-square overflow-hidden bg-base-200">
-                        <img src={photo.data_url} alt="" class="w-full h-full object-cover" loading="lazy" />
-                      </div>
+                      <button
+                        type="button"
+                        phx-click="open-lightbox"
+                        phx-value-id={photo.id}
+                        class="overflow-hidden bg-base-200 w-full cursor-zoom-in block"
+                      >
+                        <img src={photo.data_url} alt="" class="w-full h-auto" loading="lazy" />
+                      </button>
                       
                       <div class="p-2 border-t-2 border-base-content bg-base-100 flex items-center gap-2">
-                        <div class="w-3 h-3 rounded-full border border-base-content" style={"background-color: #{photo.user_color}"}></div>
-                        <span class="text-[10px] font-bold opacity-50">{format_time(photo.uploaded_at)}</span>
+                        <div class="w-3 h-3 rounded-full border border-base-content flex-shrink-0" style={"background-color: #{photo.user_color}"}></div>
+                        <span class="text-[10px] font-bold truncate flex-1">
+                          {photo.user_name || String.slice(photo.user_id, 0, 6)}
+                        </span>
+                        <span class="text-[10px] opacity-50 flex-shrink-0">{format_time(photo.uploaded_at)}</span>
                       </div>
                     </div>
                   <% end %>
@@ -235,11 +261,21 @@ defmodule RzeczywiscieWeb.FriendsLive do
                 <!-- Messages -->
                 <div class="flex-1 overflow-y-auto p-3 space-y-3" id="messages-container" phx-update="stream" phx-hook="ScrollToBottom">
                   <%= for {dom_id, message} <- @streams.messages do %>
-                    <div id={dom_id} class="flex gap-2">
+                    <div id={dom_id} class="group flex gap-2">
                       <div class="w-6 h-6 rounded-full border border-base-content flex-shrink-0" style={"background-color: #{message.user_color}"}></div>
                       <div class="flex-1 min-w-0">
-                        <div class="text-[10px] font-bold opacity-40 mb-0.5">
-                          {String.slice(message.user_id, 0, 6)} · {format_time(message.sent_at)}
+                        <div class="text-[10px] font-bold opacity-40 mb-0.5 flex items-center gap-2">
+                          <span>{message.user_name || String.slice(message.user_id, 0, 6)}</span>
+                          <span>·</span>
+                          <span>{format_time(message.sent_at)}</span>
+                          <%= if message.user_id == @user_id do %>
+                            <button
+                              type="button"
+                              phx-click="delete-message"
+                              phx-value-id={message.id}
+                              class="opacity-0 group-hover:opacity-100 text-error hover:text-error/80 transition-opacity"
+                            >✕</button>
+                          <% end %>
                         </div>
                         <div class="text-sm break-words">{message.content}</div>
                       </div>
@@ -273,6 +309,72 @@ defmodule RzeczywiscieWeb.FriendsLive do
             </div>
           </div>
         </div>
+
+        <!-- Lightbox Modal -->
+        <%= if @show_lightbox && @lightbox_photo do %>
+          <div 
+            class="fixed inset-0 z-50 flex items-center justify-center bg-black/90 cursor-zoom-out"
+            phx-click="close-lightbox"
+          >
+            <button 
+              type="button" 
+              phx-click="close-lightbox"
+              class="absolute top-4 right-4 text-white text-3xl hover:opacity-60 z-10"
+            >×</button>
+            <img 
+              src={@lightbox_photo.data_url} 
+              alt="" 
+              class="max-w-[95vw] max-h-[95vh] object-contain"
+              phx-click="close-lightbox"
+            />
+            <div class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/70 text-white px-4 py-2 rounded flex items-center gap-3">
+              <div class="w-4 h-4 rounded-full" style={"background-color: #{@lightbox_photo.user_color}"}></div>
+              <span class="font-bold">{@lightbox_photo.user_name || String.slice(@lightbox_photo.user_id, 0, 6)}</span>
+              <span class="opacity-60">{format_time(@lightbox_photo.uploaded_at)}</span>
+            </div>
+          </div>
+        <% end %>
+
+        <!-- Name Edit Modal -->
+        <%= if @show_name_modal do %>
+          <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+            <div class="bg-base-100 border-4 border-base-content p-6 max-w-sm w-full shadow-2xl" phx-click-away="close-name-modal">
+              <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-black uppercase">Your Profile</h2>
+                <button type="button" phx-click="close-name-modal" class="text-2xl leading-none hover:opacity-60">×</button>
+              </div>
+              
+              <!-- Current Identity -->
+              <div class="mb-6 flex items-center gap-4">
+                <div class="w-12 h-12 rounded-full border-2 border-base-content" style={"background-color: #{@user_color}"}></div>
+                <div>
+                  <div class="font-bold">{@user_name || String.slice(@user_id, 0, 6)}</div>
+                  <div class="text-xs opacity-40">ID: {String.slice(@user_id, 0, 8)}</div>
+                </div>
+              </div>
+
+              <!-- Change Name -->
+              <form phx-submit="save-name">
+                <label class="text-xs font-bold uppercase opacity-60 mb-2 block">Display Name</label>
+                <div class="flex gap-2">
+                  <input
+                    type="text"
+                    name="name"
+                    value={@name_input}
+                    phx-change="update-name-input"
+                    placeholder="Enter name (max 20 chars)"
+                    maxlength="20"
+                    class="flex-1 px-3 py-2 border-2 border-base-content text-sm bg-base-100"
+                  />
+                  <button type="submit" class="px-4 py-2 border-2 border-base-content bg-base-content text-base-100 font-bold text-sm">
+                    Save
+                  </button>
+                </div>
+                <p class="text-xs opacity-40 mt-2">Your name is stored locally and shown with your messages and photos.</p>
+              </form>
+            </div>
+          </div>
+        <% end %>
 
         <!-- Room Modal -->
         <%= if @show_room_modal do %>
@@ -349,12 +451,40 @@ defmodule RzeczywiscieWeb.FriendsLive do
 
   # --- Events ---
 
+  def handle_event("set_user_id", %{"user_id" => device_user_id} = params, socket) do
+    # Client sends device-specific user_id (fingerprint based on hardware)
+    old_user_id = socket.assigns.user_id
+    room = socket.assigns.room
+    user_name = params["user_name"]
+
+    if old_user_id != device_user_id do
+      # Update presence with new device-based user_id
+      Presence.untrack(self(), room.code, old_user_id)
+
+      # Generate new color based on device fingerprint (consistent across browsers)
+      new_user_color = generate_user_color(device_user_id)
+
+      # Track with new device-based user_id
+      Presence.track_user(self(), room.code, device_user_id, new_user_color)
+
+      {:noreply,
+       socket
+       |> assign(:user_id, device_user_id)
+       |> assign(:user_color, new_user_color)
+       |> assign(:user_name, user_name)}
+    else
+      {:noreply, assign(socket, :user_name, user_name)}
+    end
+  end
+
   def handle_event("validate", _params, socket), do: {:noreply, socket}
   def handle_event("save", _params, socket), do: {:noreply, socket}
 
   def handle_event("cancel-upload", %{"ref" => ref}, socket) do
     {:noreply, cancel_upload(socket, :photo, ref)}
   end
+
+  # --- Photo Events ---
 
   def handle_event("delete-photo", %{"id" => id}, socket) do
     photo_id = String.to_integer(id)
@@ -380,6 +510,97 @@ defmodule RzeczywiscieWeb.FriendsLive do
         end
     end
   end
+
+  def handle_event("open-lightbox", %{"id" => id}, socket) do
+    photo_id = String.to_integer(id)
+    # Find the photo in the stream
+    photo = Enum.find(socket.assigns.photos, fn p -> p.id == photo_id end)
+    {:noreply, socket |> assign(:show_lightbox, true) |> assign(:lightbox_photo, photo)}
+  end
+
+  def handle_event("close-lightbox", _params, socket) do
+    {:noreply, socket |> assign(:show_lightbox, false) |> assign(:lightbox_photo, nil)}
+  end
+
+  # --- Message Events ---
+
+  def handle_event("delete-message", %{"id" => id}, socket) do
+    message_id = String.to_integer(id)
+    room = socket.assigns.room
+    
+    case Friends.get_message(message_id) do
+      nil -> {:noreply, put_flash(socket, :error, "Message not found")}
+      message ->
+        if message.user_id == socket.assigns.user_id do
+          case Friends.delete_message(message_id, room.code) do
+            {:ok, _} ->
+              Friends.broadcast(room.code, :message_deleted_from_session, %{id: message_id}, socket.assigns.session_id)
+              {:noreply, stream_delete(socket, :messages, %{id: message_id})}
+            {:error, _} ->
+              {:noreply, put_flash(socket, :error, "Failed")}
+          end
+        else
+          {:noreply, put_flash(socket, :error, "Not yours")}
+        end
+    end
+  end
+
+  def handle_event("update-message", %{"content" => content}, socket) do
+    {:noreply, assign(socket, :message_input, content)}
+  end
+
+  def handle_event("send-message", %{"content" => content}, socket) do
+    content = String.trim(content)
+    room = socket.assigns.room
+    
+    if content != "" do
+      case Friends.create_message(%{
+        user_id: socket.assigns.user_id,
+        user_color: socket.assigns.user_color,
+        user_name: socket.assigns.user_name,
+        content: content,
+        room_id: room.id
+      }, room.code) do
+        {:ok, message} ->
+          Friends.broadcast(room.code, :new_message_from_session, message, socket.assigns.session_id)
+          {:noreply,
+           socket
+           |> assign(:message_input, "")
+           |> stream_insert(:messages, message)}
+        {:error, _} ->
+          {:noreply, put_flash(socket, :error, "Failed to send")}
+      end
+    else
+      {:noreply, socket}
+    end
+  end
+
+  # --- Name Events ---
+
+  def handle_event("open-name-modal", _params, socket) do
+    {:noreply, socket |> assign(:show_name_modal, true) |> assign(:name_input, socket.assigns.user_name || "")}
+  end
+
+  def handle_event("close-name-modal", _params, socket) do
+    {:noreply, assign(socket, :show_name_modal, false)}
+  end
+
+  def handle_event("update-name-input", %{"name" => name}, socket) do
+    {:noreply, assign(socket, :name_input, name)}
+  end
+
+  def handle_event("save-name", %{"name" => name}, socket) do
+    name = String.trim(name)
+    name = if name == "", do: nil, else: String.slice(name, 0, 20)
+    
+    {:noreply,
+     socket
+     |> assign(:user_name, name)
+     |> assign(:show_name_modal, false)
+     |> push_event("save_user_name", %{name: name})}
+  end
+
+  # --- Room Events ---
 
   def handle_event("open-room-modal", _params, socket) do
     {:noreply, assign(socket, :show_room_modal, true)}
@@ -434,35 +655,6 @@ defmodule RzeczywiscieWeb.FriendsLive do
      |> push_navigate(to: ~p"/friends/lobby")}
   end
 
-  def handle_event("update-message", %{"content" => content}, socket) do
-    {:noreply, assign(socket, :message_input, content)}
-  end
-
-  def handle_event("send-message", %{"content" => content}, socket) do
-    content = String.trim(content)
-    room = socket.assigns.room
-    
-    if content != "" do
-      case Friends.create_message(%{
-        user_id: socket.assigns.user_id,
-        user_color: socket.assigns.user_color,
-        content: content,
-        room_id: room.id
-      }, room.code) do
-        {:ok, message} ->
-          Friends.broadcast(room.code, :new_message_from_session, message, socket.assigns.session_id)
-          {:noreply,
-           socket
-           |> assign(:message_input, "")
-           |> stream_insert(:messages, message)}
-        {:error, _} ->
-          {:noreply, put_flash(socket, :error, "Failed to send")}
-      end
-    else
-      {:noreply, socket}
-    end
-  end
-
   # --- Progress Handler ---
 
   def handle_progress(:photo, entry, socket) when entry.done? do
@@ -480,6 +672,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
     case Friends.create_photo(%{
       user_id: socket.assigns.user_id,
       user_color: socket.assigns.user_color,
+      user_name: socket.assigns.user_name,
       image_data: photo_result.data_url,
       content_type: photo_result.content_type,
       file_size: photo_result.file_size,
@@ -540,6 +733,16 @@ defmodule RzeczywiscieWeb.FriendsLive do
 
   def handle_info({:new_message, _}, socket), do: {:noreply, socket}
 
+  def handle_info({:message_deleted_from_session, %{id: id}, from_session_id}, socket) do
+    if from_session_id != socket.assigns.session_id do
+      {:noreply, stream_delete(socket, :messages, %{id: id})}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info({:message_deleted, _}, socket), do: {:noreply, socket}
+
   def handle_info(%{event: "presence_diff", payload: _}, socket) do
     viewers = Presence.list_users(socket.assigns.room.code)
     {:noreply, assign(socket, :viewers, viewers)}
@@ -581,4 +784,3 @@ defmodule RzeczywiscieWeb.FriendsLive do
     end
   end
 end
-
