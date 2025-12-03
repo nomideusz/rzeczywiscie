@@ -437,7 +437,7 @@ defmodule RzeczywiscieWeb.LLMResultsLive do
         <!-- Results Grid -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
           <%= for property <- @properties do %>
-            <div class={"bg-base-100 border-2 transition-colors hover:shadow-lg #{border_class(property.llm_investment_score)}"}>
+            <div class={"bg-base-100 border-2 transition-colors hover:shadow-lg overflow-hidden min-w-0 #{border_class(property.llm_investment_score)}"}>
               <div class="flex">
                 <!-- Left: Image + Score -->
                 <div class="relative w-24 md:w-32 shrink-0">
@@ -474,10 +474,10 @@ defmodule RzeczywiscieWeb.LLMResultsLive do
                 </div>
                 
                 <!-- Right: Content -->
-                <div class="flex-1 p-3 min-w-0">
+                <div class="flex-1 p-3 min-w-0 overflow-hidden">
                   <!-- Title -->
-                  <a href={property.url} target="_blank" class="group">
-                    <h3 class="font-bold text-sm leading-tight line-clamp-2 group-hover:text-primary transition-colors">
+                  <a href={property.url} target="_blank" class="group block">
+                    <h3 class="font-bold text-sm leading-tight line-clamp-2 break-words group-hover:text-primary transition-colors">
                       <%= property.title %>
                       <span class="text-primary opacity-0 group-hover:opacity-100">↗</span>
                     </h3>
@@ -495,7 +495,7 @@ defmodule RzeczywiscieWeb.LLMResultsLive do
                   
                   <!-- AI Summary -->
                   <%= if property.llm_summary && not String.contains?(property.llm_summary || "", "Skipped") do %>
-                    <div class="mt-2 p-2 bg-gradient-to-r from-info/10 to-transparent border-l-2 border-info text-xs leading-relaxed line-clamp-2">
+                    <div class="mt-2 p-2 bg-gradient-to-r from-info/10 to-transparent border-l-2 border-info text-xs leading-relaxed line-clamp-2 overflow-hidden break-words">
                       💡 <%= property.llm_summary %>
                     </div>
                   <% end %>

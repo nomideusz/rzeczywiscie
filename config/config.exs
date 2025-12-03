@@ -38,21 +38,30 @@ config :rzeczywiscie, Oban,
     {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 7},
     {Oban.Plugins.Cron,
      crontab: [
-       # Scrape OLX every 4 hours with 10 pages (regular fast scrape)
-       # Runs at: 0:00, 4:00, 8:00, 12:00, 16:00, 20:00
-       {"0 */4 * * *", Rzeczywiscie.Workers.OlxScraperWorker, args: %{"pages" => 10, "delay" => 2500}},
-       # Scrape Otodom every 4 hours WITH ENRICHMENT to ensure prices are fetched
-       # Enrichment re-scrapes detail pages for properties missing price/area
-       # Runs at: 2:00, 6:00, 10:00, 14:00, 18:00, 22:00
-       {"0 2,6,10,14,18,22 * * *", Rzeczywiscie.Workers.OtodomScraperWorker, args: %{"pages" => 5, "delay" => 3000, "enrich" => true}},
-       # Daily deep enrichment run at 5 AM - fetch descriptions + fill all missing data
-       {"0 5 * * *", Rzeczywiscie.Workers.OlxScraperWorker, args: %{"pages" => 5, "delay" => 3000, "enrich" => true}},
+       # === SCRAPING (spread throughout day) ===
+       # OLX: Regular scrape every 6 hours - fast listing scrape
+       {"0 0,6,12,18 * * *", Rzeczywiscie.Workers.OlxScraperWorker, args: %{"pages" => 10, "delay" => 2500}},
+       # OLX: Enrichment every 8 hours - fetches detail pages for missing data
+       {"0 3,11,19 * * *", Rzeczywiscie.Workers.OlxScraperWorker, args: %{"pages" => 5, "delay" => 3000, "enrich" => true}},
+       # Otodom: Scrape with enrichment every 6 hours (offset from OLX)
+       {"0 1,7,13,21 * * *", Rzeczywiscie.Workers.OtodomScraperWorker, args: %{"pages" => 5, "delay" => 3000, "enrich" => true}},
+       
+       # === ENRICHMENT ===
+       # Geocode properties every hour
+       {"0 * * * *", Rzeczywiscie.Workers.GeocodingWorker},
        # Track price changes every 2 hours
        {"0 */2 * * *", Rzeczywiscie.Workers.PriceTrackerWorker},
-       # Mark stale properties inactive daily at 3 AM (96 hours = 4 days without being seen)
-       {"0 3 * * *", Rzeczywiscie.Workers.CleanupWorker, args: %{"hours" => 96}},
-       # Geocode properties every hour
-       {"0 * * * *", Rzeczywiscie.Workers.GeocodingWorker}
+       
+       # === ANALYSIS (run after scraping completes) ===
+       # LLM Analysis: every 6 hours (30 properties each run)
+       # Runs at: 2:00, 8:00, 14:00, 20:00 (1h after scraping)
+       {"0 2,8,14,20 * * *", Rzeczywiscie.Workers.LLMAnalysisWorker, args: %{"limit" => 30}},
+       
+       # === MAINTENANCE (daily, low-traffic hours) ===
+       # Data maintenance: daily at 4 AM (fix duplicates, misclassified, backfill)
+       {"0 4 * * *", Rzeczywiscie.Workers.DataMaintenanceWorker},
+       # Mark stale properties inactive: daily at 5 AM
+       {"0 5 * * *", Rzeczywiscie.Workers.CleanupWorker, args: %{"hours" => 96}}
      ]},
     # Lifeline plugin helps rescue long-running jobs from timeout
     {Oban.Plugins.Lifeline, rescue_after: :timer.minutes(30)}

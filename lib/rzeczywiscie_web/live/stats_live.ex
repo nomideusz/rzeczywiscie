@@ -30,6 +30,8 @@ defmodule RzeczywiscieWeb.StatsLive do
       |> assign(:sort_by, "sale_count")
       |> assign(:sort_dir, :desc)
       |> assign(:filtered_district_prices, calculate_filtered_district_prices("mieszkanie", "all"))
+      |> assign(:expanded_district, nil)
+      |> assign(:district_properties, [])
       |> sort_filtered_prices()
 
     {:ok, socket}
@@ -317,8 +319,17 @@ defmodule RzeczywiscieWeb.StatsLive do
                 <tbody class="divide-y divide-base-content/20">
                   <%= for item <- @filtered_district_prices do %>
                     <%= if item.mode == :both do %>
-                      <tr class="hover:bg-base-200/50">
-                        <td class="px-3 py-2 font-bold text-sm"><%= item.district %></td>
+                      <tr 
+                        class={"hover:bg-base-200/50 cursor-pointer #{if @expanded_district == item.district, do: "bg-primary/10"}"}
+                        phx-click="toggle_district"
+                        phx-value-district={item.district}
+                      >
+                        <td class="px-3 py-2 font-bold text-sm">
+                          <span class="inline-flex items-center gap-1">
+                            <span class={"transition-transform #{if @expanded_district == item.district, do: "rotate-90"}"}>▶</span>
+                            <%= item.district %>
+                          </span>
+                        </td>
                         <td class="px-1 py-2 text-center text-info text-xs"><%= item.sale.count %></td>
                         <td class="px-1 py-2 text-center font-bold text-xs"><%= format_price_short(item.sale.avg_price) %></td>
                         <td class="px-1 py-2 text-center text-[10px] text-success"><%= format_price_short(item.sale.min_price) %></td>
@@ -330,15 +341,48 @@ defmodule RzeczywiscieWeb.StatsLive do
                         <td class="px-1 py-2 text-center text-[10px] text-error"><%= format_price_short(item.rent.max_price) %></td>
                         <td class="px-1 py-2 text-center text-[10px] opacity-70"><%= format_price_short(item.rent.avg_per_sqm) %></td>
                       </tr>
+                      <!-- Expanded properties row -->
+                      <%= if @expanded_district == item.district do %>
+                        <tr>
+                          <td colspan="11" class="p-0">
+                            <.district_properties_panel 
+                              properties={@district_properties} 
+                              district={item.district}
+                              transaction_type={@selected_transaction_type}
+                            />
+                          </td>
+                        </tr>
+                      <% end %>
                     <% else %>
-                      <tr class="hover:bg-base-200/50">
-                        <td class="px-4 py-2 font-bold"><%= item.district %></td>
+                      <tr 
+                        class={"hover:bg-base-200/50 cursor-pointer #{if @expanded_district == item.district, do: "bg-primary/10"}"}
+                        phx-click="toggle_district"
+                        phx-value-district={item.district}
+                      >
+                        <td class="px-4 py-2 font-bold">
+                          <span class="inline-flex items-center gap-1">
+                            <span class={"transition-transform #{if @expanded_district == item.district, do: "rotate-90"}"}>▶</span>
+                            <%= item.district %>
+                          </span>
+                        </td>
                         <td class={"px-2 py-2 text-center #{if item.transaction_type == "sprzedaż", do: "text-info", else: "text-warning"}"}><%= item.stats.count %></td>
                         <td class="px-2 py-2 text-center font-bold"><%= format_price_short(item.stats.avg_price) %></td>
                         <td class="px-2 py-2 text-center text-success"><%= format_price_short(item.stats.min_price) %></td>
                         <td class="px-2 py-2 text-center text-error"><%= format_price_short(item.stats.max_price) %></td>
                         <td class="px-2 py-2 text-center opacity-70"><%= format_price_short(item.stats.avg_per_sqm) %></td>
                       </tr>
+                      <!-- Expanded properties row -->
+                      <%= if @expanded_district == item.district do %>
+                        <tr>
+                          <td colspan="6" class="p-0">
+                            <.district_properties_panel 
+                              properties={@district_properties} 
+                              district={item.district}
+                              transaction_type={@selected_transaction_type}
+                            />
+                          </td>
+                        </tr>
+                      <% end %>
                     <% end %>
                   <% end %>
                 </tbody>
@@ -571,6 +615,89 @@ defmodule RzeczywiscieWeb.StatsLive do
     """
   end
 
+  attr :properties, :list, required: true
+  attr :district, :string, required: true
+  attr :transaction_type, :string, required: true
+
+  defp district_properties_panel(assigns) do
+    ~H"""
+    <div class="bg-base-200/50 border-t border-b border-base-content/20">
+      <div class="px-4 py-2 border-b border-base-content/10 bg-base-300/50">
+        <span class="text-xs font-bold uppercase tracking-wide opacity-60">
+          📋 Listings in <%= @district %> 
+          <span class="font-normal">(<%= length(@properties) %> shown, max 20)</span>
+        </span>
+      </div>
+      
+      <%= if length(@properties) == 0 do %>
+        <div class="p-4 text-center text-sm opacity-50">
+          No properties found with current filters
+        </div>
+      <% else %>
+        <div class="max-h-[400px] overflow-y-auto">
+          <table class="w-full text-xs">
+            <thead class="bg-base-300/30 sticky top-0">
+              <tr>
+                <th class="px-3 py-1.5 text-left font-bold uppercase tracking-wide opacity-60">Title</th>
+                <th class="px-2 py-1.5 text-center font-bold uppercase tracking-wide opacity-60">Type</th>
+                <th class="px-2 py-1.5 text-right font-bold uppercase tracking-wide opacity-60">Price</th>
+                <th class="px-2 py-1.5 text-right font-bold uppercase tracking-wide opacity-60">Area</th>
+                <th class="px-2 py-1.5 text-center font-bold uppercase tracking-wide opacity-60">Rooms</th>
+                <th class="px-2 py-1.5 text-right font-bold uppercase tracking-wide opacity-60">/m²</th>
+                <th class="px-2 py-1.5 text-center font-bold uppercase tracking-wide opacity-60">Source</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-base-content/10">
+              <%= for prop <- @properties do %>
+                <tr class="hover:bg-base-100/50">
+                  <td class="px-3 py-2 max-w-[300px]">
+                    <a 
+                      href={prop.url} 
+                      target="_blank" 
+                      class="text-primary hover:underline truncate block"
+                      title={prop.title}
+                    >
+                      <%= truncate_title(prop.title, 50) %>
+                    </a>
+                  </td>
+                  <td class={"px-2 py-2 text-center #{if prop.transaction_type == "sprzedaż", do: "text-info", else: "text-warning"}"}>
+                    <%= if prop.transaction_type == "sprzedaż", do: "Sale", else: "Rent" %>
+                  </td>
+                  <td class="px-2 py-2 text-right font-bold">
+                    <%= format_price_short(prop.price) %>
+                  </td>
+                  <td class="px-2 py-2 text-right">
+                    <%= if prop.area_sqm, do: "#{Decimal.round(prop.area_sqm, 0)} m²", else: "—" %>
+                  </td>
+                  <td class="px-2 py-2 text-center">
+                    <%= prop.rooms || "—" %>
+                  </td>
+                  <td class="px-2 py-2 text-right opacity-70">
+                    <%= if prop.price && prop.area_sqm && Decimal.compare(prop.area_sqm, Decimal.new(0)) == :gt do %>
+                      <%= format_price_short(Decimal.div(prop.price, prop.area_sqm)) %>
+                    <% else %>
+                      —
+                    <% end %>
+                  </td>
+                  <td class="px-2 py-2 text-center">
+                    <span class={"px-1.5 py-0.5 text-[10px] font-bold uppercase rounded #{if prop.source == "olx", do: "bg-primary/20 text-primary", else: "bg-secondary/20 text-secondary"}"}>
+                      <%= prop.source %>
+                    </span>
+                  </td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+      <% end %>
+    </div>
+    """
+  end
+
+  defp truncate_title(nil, _), do: "—"
+  defp truncate_title(title, max_length) when byte_size(title) <= max_length, do: title
+  defp truncate_title(title, max_length), do: String.slice(title, 0, max_length) <> "…"
+
   @impl true
   def handle_event("refresh_stats", _params, socket) do
     socket =
@@ -663,7 +790,33 @@ defmodule RzeczywiscieWeb.StatsLive do
 
     {:noreply, socket}
   end
-  
+
+  @impl true
+  def handle_event("toggle_district", %{"district" => district}, socket) do
+    socket = if socket.assigns.expanded_district == district do
+      # Collapse
+      socket
+      |> assign(:expanded_district, nil)
+      |> assign(:district_properties, [])
+    else
+      # Expand with properties
+      properties = fetch_district_properties(
+        district,
+        socket.assigns.selected_property_type,
+        socket.assigns.selected_transaction_type,
+        socket.assigns.min_area,
+        socket.assigns.max_area,
+        socket.assigns.min_rooms,
+        socket.assigns.max_rooms
+      )
+      
+      socket
+      |> assign(:expanded_district, district)
+      |> assign(:district_properties, properties)
+    end
+    
+    {:noreply, socket}
+  end
 
   defp parse_int_or_nil(""), do: nil
   defp parse_int_or_nil(nil), do: nil
@@ -686,6 +839,8 @@ defmodule RzeczywiscieWeb.StatsLive do
     
     socket
     |> assign(:filtered_district_prices, filtered)
+    |> assign(:expanded_district, nil)
+    |> assign(:district_properties, [])
     |> sort_filtered_prices()
   end
 
@@ -1163,6 +1318,66 @@ defmodule RzeczywiscieWeb.StatsLive do
       min_price: min_price,
       max_price: max_price
     }
+  end
+
+  defp fetch_district_properties(district, property_type, transaction_type, min_area, max_area, min_rooms, max_rooms) do
+    # Build base query
+    base_query = from p in Property,
+      where: p.active == true and 
+             p.property_type == ^property_type and
+             p.district == ^district and
+             not is_nil(p.price),
+      order_by: [desc: p.inserted_at],
+      limit: 20,
+      select: %{
+        id: p.id,
+        title: p.title,
+        price: p.price,
+        area_sqm: p.area_sqm,
+        rooms: p.rooms,
+        transaction_type: p.transaction_type,
+        source: p.source,
+        url: p.url
+      }
+
+    # Add transaction type filter and price range
+    base_query = case transaction_type do
+      "all" -> 
+        where(base_query, [p], p.price >= ^Decimal.new("300") and p.price <= ^Decimal.new("50000000"))
+      type -> 
+        {min_price, max_price} = price_range(type)
+        base_query
+        |> where([p], p.transaction_type == ^type)
+        |> where([p], p.price >= ^min_price and p.price <= ^max_price)
+    end
+
+    # Add area filters
+    base_query = if min_area do
+      where(base_query, [p], not is_nil(p.area_sqm) and p.area_sqm >= ^min_area)
+    else
+      base_query
+    end
+    
+    base_query = if max_area do
+      where(base_query, [p], not is_nil(p.area_sqm) and p.area_sqm <= ^max_area)
+    else
+      base_query
+    end
+
+    # Add room filters
+    base_query = if min_rooms do
+      where(base_query, [p], not is_nil(p.rooms) and p.rooms >= ^min_rooms)
+    else
+      base_query
+    end
+    
+    base_query = if max_rooms do
+      where(base_query, [p], p.rooms <= ^max_rooms)
+    else
+      base_query
+    end
+
+    Repo.all(base_query)
   end
 
   defp format_price(price) when is_nil(price), do: "N/A"

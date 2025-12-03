@@ -1,7 +1,7 @@
 defmodule Rzeczywiscie.Workers.OlxScraperWorker do
   @moduledoc """
   Oban worker for scraping OLX properties.
-  Scheduled to run every 30 minutes via cron.
+  Scheduled to run every 6 hours (regular) + every 8 hours (with enrichment).
   
   Options (via job args):
     - pages: Number of pages to scrape (default: 3)
