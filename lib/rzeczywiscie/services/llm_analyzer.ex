@@ -384,8 +384,9 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
   end
   
   defp call_openai(content, api_key, system_prompt \\ @system_prompt, user_prefix \\ "Analyze this title: ") do
-    # Adjust max_tokens based on content length (descriptions need more)
-    max_tokens = if String.length(content) > 500, do: 800, else: 200
+    # Adjust max_tokens based on content length
+    # Descriptions need more tokens due to expanded JSON schema with data quality fields
+    max_tokens = if String.length(content) > 500, do: 1500, else: 400
     
     body = %{
       model: @model,
@@ -473,11 +474,24 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
     
     case Jason.decode(json_str) do
       {:ok, signals} -> {:ok, normalize_signals(signals)}
-      {:error, reason} -> 
-        # Log the raw content for debugging
-        Logger.warning("  JSON parse error: #{inspect(reason)}")
-        Logger.warning("  Raw content (first 500 chars): #{String.slice(content, 0, 500)}")
-        {:error, :invalid_json}
+      {:error, _reason} -> 
+        # Try to fix truncated JSON by completing it
+        case try_fix_truncated_json(json_str) do
+          {:ok, fixed_json} ->
+            case Jason.decode(fixed_json) do
+              {:ok, signals} -> 
+                Logger.info("  ✓ Fixed truncated JSON response")
+                {:ok, normalize_signals(signals)}
+              {:error, _} ->
+                Logger.warning("  JSON still invalid after fix attempt")
+                Logger.warning("  Raw content (first 300 chars): #{String.slice(content, 0, 300)}")
+                {:error, :invalid_json}
+            end
+          :error ->
+            Logger.warning("  Could not fix truncated JSON")
+            Logger.warning("  Raw content (first 300 chars): #{String.slice(content, 0, 300)}")
+            {:error, :invalid_json}
+        end
     end
   end
   
@@ -532,6 +546,39 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
     case Regex.run(~r/^\{[\s\S]*\}/m, content) do
       [json] -> json
       _ -> content
+    end
+  end
+  
+  # Try to fix truncated JSON by completing it
+  defp try_fix_truncated_json(json_str) do
+    # Count unclosed braces and brackets
+    open_braces = json_str |> String.graphemes() |> Enum.count(&(&1 == "{"))
+    close_braces = json_str |> String.graphemes() |> Enum.count(&(&1 == "}"))
+    open_brackets = json_str |> String.graphemes() |> Enum.count(&(&1 == "["))
+    close_brackets = json_str |> String.graphemes() |> Enum.count(&(&1 == "]"))
+    
+    # If already balanced, nothing to fix
+    if open_braces == close_braces and open_brackets == close_brackets do
+      :error  # Not a truncation issue
+    else
+      # Remove the last incomplete field (after the last comma or colon)
+      fixed = json_str
+      |> String.trim()
+      # Remove trailing incomplete field (e.g., `"field": "incomplete` or `"field":`)
+      |> String.replace(~r/,\s*"[^"]*":\s*("[^"]*)?$/, "")
+      |> String.replace(~r/,\s*"[^"]*":\s*\[?[^\]]*$/, "")
+      |> String.replace(~r/,\s*"[^"]*":\s*\{?[^\}]*$/, "")
+      |> String.replace(~r/,\s*$/, "")  # Remove trailing comma
+      |> String.trim()
+      
+      # Add closing brackets/braces
+      missing_brackets = open_brackets - close_brackets
+      missing_braces = open_braces - close_braces
+      
+      fixed = fixed <> String.duplicate("]", max(0, missing_brackets))
+      fixed = fixed <> String.duplicate("}", max(0, missing_braces))
+      
+      {:ok, fixed}
     end
   end
   
