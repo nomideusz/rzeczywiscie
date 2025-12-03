@@ -56,80 +56,7 @@ defmodule Rzeczywiscie.PixelCanvas do
     |> Map.new()
   end
 
-  # ===========================================
-  # ANIMAL SHAPE DEFINITIONS (must match frontend)
-  # ===========================================
-
-  # Chicken shape (~25 pixels) - MOST COMMON
-  @chicken_shape_right [
-    # Comb (red)
-    {1, -6}, {2, -6},
-    # Head
-    {1, -5}, {2, -5},
-    # Beak (orange/yellow)
-    {-1, -4}, {0, -4},
-    # Head with eye
-    {1, -4},
-    # Wattle (red)
-    {0, -3},
-    # Body
-    {1, -3}, {2, -3}, {3, -3},
-    # Body middle
-    {1, -2}, {2, -2}, {3, -2}, {4, -2},
-    # Body bottom
-    {1, -1}, {2, -1}, {3, -1}, {4, -1},
-    # Legs (orange)
-    {2, 0}, {3, 0},
-    {2, 1}, {3, 1},
-    {1, 1}, {4, 1}  # feet
-  ]
-  @chicken_shape_left Enum.map(@chicken_shape_right, fn {dx, dy} -> {-dx, dy} end)
-
-  # Pegasus shape (~35 pixels) - MEDIUM RARITY
-  @pegasus_shape_right [
-    # Ears
-    {0, -8}, {2, -8},
-    {0, -7}, {1, -7}, {2, -7},
-    # Head
-    {0, -6}, {1, -6}, {2, -6},
-    # Eyes (brown)
-    {0, -5}, {2, -5},
-    # Face
-    {1, -5},
-    # Neck + wing
-    {1, -4}, {2, -4}, {4, -4}, {5, -4},  # wing top
-    {1, -3}, {2, -3}, {3, -3}, {4, -3}, {5, -3}, {6, -3},  # neck + wing
-    # Body + tail
-    {1, -2}, {2, -2}, {3, -2}, {4, -2}, {5, -2}, {6, -2}, {7, -2},
-    {1, -1}, {2, -1}, {3, -1}, {4, -1}, {5, -1}, {6, -1},
-    # Legs
-    {1, 0}, {2, 0}, {5, 0}, {6, 0}
-  ]
-  @pegasus_shape_left Enum.map(@pegasus_shape_right, fn {dx, dy} -> {-dx, dy} end)
-
-  # Whale shape (~40 pixels) - RARE
-  @whale_shape_right [
-    # Water spout
-    {2, -8}, {4, -8},
-    {1, -7}, {3, -7}, {5, -7},
-    {2, -6}, {4, -6},
-    {3, -5},
-    # Head top
-    {1, -4}, {2, -4}, {3, -4}, {4, -4},
-    # Head with eye
-    {0, -3}, {1, -3}, {2, -3}, {3, -3}, {4, -3}, {5, -3}, {6, -3},
-    # Body (eye at 1,-3)
-    {0, -2}, {1, -2}, {2, -2}, {3, -2}, {4, -2}, {5, -2}, {6, -2}, {7, -2}, {8, -2},
-    # Belly (cream) + tail
-    {0, -1}, {1, -1}, {2, -1}, {3, -1}, {4, -1}, {5, -1}, {6, -1}, {7, -1},
-    {8, -1}, {9, -1},
-    # Bottom
-    {1, 0}, {2, 0}, {3, 0}, {4, 0}, {5, 0}, {6, 0},
-    {9, 0}, {10, 0}  # tail fluke
-  ]
-  @whale_shape_left Enum.map(@whale_shape_right, fn {dx, dy} -> {-dx, dy} end)
-
-  # Unicorn shape (~52 pixels) - RAREST
+  # Unicorn shape offsets (facing right) - must match frontend UNICORN_SHAPE
   @unicorn_shape_right [
     {6, -9}, {7, -9}, {7, -8},  # horn
     {5, -8}, {6, -8},  # head top
@@ -142,38 +69,16 @@ defmodule Rzeczywiscie.PixelCanvas do
     {-1, -1}, {0, -1}, {2, -1}, {3, -1}, {5, -1}, {6, -1},  # tail + legs
     {0, 0}, {2, 0}, {3, 0}, {5, 0}, {6, 0}  # tail + feet
   ]
+
+  # Unicorn shape facing left (mirror of right)
   @unicorn_shape_left Enum.map(@unicorn_shape_right, fn {dx, dy} -> {-dx, dy} end)
 
   @doc """
-  Returns the shape offsets for a given special type and direction.
+  Returns the unicorn shape offsets for a given direction.
   """
-  def special_shape("chicken", :left), do: @chicken_shape_left
-  def special_shape("chicken", :right), do: @chicken_shape_right
-  def special_shape("chicken", _), do: @chicken_shape_right
-  def special_shape("pegasus", :left), do: @pegasus_shape_left
-  def special_shape("pegasus", :right), do: @pegasus_shape_right
-  def special_shape("pegasus", _), do: @pegasus_shape_right
-  def special_shape("whale", :left), do: @whale_shape_left
-  def special_shape("whale", :right), do: @whale_shape_right
-  def special_shape("whale", _), do: @whale_shape_right
-  def special_shape("unicorn", :left), do: @unicorn_shape_left
-  def special_shape("unicorn", :right), do: @unicorn_shape_right
-  def special_shape("unicorn", _), do: @unicorn_shape_right
-  def special_shape(_, direction), do: special_shape("unicorn", direction)
-
-  # Legacy function for unicorn (backwards compatibility)
   def unicorn_shape(:left), do: @unicorn_shape_left
   def unicorn_shape(:right), do: @unicorn_shape_right
   def unicorn_shape(_), do: @unicorn_shape_right
-
-  @doc """
-  Returns pixel count for a special type.
-  """
-  def special_pixel_count("chicken"), do: length(@chicken_shape_right)
-  def special_pixel_count("pegasus"), do: length(@pegasus_shape_right)
-  def special_pixel_count("whale"), do: length(@whale_shape_right)
-  def special_pixel_count("unicorn"), do: length(@unicorn_shape_right)
-  def special_pixel_count(_), do: length(@unicorn_shape_right)
 
   @doc """
   Places a special pixel on the canvas with the user's name and color.
@@ -191,8 +96,8 @@ defmodule Rzeczywiscie.PixelCanvas do
           available_count = Map.get(stats.special_pixels_available || %{}, special_type, 0)
 
           if available_count > 0 do
-            # Get all positions the special shape would occupy
-            shape_offsets = special_shape(special_type, direction)
+            # Get all positions the unicorn would occupy
+            shape_offsets = unicorn_shape(direction)
             positions = Enum.map(shape_offsets, fn {dx, dy} -> {x + dx, y + dy} end)
 
             # Check if ANY position is already occupied
@@ -253,7 +158,7 @@ defmodule Rzeczywiscie.PixelCanvas do
 
   @doc """
   Places a pixel on the canvas.
-  Returns {:ok, pixel, lucky_animal: string | nil} or {:error, reason}
+  Returns {:ok, pixel, lucky_unicorn: boolean} or {:error, reason}
   """
   def place_pixel(x, y, color, user_id) do
     # Check cooldown
@@ -271,8 +176,8 @@ defmodule Rzeczywiscie.PixelCanvas do
             # Update user stats and check for unlock
             case result do
               {:ok, pixel} ->
-                lucky_animal = update_user_progress(user_id, :normal)
-                {:ok, pixel, lucky_animal: lucky_animal}
+                lucky_unicorn = update_user_progress(user_id, :normal)
+                {:ok, pixel, lucky_unicorn: lucky_unicorn}
               error ->
                 error
             end
@@ -347,7 +252,7 @@ defmodule Rzeczywiscie.PixelCanvas do
   @doc """
   Calculates total pixel coverage on the canvas.
   - Regular/mega/massive pixels: each record = 1 pixel (mega/massive stored as multiple records)
-  - Special animals: 1 record = shape size pixels
+  - Unicorns: 1 record = 52 pixels (the shape size)
   """
   def total_pixel_coverage do
     # Count non-special pixels (regular, mega, massive - all stored as individual records)
@@ -355,19 +260,12 @@ defmodule Rzeczywiscie.PixelCanvas do
     |> where([p], p.is_special == false or is_nil(p.is_special))
     |> Repo.aggregate(:count)
 
-    # Count special pixels by type and multiply by their shape sizes
-    special_pixels = Pixel
+    # Count special pixels (unicorns) and multiply by shape size
+    unicorn_count = Pixel
     |> where([p], p.is_special == true)
-    |> select([p], p.special_type)
-    |> Repo.all()
+    |> Repo.aggregate(:count)
 
-    special_coverage = Enum.reduce(special_pixels, 0, fn special_type, acc ->
-      # Parse animal type from "animal:direction" format
-      animal_type = special_type |> to_string() |> String.split(":") |> List.first()
-      acc + special_pixel_count(animal_type)
-    end)
-
-    regular_count + special_coverage
+    regular_count + (unicorn_count * unicorn_pixel_count())
   end
 
   @doc """
@@ -565,35 +463,39 @@ defmodule Rzeczywiscie.PixelCanvas do
         # Check global milestones and award special pixels
         check_and_unlock_milestones()
 
-        # Lucky animal check - 3% chance to win an animal!
-        # Rarity: Chicken (60%) → Pegasus (25%) → Whale (10%) → Unicorn (5%)
-        {lucky_animal, updated_specials} = 
-          if :rand.uniform() < @lucky_unicorn_chance do
-            animal = pick_random_animal()
-            specials = Map.update(
+        # Lucky unicorn check - 3% chance!
+        lucky_unicorn = :rand.uniform() < @lucky_unicorn_chance
+        
+        updated_specials = 
+          if lucky_unicorn do
+            Map.update(
               stats.special_pixels_available || %{},
-              animal,
+              "unicorn",
               1,
               &(&1 + 1)
             )
-            {animal, specials}
           else
-            {nil, stats.special_pixels_available}
+            stats.special_pixels_available
           end
 
-        stats
-        |> UserPixelStats.changeset(%{
-          pixels_placed_count: new_count,
-          mega_pixels_available: new_mega_count,
-          mega_last_unlock_at: mega_last_unlock,
-          massive_pixels_available: new_massive_count,
-          last_unlock_at: last_unlock,
-          special_pixels_available: updated_specials
-        })
-        |> Repo.update()
+        case stats
+             |> UserPixelStats.changeset(%{
+               pixels_placed_count: new_count,
+               mega_pixels_available: new_mega_count,
+               mega_last_unlock_at: mega_last_unlock,
+               massive_pixels_available: new_massive_count,
+               last_unlock_at: last_unlock,
+               special_pixels_available: updated_specials
+             })
+             |> Repo.update() do
+          {:ok, _} ->
+            # Return lucky unicorn status only if save succeeded
+            lucky_unicorn
 
-        # Return which animal user won (or nil if none)
-        lucky_animal
+          {:error, _changeset} ->
+            # Don't claim lucky unicorn if the stats update failed
+            false
+        end
 
       :mega ->
         # Mega pixel used - decrement available, increment used count
@@ -607,14 +509,16 @@ defmodule Rzeczywiscie.PixelCanvas do
             {stats.massive_pixels_available, stats.last_unlock_at}
           end
 
-        stats
-        |> UserPixelStats.changeset(%{
-          mega_pixels_available: stats.mega_pixels_available - 1,
-          mega_pixels_used_count: new_used_count,
-          massive_pixels_available: new_massive_count,
-          last_unlock_at: last_unlock
-        })
-        |> Repo.update()
+        # Explicitly capture result (even though we return false regardless)
+        _update_result =
+          stats
+          |> UserPixelStats.changeset(%{
+            mega_pixels_available: stats.mega_pixels_available - 1,
+            mega_pixels_used_count: new_used_count,
+            massive_pixels_available: new_massive_count,
+            last_unlock_at: last_unlock
+          })
+          |> Repo.update()
 
         # No lucky unicorn for mega pixels
         false
@@ -629,23 +533,22 @@ defmodule Rzeczywiscie.PixelCanvas do
   @doc """
   Returns global milestone progress information.
   All pixels count towards milestones (including special pixels).
-  Animals have different rarities: Chicken (common) → Pegasus → Whale → Unicorn (rare)
+  Unicorns count as their full shape size (52 pixels each).
   """
   def milestone_progress do
-    # Count all pixels for milestone progress (special shapes count as their full size)
+    # Count all pixels for milestone progress (unicorns count as their full shape)
     total_pixels = total_pixel_coverage()
     
-    # Define milestones: different animals based on rarity
-    # Chicken (common) → Pegasus (medium) → Whale (rare) → Unicorn (legendary)
+    # Define milestones: more achievable thresholds for small communities
     milestones = [
-      %{threshold: 100, reward: "chicken", name: "First Flock 🐔"},
-      %{threshold: 250, reward: "chicken", name: "Coop Party 🐔"},
-      %{threshold: 500, reward: "pegasus", name: "Taking Flight 🪽"},
-      %{threshold: 750, reward: "pegasus", name: "Sky Riders 🪽"},
-      %{threshold: 1000, reward: "whale", name: "Whale Watch 🐋"},
-      %{threshold: 1500, reward: "whale", name: "Ocean Giants 🐋"},
-      %{threshold: 2000, reward: "unicorn", name: "Unicorn Dreams 🦄"},
-      %{threshold: 3000, reward: "unicorn", name: "Mythic Herd 🦄"},
+      %{threshold: 100, reward: "unicorn", name: "First Herd 🦄"},
+      %{threshold: 250, reward: "unicorn", name: "Growing Herd 🦄"},
+      %{threshold: 500, reward: "unicorn", name: "Pixel Party 🦄"},
+      %{threshold: 750, reward: "unicorn", name: "Canvas Masters 🦄"},
+      %{threshold: 1000, reward: "unicorn", name: "Millennium 🦄"},
+      %{threshold: 1500, reward: "unicorn", name: "Legend 🦄"},
+      %{threshold: 2000, reward: "unicorn", name: "Epic 🦄"},
+      %{threshold: 3000, reward: "unicorn", name: "Mythic 🦄"},
       %{threshold: 5000, reward: "unicorn", name: "Celestial 🦄"}
     ]
 
@@ -665,20 +568,20 @@ defmodule Rzeczywiscie.PixelCanvas do
 
   @doc """
   Check and unlock global milestones, distributing special pixels to all active users.
-  Animals have different rarities: Chicken (common) → Pegasus → Whale → Unicorn (rare)
+  All pixels count towards milestones (unicorns count as their full shape).
   """
   def check_and_unlock_milestones do
-    # Count all pixels for milestone checks (special shapes count as their full size)
+    # Count all pixels for milestone checks (unicorns count as their full shape)
     total_pixels = total_pixel_coverage()
     
-    # Milestones to check - different animals based on rarity
+    # Milestones to check - more achievable thresholds for small communities
     milestones_to_check = [
-      %{type: "pixels_100", threshold: 100, reward: "chicken"},
-      %{type: "pixels_250", threshold: 250, reward: "chicken"},
-      %{type: "pixels_500", threshold: 500, reward: "pegasus"},
-      %{type: "pixels_750", threshold: 750, reward: "pegasus"},
-      %{type: "pixels_1000", threshold: 1000, reward: "whale"},
-      %{type: "pixels_1500", threshold: 1500, reward: "whale"},
+      %{type: "pixels_100", threshold: 100, reward: "unicorn"},
+      %{type: "pixels_250", threshold: 250, reward: "unicorn"},
+      %{type: "pixels_500", threshold: 500, reward: "unicorn"},
+      %{type: "pixels_750", threshold: 750, reward: "unicorn"},
+      %{type: "pixels_1000", threshold: 1000, reward: "unicorn"},
+      %{type: "pixels_1500", threshold: 1500, reward: "unicorn"},
       %{type: "pixels_2000", threshold: 2000, reward: "unicorn"},
       %{type: "pixels_3000", threshold: 3000, reward: "unicorn"},
       %{type: "pixels_5000", threshold: 5000, reward: "unicorn"}
@@ -725,17 +628,5 @@ defmodule Rzeczywiscie.PixelCanvas do
       |> UserPixelStats.changeset(%{special_pixels_available: updated_specials})
       |> Repo.update()
     end)
-  end
-
-  # Pick a random animal based on rarity weights
-  # Chicken (60%) → Pegasus (25%) → Whale (10%) → Unicorn (5%)
-  defp pick_random_animal do
-    roll = :rand.uniform()
-    cond do
-      roll < 0.60 -> "chicken"
-      roll < 0.85 -> "pegasus"
-      roll < 0.95 -> "whale"
-      true -> "unicorn"
-    end
   end
 end
