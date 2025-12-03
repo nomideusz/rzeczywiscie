@@ -54,6 +54,11 @@ defmodule Rzeczywiscie.RealEstate.Property do
     field :llm_monthly_fee, :integer  # Czynsz in PLN
     field :llm_year_built, :integer
     field :llm_floor_info, :string  # e.g. "3/5" (floor/total floors)
+    
+    # LLM data quality analysis
+    field :llm_data_issues, {:array, :string}, default: []  # Data problems detected
+    field :llm_listing_quality, :integer  # 1-5 quality score
+    field :llm_is_agency, :boolean  # true=agency, false=private, nil=unknown
 
     timestamps(type: :utc_datetime)
   end
@@ -99,7 +104,11 @@ defmodule Rzeczywiscie.RealEstate.Property do
       :llm_negotiation_hints,
       :llm_monthly_fee,
       :llm_year_built,
-      :llm_floor_info
+      :llm_floor_info,
+      # Data quality fields
+      :llm_data_issues,
+      :llm_listing_quality,
+      :llm_is_agency
     ])
     |> validate_required([:source, :external_id, :title, :url])
     |> validate_inclusion(:source, ["olx", "otodom", "gratka"])
@@ -132,10 +141,15 @@ defmodule Rzeczywiscie.RealEstate.Property do
       :llm_negotiation_hints,
       :llm_monthly_fee,
       :llm_year_built,
-      :llm_floor_info
+      :llm_floor_info,
+      # Data quality fields
+      :llm_data_issues,
+      :llm_listing_quality,
+      :llm_is_agency
     ])
     |> validate_number(:llm_urgency, greater_than_or_equal_to: 0, less_than_or_equal_to: 10)
     |> validate_number(:llm_investment_score, greater_than_or_equal_to: 0, less_than_or_equal_to: 10)
+    |> validate_number(:llm_listing_quality, greater_than_or_equal_to: 1, less_than_or_equal_to: 5)
     |> validate_inclusion(:llm_condition, ["unknown", "needs_renovation", "to_finish", "good", "renovated", "new", nil])
     |> validate_inclusion(:llm_motivation, ["unknown", "standard", "motivated", "very_motivated", nil])
   end

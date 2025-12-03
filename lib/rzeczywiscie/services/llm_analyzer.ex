@@ -105,11 +105,12 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
   
   # Context-aware prompt template (filled in dynamically)
   @context_prompt_template """
-  You're a sharp real estate scout writing quick notes for an investor friend.
+  You're a sharp real estate scout AND data quality checker. Analyze this listing.
   
-  NUMBERS YOU KNOW:
+  LISTING DATA (from scraper - may have errors!):
   - Price: %{price} PLN | Area: %{area} m² | Per m²: %{price_per_sqm} PLN
-  - Location: %{district}
+  - Location: %{district}, %{city}
+  - Rooms: %{rooms}
   - Market avg in area: %{market_avg} PLN/m²
   - Type: %{transaction_type}
   
@@ -129,14 +130,52 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
     "monthly_fee": null or number,
     "year_built": null or number,
     "floor_info": null or "X/Y",
-    "street": null or "Street Name" or "Street Name 123"
+    "street": null or "Street Name" or "Street Name 123",
+    "extracted_city": null or "City Name",
+    "extracted_district": null or "District Name",
+    "data_issues": [],
+    "corrected_area": null or number,
+    "corrected_rooms": null or number,
+    "corrected_transaction_type": null or "sprzedaż" or "wynajem",
+    "is_agency": null or true or false,
+    "listing_quality": 1-5
   }
   
-  STREET EXTRACTION:
-  - Extract street name if mentioned (e.g. "ul. Kościuszki 22", "przy Emaus", "Stachowicza")
-  - Include house number if mentioned
-  - Return null if no specific street is mentioned
-  - Common patterns: "ul.", "ulica", street name + number
+  DATA QUALITY CHECKS - Look for these issues:
+  1. WRONG AREA: If description says "45m2" but we have 1325m², extract corrected_area
+  2. WRONG ROOMS: If "kawalerka" (studio) but rooms=5, correct it
+  3. WRONG TRANSACTION: Monthly price (2000-5000 PLN) marked as sale? It's probably rent
+  4. MISSING LOCATION: Extract city/district from description if we don't have it
+  5. SUSPICIOUS DATA: Area 1m² or 10000m² for apartment? Flag it!
+  
+  Add to data_issues array (Polish):
+  - "Błędna powierzchnia - w opisie X m²"
+  - "Błędna liczba pokoi - opis wskazuje na Y"
+  - "Prawdopodobnie wynajem, nie sprzedaż"
+  - "Podejrzanie niska/wysoka cena za m²"
+  - "Brak opisu - trudno ocenić"
+  
+  STREET EXTRACTION (any Polish city):
+  - Look for: "ul.", "ulica", "al.", "aleja", "os.", "osiedle", "pl.", "plac"
+  - Extract street name + number if present
+  - Works for Kraków, Warsaw, Gdańsk, any city!
+  
+  LOCATION EXTRACTION:
+  - If city/district mentioned in text, extract them
+  - Kraków districts: Podgórze, Krowodrza, Nowa Huta, Prądnik, etc.
+  - Other cities: extract what you find
+  
+  IS_AGENCY DETECTION:
+  - true if: "biuro nieruchomości", "pośrednik", agency name, "prowizja X%"
+  - false if: "bez pośredników", "prywatnie", "od właściciela"
+  - null if unclear
+  
+  LISTING_QUALITY (1-5):
+  - 5: Detailed description, photos mentioned, clear terms, complete info
+  - 4: Good description, most info present
+  - 3: Basic description, some info missing
+  - 2: Sparse description, key info missing
+  - 1: Almost no description, red flags, suspicious
   
   INSTANT RED FLAGS (score 0-2):
   - "dom szkieletowy/modułowy/prefabrykowany/mobilny" = PREFAB PRODUCT!
@@ -147,28 +186,13 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
   SCORE GUIDE:
   - 8-10: Way below market, seller motivated, ready to move in
   - 5-7: Fair deal, some upside
-  - 3-4: Market price, nothing special
+  - 3-4: Market price, nothing special  
   - 0-2: Overpriced, red flags, or NOT REAL ESTATE (prefab/shed)
   
-  SUMMARY - WRITE LIKE A FRIEND TEXTING:
-  
-  ❌ NEVER SAY:
-  - "Nieruchomość w X oferuje..."
-  - "jest/stanowi atrakcyjną inwestycją/ofertą"
-  - "znacznie poniżej średniej rynkowej"
-  - "w dzielnicy X" (just say the district name naturally)
-  - Generic corporate phrases
-  
-  ✅ BE LIKE THIS:
-  - "Dębniki, %{price_per_sqm} zł/m² przy średniej %{market_avg} - solidna okazja. Balkon na południe."
-  - "Garaż blaszany to produkt z OBI, nie nieruchomość. Omijać."
-  - "Remont zrobiony, ale czynsz 650zł zjada zysk z wynajmu."
-  - "Podgórze, pilna sprzedaż - warto zadzwonić i negocjować twardo."
-  - "Zakopane, wynajem krótkoterminowy - licencja już jest? Sprawdzić."
-  - "Prefabrykat za 140k - kupujesz produkt, nie mieszkanie. Skip."
-  - "Wielka płyta, parter, hałas. Cena niska, bo jest za co."
-  
-  Focus on THE ONE THING that matters most. Be direct. Be useful.
+  SUMMARY - WRITE LIKE A FRIEND TEXTING (Polish):
+  - Include data issues if found! "Uwaga: w tytule 45m², system ma 1325m²"
+  - Be direct about problems
+  - Focus on THE ONE THING that matters most
   %{summary_instruction}
   """
   
@@ -257,6 +281,8 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
       |> String.replace("%{area}", format_number(area))
       |> String.replace("%{price_per_sqm}", format_number(price_per_sqm))
       |> String.replace("%{district}", district || "Unknown")
+      |> String.replace("%{city}", context[:city] || "Unknown")
+      |> String.replace("%{rooms}", to_string(context[:rooms] || "?"))
       |> String.replace("%{market_avg}", format_number(market_avg))
       |> String.replace("%{transaction_type}", context[:transaction_type] || "sprzedaż")
       |> String.replace("%{location_instruction}", location_instruction)

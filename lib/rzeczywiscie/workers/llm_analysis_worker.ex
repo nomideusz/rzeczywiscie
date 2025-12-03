@@ -125,6 +125,8 @@ defmodule Rzeczywiscie.Workers.LLMAnalysisWorker do
       price: property.price && Decimal.to_float(property.price),
       area: property.area_sqm && Decimal.to_float(property.area_sqm),
       district: property.district,
+      city: property.city,
+      rooms: property.rooms,
       market_avg_price_per_sqm: market_avg,
       transaction_type: property.transaction_type || "sprzedaż"
     }
@@ -178,7 +180,11 @@ defmodule Rzeczywiscie.Workers.LLMAnalysisWorker do
       llm_negotiation_hints: signals[:negotiation_hints] || [],
       llm_monthly_fee: signals[:monthly_fee],
       llm_year_built: signals[:year_built],
-      llm_floor_info: signals[:floor_info]
+      llm_floor_info: signals[:floor_info],
+      # New fields
+      llm_data_issues: signals[:data_issues] || [],
+      llm_listing_quality: signals[:listing_quality],
+      llm_is_agency: signals[:is_agency]
     }
     
     # Add street if LLM extracted it and property doesn't already have one
@@ -188,10 +194,68 @@ defmodule Rzeczywiscie.Workers.LLMAnalysisWorker do
       updates
     end
     
+    # Apply corrected area if LLM found error and current area looks wrong
+    updates = if signals[:corrected_area] && is_number(signals[:corrected_area]) do
+      current_area = property.area_sqm && Decimal.to_float(property.area_sqm)
+      # Only correct if current area is suspiciously different (10x or more)
+      if current_area && (current_area > signals[:corrected_area] * 10 || current_area < signals[:corrected_area] / 10) do
+        Logger.info("  📐 Correcting area: #{current_area} → #{signals[:corrected_area]} m²")
+        Map.put(updates, :area_sqm, Decimal.from_float(signals[:corrected_area] * 1.0))
+      else
+        updates
+      end
+    else
+      updates
+    end
+    
+    # Apply corrected rooms if LLM found error
+    updates = if signals[:corrected_rooms] && is_integer(signals[:corrected_rooms]) do
+      if property.rooms != signals[:corrected_rooms] do
+        Logger.info("  🚪 Correcting rooms: #{property.rooms} → #{signals[:corrected_rooms]}")
+        Map.put(updates, :rooms, signals[:corrected_rooms])
+      else
+        updates
+      end
+    else
+      updates
+    end
+    
+    # Apply corrected transaction type if LLM found error
+    updates = if signals[:corrected_transaction_type] && signals[:corrected_transaction_type] in ["sprzedaż", "wynajem"] do
+      if property.transaction_type != signals[:corrected_transaction_type] do
+        Logger.info("  💰 Correcting transaction: #{property.transaction_type} → #{signals[:corrected_transaction_type]}")
+        Map.put(updates, :transaction_type, signals[:corrected_transaction_type])
+      else
+        updates
+      end
+    else
+      updates
+    end
+    
+    # Extract city if missing and LLM found it
+    updates = if signals[:extracted_city] && (is_nil(property.city) || property.city == "") do
+      Logger.info("  📍 Extracted city: #{signals[:extracted_city]}")
+      Map.put(updates, :city, signals[:extracted_city])
+    else
+      updates
+    end
+    
+    # Extract district if missing and LLM found it
+    updates = if signals[:extracted_district] && (is_nil(property.district) || property.district == "") do
+      Logger.info("  📍 Extracted district: #{signals[:extracted_district]}")
+      Map.put(updates, :district, signals[:extracted_district])
+    else
+      updates
+    end
+    
     case RealEstate.update_property(property, updates) do
       {:ok, _} ->
-        street_note = if signals[:street], do: ", street: #{signals[:street]}", else: ""
-        Logger.info("  ✓ Property ##{property.id} analyzed (investment: #{signals[:investment_score] || "?"}/10#{street_note})")
+        extras = []
+        extras = if signals[:street], do: ["street: #{signals[:street]}" | extras], else: extras
+        extras = if signals[:data_issues] && length(signals[:data_issues]) > 0, do: ["#{length(signals[:data_issues])} issues" | extras], else: extras
+        extras = if signals[:is_agency] == true, do: ["agency" | extras], else: extras
+        extras_str = if length(extras) > 0, do: ", #{Enum.join(extras, ", ")}", else: ""
+        Logger.info("  ✓ Property ##{property.id} analyzed (inv: #{signals[:investment_score] || "?"}/10, quality: #{signals[:listing_quality] || "?"}#{extras_str})")
         :ok
       {:error, changeset} ->
         Logger.error("  ✗ Failed to save: #{inspect(changeset.errors)}")
