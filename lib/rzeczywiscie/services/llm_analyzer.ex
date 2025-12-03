@@ -473,7 +473,11 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
     
     case Jason.decode(json_str) do
       {:ok, signals} -> {:ok, normalize_signals(signals)}
-      {:error, _} -> {:error, :invalid_json}
+      {:error, reason} -> 
+        # Log the raw content for debugging
+        Logger.warning("  JSON parse error: #{inspect(reason)}")
+        Logger.warning("  Raw content (first 500 chars): #{String.slice(content, 0, 500)}")
+        {:error, :invalid_json}
     end
   end
   
@@ -496,12 +500,39 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
   
   # Extract JSON from potential markdown code blocks
   defp extract_json(content) do
-    content
-    |> String.trim()
-    |> String.replace(~r/^```json\s*/, "")
-    |> String.replace(~r/^```\s*/, "")
-    |> String.replace(~r/\s*```$/, "")
-    |> String.trim()
+    content = String.trim(content)
+    
+    # Try to find JSON object in the response
+    cond do
+      # Already starts with { - assume it's JSON
+      String.starts_with?(content, "{") ->
+        # Find matching closing brace
+        extract_json_object(content)
+        
+      # Has markdown code block
+      String.contains?(content, "```") ->
+        content
+        |> String.replace(~r/^```json\s*/m, "")
+        |> String.replace(~r/^```\s*/m, "")
+        |> String.replace(~r/\s*```\s*$/m, "")
+        |> String.trim()
+        |> extract_json_object()
+        
+      # Try to find JSON anywhere in the response
+      true ->
+        case Regex.run(~r/\{[\s\S]*\}/, content) do
+          [json] -> json
+          _ -> content
+        end
+    end
+  end
+  
+  # Extract a complete JSON object, handling nested braces
+  defp extract_json_object(content) do
+    case Regex.run(~r/^\{[\s\S]*\}/m, content) do
+      [json] -> json
+      _ -> content
+    end
   end
   
   # Normalize signals to expected format with defaults
