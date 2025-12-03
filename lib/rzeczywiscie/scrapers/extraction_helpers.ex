@@ -810,26 +810,28 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
   end
 
   defp try_otodom_description_selectors(document) do
+    # Strategy 1: Try specific description selectors first
     selectors = [
-      # Primary Otodom description selectors - these work!
-      "div[data-cy='ad_description'] div",  # This one works per logs!
+      # Otodom description section - look for the "Opis" section specifically
+      "section[data-cy='ad.description'] div",
+      "section[data-cy='ad.description']",
+      "div[data-cy='ad.description.content']",
+      # Alternative data-cy patterns
+      "div[data-cy='ad_description'] div",
       "div[data-cy='ad_description']",
       "div[data-cy='adPageAdDescription']",
+      # Section with aria-label
+      "section[aria-label='Opis'] div",
       "section[aria-label='Opis']",
+      # data-testid patterns
       "div[data-testid='ad-description']",
       "section[data-testid='ad-description-section']",
-      # Class-based selectors (Otodom uses CSS modules)
+      # Class-based selectors (Otodom uses CSS modules - try multiple)
       "div.css-1wekrze",
       "div.css-1k7yu81",
-      "div.css-1bi0g88",  # Possible description container
-      "div.css-1t38rho",  # Another common pattern
       # Section-based selectors
-      "section.css-10m5oaz",  # Description section
       "div[class*='AdDescription']",
-      "div[class*='adDescription']",
-      # Generic but specific enough
-      "article section p",
-      "main section p"
+      "div[class*='adDescription']"
     ]
 
     description = Enum.reduce_while(selectors, nil, fn selector, _acc ->
@@ -840,13 +842,24 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
         |> String.trim()
         |> clean_css_artifacts()  # Clean up inline CSS artifacts
 
-      # Accept only if it's substantial AND not CSS garbage
-      if text != "" and String.length(text) > 50 and not is_css_content?(text) do
+      # Accept only if it's substantial AND not CSS garbage AND not metadata table
+      valid = text != "" and 
+              String.length(text) > 50 and 
+              not is_css_content?(text) and
+              not is_otodom_metadata?(text) and
+              not is_navigation_content?(text)
+              
+      if valid do
         Logger.info("Otodom description found with selector: #{selector} (#{String.length(text)} chars)")
         {:halt, text}
       else
-        if text != "" and is_css_content?(text) do
-          Logger.info("Otodom selector '#{selector}' found CSS content, skipping")
+        if text != "" and String.length(text) > 50 do
+          cond do
+            is_css_content?(text) -> Logger.info("Selector '#{selector}' found CSS content, skipping")
+            is_otodom_metadata?(text) -> Logger.info("Selector '#{selector}' found metadata table, skipping")
+            is_navigation_content?(text) -> Logger.info("Selector '#{selector}' found navigation, skipping")
+            true -> :ok
+          end
         end
         {:cont, nil}
       end
@@ -879,7 +892,7 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
     |> String.trim()
   end
   
-  # Validate that extracted text is a real description, not CSS/garbage
+  # Validate that extracted text is a real description, not CSS/garbage/metadata
   defp validate_description(nil), do: nil
   defp validate_description(text) when byte_size(text) < 20, do: nil
   defp validate_description(text) do
@@ -889,6 +902,9 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
         nil
       is_navigation_content?(text) ->
         Logger.warning("Rejected navigation/footer content as description (#{String.length(text)} chars)")
+        nil
+      is_otodom_metadata?(text) ->
+        Logger.warning("Rejected Otodom metadata table as description (#{String.length(text)} chars)")
         nil
       true ->
         text
@@ -909,6 +925,7 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
         not String.contains?(text, ["Cookie", "Polityka prywatności", "Regulamin"]) and  # Not legal text
         not is_css_content?(text) and  # Not CSS garbage
         not is_navigation_content?(text) and  # Not navigation/footer
+        not is_otodom_metadata?(text) and  # Not metadata table
         String.contains?(text, [" ", "."]) # Has spaces and sentences
       end)
       |> Enum.sort_by(fn {_, _, len} -> -len end)  # Longest first

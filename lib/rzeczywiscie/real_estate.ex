@@ -571,24 +571,10 @@ defmodule Rzeczywiscie.RealEstate do
   end
 
   @doc """
-  Clear descriptions that contain CSS, JS, or other garbage content.
+  Clear descriptions that contain CSS, JS, metadata tables, or other garbage content.
   """
   def clear_bad_descriptions do
-    # Find descriptions with CSS/JS patterns
-    bad_patterns = [".css-", "{color:", "{font-", "font-weight:", "text-align:"]
-    
-    # Navigation/footer/UI patterns (Otodom/OLX garbage content)
-    navigation_patterns = [
-      "WynajmujęNieruchomości", "NieruchomościMieszkania", "MieszkaniaKawalerki",
-      "KawalerkiDomy", "DomyPokoje", "PokojeDziałki", "DziałkiLokale",
-      "Popularne lokalizacje", "Popularne biura nieruchomości",
-      "Biura nieruchomości w", "Przewodnik wynajmującego", "Raport z rynku najmu",
-      "WarszawaWrocławKraków", "KrakówPoznańGdańsk", "GdańskŁódźGdynia",
-      # OLX history/stats/login patterns
-      "Historia i statystyki", "Ostatnia aktualizacja:", "DataZmianaCena",
-      "Zaloguj się lub załóż konto", "Zaloguj się i sprawdź", "dostęp do pełnej historii",
-      "załóż konto, aby", "XXXXXXXXXXXX"
-    ]
+    alias Rzeczywiscie.Scrapers.ExtractionHelpers
     
     # Get properties with bad descriptions
     bad_props = from(p in Property,
@@ -597,20 +583,13 @@ defmodule Rzeczywiscie.RealEstate do
     |> Repo.all()
     |> Enum.filter(fn p ->
       desc = p.description || ""
-      desc_lower = String.downcase(desc)
       
-      # Check CSS patterns
-      has_css = Enum.any?(bad_patterns, &String.contains?(desc, &1))
-      
-      # Check navigation patterns (case-insensitive)
-      has_navigation = Enum.any?(navigation_patterns, fn pattern ->
-        String.contains?(desc_lower, String.downcase(pattern))
-      end)
-      
-      # Too many special characters
-      special_char_ratio = String.length(String.replace(desc, ~r/[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ0-9\s.,!?;:\-–—'"„""]/u, "")) / max(String.length(desc), 1)
-      
-      has_css || has_navigation || special_char_ratio > 0.15
+      # Use centralized detection from ExtractionHelpers
+      ExtractionHelpers.is_css_content?(desc) or
+        ExtractionHelpers.is_navigation_content?(desc) or
+        ExtractionHelpers.is_otodom_metadata?(desc) or
+        # Too many special characters (minified code)
+        (String.length(String.replace(desc, ~r/[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ0-9\s.,!?;:\-–—'"„""]/u, "")) / max(String.length(desc), 1) > 0.15)
     end)
     
     # Clear them and reset LLM analysis
