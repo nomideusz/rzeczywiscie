@@ -212,16 +212,28 @@ defmodule Rzeczywiscie.Workers.LLMAnalysisWorker do
     desc_lower = String.downcase(desc)
     first_100 = String.slice(desc_lower, 0, 100)
     
+    # CSS patterns
     css_patterns = ["@media", "@keyframes", ".css-", "{text-decoration", "{display:", 
                     "{color:", "{background", ":hover{", "!important", "var(--",
                     "oklch(", "rgba(", "font-family:", "font-size:"]
     
     has_css = Enum.any?(css_patterns, &String.contains?(first_100, &1))
     
+    # Navigation/footer patterns (Otodom menu content)
+    navigation_patterns = [
+      "wynajmujęnieruchomości", "nieruchomościmieszkania", "mieszkaniakawalerki",
+      "kawalerkidomy", "domypokoje", "pokojedzialki", "działkilokale",
+      "popularne lokalizacje", "popularne biura nieruchomości", 
+      "biura nieruchomości w", "przewodnik wynajmującego", "raport z rynku najmu",
+      "warszawawrocławkraków", "krakówpoznańgdańsk", "gdańskłódźgdynia"
+    ]
+    
+    has_navigation = Enum.any?(navigation_patterns, &String.contains?(desc_lower, &1))
+    
     css_char_ratio = (String.graphemes(desc) 
       |> Enum.count(fn c -> c in ["{", "}", ":", ";"] end)) / max(String.length(desc), 1)
     
-    not has_css and css_char_ratio < 0.05
+    not has_css and not has_navigation and css_char_ratio < 0.05
   end
 
   @doc """

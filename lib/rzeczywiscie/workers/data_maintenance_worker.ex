@@ -8,6 +8,7 @@ defmodule Rzeczywiscie.Workers.DataMaintenanceWorker do
   - Backfill missing districts from city field
   - Backfill missing cities from district data
   - Clear invalid prices (< 100 PLN)
+  - Clear bad descriptions (CSS, navigation content)
   
   Scheduled to run daily at 4 AM via cron.
   """
@@ -48,6 +49,10 @@ defmodule Rzeczywiscie.Workers.DataMaintenanceWorker do
     # 5. Clear invalid prices
     prices_result = clear_invalid_prices()
     results = ["Invalid prices: #{prices_result}" | results]
+    
+    # 6. Clear bad descriptions (CSS, navigation garbage)
+    desc_result = clear_bad_descriptions()
+    results = ["Bad descriptions: #{desc_result}" | results]
     
     Logger.info("🧹 Data Maintenance complete: #{Enum.join(Enum.reverse(results), ", ")}")
     
@@ -100,6 +105,16 @@ defmodule Rzeczywiscie.Workers.DataMaintenanceWorker do
     case RealEstate.clear_invalid_prices() do
       {:ok, count} ->
         if count > 0, do: Logger.info("  Cleared #{count} invalid prices")
+        "#{count} cleared"
+      {:error, _} ->
+        "error"
+    end
+  end
+
+  defp clear_bad_descriptions do
+    case RealEstate.clear_bad_descriptions() do
+      {:ok, count} ->
+        if count > 0, do: Logger.info("  Cleared #{count} bad descriptions (CSS/navigation)")
         "#{count} cleared"
       {:error, _} ->
         "error"

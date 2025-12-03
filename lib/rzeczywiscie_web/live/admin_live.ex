@@ -94,40 +94,40 @@ defmodule RzeczywiscieWeb.AdminLive do
               <div class="text-xs space-y-1 opacity-70">
                 <p>• OLX: every 6h (regular) + every 8h (enriched)</p>
                 <p>• Otodom: every 6h with enrichment</p>
-              </div>
+            </div>
               <%= if @job_status.last_scrape do %>
                 <div class="mt-2 text-[10px] opacity-50">Last: <%= format_time_ago(@job_status.last_scrape) %></div>
               <% end %>
-            </div>
-            
+        </div>
+
             <!-- Geocoding -->
             <div class="border border-base-content/20 p-4">
               <div class="flex items-center justify-between mb-2">
                 <h3 class="font-bold text-sm">📍 Geocoding</h3>
                 <span class="px-2 py-1 text-[10px] font-bold bg-success/20 text-success">AUTO</span>
-              </div>
+          </div>
               <div class="text-xs space-y-1 opacity-70">
                 <p>• Runs every hour</p>
                 <p>• <%= @stats.pending_geocode %> pending</p>
               </div>
               <%= if @job_status.last_geocode do %>
                 <div class="mt-2 text-[10px] opacity-50">Last: <%= format_time_ago(@job_status.last_geocode) %></div>
-              <% end %>
-            </div>
-            
+            <% end %>
+        </div>
+
             <!-- LLM Analysis -->
             <div class="border border-base-content/20 p-4">
               <div class="flex items-center justify-between mb-2">
                 <h3 class="font-bold text-sm">🤖 LLM Analysis</h3>
                 <span class="px-2 py-1 text-[10px] font-bold bg-success/20 text-success">AUTO</span>
-              </div>
+          </div>
               <div class="text-xs space-y-1 opacity-70">
                 <p>• Runs every 6h (30 properties)</p>
                 <p>• <%= @stats.pending_llm %> with descriptions pending</p>
               </div>
               <%= if @job_status.last_llm do %>
                 <div class="mt-2 text-[10px] opacity-50">Last: <%= format_time_ago(@job_status.last_llm) %></div>
-              <% end %>
+            <% end %>
             </div>
             
             <!-- Price Tracking -->
@@ -135,19 +135,19 @@ defmodule RzeczywiscieWeb.AdminLive do
               <div class="flex items-center justify-between mb-2">
                 <h3 class="font-bold text-sm">📉 Price Tracking</h3>
                 <span class="px-2 py-1 text-[10px] font-bold bg-success/20 text-success">AUTO</span>
-              </div>
+            </div>
               <div class="text-xs space-y-1 opacity-70">
                 <p>• Runs every 2 hours</p>
                 <p>• <%= @stats.price_drops_7d %> drops in last 7 days</p>
-              </div>
-            </div>
-            
+          </div>
+        </div>
+
             <!-- Data Maintenance -->
             <div class="border border-base-content/20 p-4">
               <div class="flex items-center justify-between mb-2">
                 <h3 class="font-bold text-sm">🧹 Maintenance</h3>
                 <span class="px-2 py-1 text-[10px] font-bold bg-success/20 text-success">AUTO</span>
-              </div>
+          </div>
               <div class="text-xs space-y-1 opacity-70">
                 <p>• Daily at 4 AM</p>
                 <p>• Dedup, fix types, backfill data</p>
@@ -164,9 +164,9 @@ defmodule RzeczywiscieWeb.AdminLive do
                 <p>• Daily at 5 AM</p>
                 <p>• Deactivates properties not seen in 4+ days</p>
               </div>
-            </div>
-          </div>
-        </div>
+              </div>
+              </div>
+              </div>
 
         <!-- Manual Actions (collapsed by default) -->
         <div class="bg-base-100 border-2 border-base-content mb-6">
@@ -248,16 +248,16 @@ defmodule RzeczywiscieWeb.AdminLive do
               <p class="mt-3 text-[10px] opacity-50">
                 These tasks are already scheduled. Only use manual triggers if you need immediate results.
               </p>
-            </div>
-          <% end %>
-        </div>
-
+                    </div>
+                  <% end %>
+                </div>
+                
         <!-- LLM Stats (if any analyzed) -->
         <%= if @stats.llm_analyzed > 0 do %>
           <div class="bg-base-100 border-2 border-base-content mb-6">
             <div class="px-4 py-3 border-b-2 border-base-content bg-info/10">
               <h2 class="text-sm font-bold uppercase tracking-wide">🤖 LLM Analysis Overview</h2>
-            </div>
+                    </div>
             <div class="p-4">
               <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
                 <div class="text-center">
@@ -267,11 +267,11 @@ defmodule RzeczywiscieWeb.AdminLive do
                 <div class="text-center">
                   <div class="text-2xl font-black text-warning"><%= @stats.llm_motivated %></div>
                   <div class="text-[10px] font-bold uppercase opacity-60">Very Motivated</div>
-                </div>
+                      </div>
                 <div class="text-center">
                   <div class="text-2xl font-black text-error"><%= @stats.llm_renovation %></div>
                   <div class="text-[10px] font-bold uppercase opacity-60">Needs Renovation</div>
-                </div>
+                    </div>
                 <div class="text-center">
                   <div class="text-2xl font-black"><%= @stats.llm_avg_score %></div>
                   <div class="text-[10px] font-bold uppercase opacity-60">Avg Score</div>
@@ -280,11 +280,11 @@ defmodule RzeczywiscieWeb.AdminLive do
                   <a href="/llm-results" class="inline-block px-4 py-2 text-xs font-bold uppercase border-2 border-info text-info hover:bg-info hover:text-info-content transition-colors">
                     View Results →
                   </a>
-                </div>
               </div>
-            </div>
-          </div>
-        <% end %>
+                  </div>
+                </div>
+                      </div>
+                          <% end %>
 
         <!-- Quick Links -->
         <div class="bg-base-100 border-2 border-base-content">
@@ -313,12 +313,12 @@ defmodule RzeczywiscieWeb.AdminLive do
       |> assign(:job_status, get_job_status())
     }
   end
-
+  
   @impl true
   def handle_event("toggle_manual", _params, socket) do
     {:noreply, assign(socket, :show_manual, !socket.assigns.show_manual)}
   end
-
+  
   @impl true
   def handle_event("run_task", %{"task" => task}, socket) do
     socket = 
@@ -388,7 +388,7 @@ defmodule RzeczywiscieWeb.AdminLive do
     active = Repo.aggregate(from(p in Property, where: p.active == true), :count, :id)
     olx = Repo.aggregate(from(p in Property, where: p.active == true and p.source == "olx"), :count, :id)
     otodom = Repo.aggregate(from(p in Property, where: p.active == true and p.source == "otodom"), :count, :id)
-    
+
     geocoded = Repo.aggregate(
       from(p in Property, where: p.active == true and not is_nil(p.latitude)),
       :count, :id
@@ -404,7 +404,7 @@ defmodule RzeczywiscieWeb.AdminLive do
       from(p in Property, where: p.active == true and not is_nil(p.llm_analyzed_at)),
       :count, :id
     )
-    
+
     pending_llm = Repo.aggregate(
       from(p in Property, 
         where: p.active == true and 

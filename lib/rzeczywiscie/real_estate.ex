@@ -577,6 +577,15 @@ defmodule Rzeczywiscie.RealEstate do
     # Find descriptions with CSS/JS patterns
     bad_patterns = [".css-", "{color:", "{font-", "font-weight:", "text-align:"]
     
+    # Navigation/footer patterns (Otodom menu content concatenated)
+    navigation_patterns = [
+      "WynajmujęNieruchomości", "NieruchomościMieszkania", "MieszkaniaKawalerki",
+      "KawalerkiDomy", "DomyPokoje", "PokojeDziałki", "DziałkiLokale",
+      "Popularne lokalizacje", "Popularne biura nieruchomości",
+      "Biura nieruchomości w", "Przewodnik wynajmującego", "Raport z rynku najmu",
+      "WarszawaWrocławKraków", "KrakówPoznańGdańsk", "GdańskŁódźGdynia"
+    ]
+    
     # Get properties with bad descriptions
     bad_props = from(p in Property,
       where: p.active == true and not is_nil(p.description)
@@ -584,14 +593,32 @@ defmodule Rzeczywiscie.RealEstate do
     |> Repo.all()
     |> Enum.filter(fn p ->
       desc = p.description || ""
-      Enum.any?(bad_patterns, &String.contains?(desc, &1)) ||
-        # Too many special characters
-        String.length(String.replace(desc, ~r/[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ0-9\s.,!?;:\-–—'"„""]/u, "")) / max(String.length(desc), 1) > 0.15
+      desc_lower = String.downcase(desc)
+      
+      # Check CSS patterns
+      has_css = Enum.any?(bad_patterns, &String.contains?(desc, &1))
+      
+      # Check navigation patterns (case-insensitive)
+      has_navigation = Enum.any?(navigation_patterns, fn pattern ->
+        String.contains?(desc_lower, String.downcase(pattern))
+      end)
+      
+      # Too many special characters
+      special_char_ratio = String.length(String.replace(desc, ~r/[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ0-9\s.,!?;:\-–—'"„""]/u, "")) / max(String.length(desc), 1)
+      
+      has_css || has_navigation || special_char_ratio > 0.15
     end)
     
-    # Clear them
+    # Clear them and reset LLM analysis
     count = Enum.reduce(bad_props, 0, fn prop, acc ->
-      case Repo.update(Property.changeset(prop, %{description: nil})) do
+      updates = %{
+        description: nil,
+        llm_analyzed_at: nil,  # Reset so it can be re-analyzed
+        llm_summary: nil,
+        llm_score: nil,
+        llm_investment_score: nil
+      }
+      case Repo.update(Property.changeset(prop, updates)) do
         {:ok, _} -> acc + 1
         {:error, _} -> acc
       end

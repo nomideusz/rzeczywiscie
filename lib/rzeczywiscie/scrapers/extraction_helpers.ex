@@ -49,6 +49,49 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
     Enum.any?(css_patterns, &Regex.match?(&1, text))
   end
 
+  @doc """
+  Check if text looks like website navigation/footer content.
+  """
+  def is_navigation_content?(nil), do: false
+  def is_navigation_content?(text) when is_binary(text) do
+    # Detect common navigation patterns from Otodom/OLX
+    navigation_patterns = [
+      # Otodom navigation patterns (concatenated menu items)
+      ~r/WynajmujęNieruchomości/i,
+      ~r/NieruchomościMieszkania/i,
+      ~r/MieszkaniaKawalerki/i,
+      ~r/KawalerkiDomy/i,
+      ~r/DomyPokoje/i,
+      ~r/PokojeDziałki/i,
+      ~r/DziałkiLokale/i,
+      ~r/Hale i magazynyGaraże/i,
+      ~r/Popularne lokalizacje/i,
+      ~r/Popularne biura nieruchomości/i,
+      ~r/Biura nieruchomości w/i,
+      ~r/Przewodnik wynajmującego/i,
+      ~r/Raport z rynku najmu/i,
+      ~r/Dobry Wy\{?Najem\}?/i,
+      # Generic navigation patterns
+      ~r/WarszawaWrocławKraków/i,
+      ~r/KrakówPoznańGdańsk/i,
+      ~r/GdańskŁódźGdynia/i,
+      # Cookie/legal patterns
+      ~r/Polityka prywatności/i,
+      ~r/Regulamin serwisu/i,
+      ~r/Pliki cookie/i
+    ]
+    
+    Enum.any?(navigation_patterns, &Regex.match?(&1, text))
+  end
+
+  @doc """
+  Check if text is invalid description (CSS, navigation, or too short).
+  """
+  def is_invalid_description?(nil), do: true
+  def is_invalid_description?(text) when is_binary(text) do
+    String.length(text) < 50 or is_css_content?(text) or is_navigation_content?(text)
+  end
+
   # Minimum valid prices to avoid extracting room counts or erroneous values
   # Rent: at least 100 PLN (no one rents for less)
   # Sale: at least 10,000 PLN (no one sells for less)
@@ -751,11 +794,15 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
   defp validate_description(nil), do: nil
   defp validate_description(text) when byte_size(text) < 20, do: nil
   defp validate_description(text) do
-    if is_css_content?(text) do
-      Logger.warning("Rejected CSS content as description (#{String.length(text)} chars)")
-      nil
-    else
-      text
+    cond do
+      is_css_content?(text) ->
+        Logger.warning("Rejected CSS content as description (#{String.length(text)} chars)")
+        nil
+      is_navigation_content?(text) ->
+        Logger.warning("Rejected navigation/footer content as description (#{String.length(text)} chars)")
+        nil
+      true ->
+        text
     end
   end
   
@@ -772,6 +819,7 @@ defmodule Rzeczywiscie.Scrapers.ExtractionHelpers do
         len > 200 and  # Substantial length
         not String.contains?(text, ["Cookie", "Polityka prywatności", "Regulamin"]) and  # Not legal text
         not is_css_content?(text) and  # Not CSS garbage
+        not is_navigation_content?(text) and  # Not navigation/footer
         String.contains?(text, [" ", "."]) # Has spaces and sentences
       end)
       |> Enum.sort_by(fn {_, _, len} -> -len end)  # Longest first
