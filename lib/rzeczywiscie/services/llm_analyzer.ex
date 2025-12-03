@@ -128,8 +128,15 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
     "summary": "Your quick note in Polish",
     "monthly_fee": null or number,
     "year_built": null or number,
-    "floor_info": null or "X/Y"
+    "floor_info": null or "X/Y",
+    "street": null or "Street Name" or "Street Name 123"
   }
+  
+  STREET EXTRACTION:
+  - Extract street name if mentioned (e.g. "ul. Kościuszki 22", "przy Emaus", "Stachowicza")
+  - Include house number if mentioned
+  - Return null if no specific street is mentioned
+  - Common patterns: "ul.", "ulica", street name + number
   
   INSTANT RED FLAGS (score 0-2):
   - "dom szkieletowy/modułowy/prefabrykowany/mobilny" = PREFAB PRODUCT!

@@ -63,6 +63,7 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
   Uses the PropertyRescraper to fetch detail pages and fill in:
   - Missing price, area, rooms, district
   - Descriptions
+  - Streets (extracted from titles/descriptions)
   - Cities (inferred from districts)
   """
   def enrich_recent_properties(delay \\ 2000) do
@@ -80,6 +81,28 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
     # Fetch descriptions for properties without them
     Logger.info("Fetching descriptions for properties without them...")
     fetch_missing_descriptions(limit: 50, delay: delay)
+    
+    # Extract streets from titles and descriptions
+    Logger.info("Extracting streets from titles/descriptions...")
+    street_stats = extract_streets_from_recent()
+    Logger.info("Street extraction: #{street_stats.updated} updated, #{street_stats.skipped} skipped")
+  end
+  
+  defp extract_streets_from_recent do
+    import Ecto.Query
+    alias Rzeczywiscie.Repo
+    alias Rzeczywiscie.RealEstate.Property
+    alias Rzeczywiscie.Services.StreetExtractor
+    
+    # Get OLX properties without streets, recently scraped first
+    properties = Repo.all(
+      from p in Property,
+        where: p.active == true and p.source == "olx" and (is_nil(p.street) or p.street == ""),
+        order_by: [desc: p.inserted_at],
+        limit: 200
+    )
+    
+    StreetExtractor.process_batch(properties)
   end
   
   defp fetch_missing_descriptions(opts) do

@@ -163,6 +163,7 @@ defmodule Rzeczywiscie.Workers.LLMAnalysisWorker do
   defp save_analysis(property, signals) do
     alias Rzeczywiscie.Services.LLMAnalyzer
     
+    # Base LLM analysis updates
     updates = %{
       llm_urgency: signals.urgency,
       llm_condition: atom_to_string(signals.condition),
@@ -180,9 +181,17 @@ defmodule Rzeczywiscie.Workers.LLMAnalysisWorker do
       llm_floor_info: signals[:floor_info]
     }
     
+    # Add street if LLM extracted it and property doesn't already have one
+    updates = if signals[:street] && (is_nil(property.street) || property.street == "") do
+      Map.put(updates, :street, signals[:street])
+    else
+      updates
+    end
+    
     case RealEstate.update_property(property, updates) do
       {:ok, _} ->
-        Logger.info("  ✓ Property ##{property.id} analyzed (investment: #{signals[:investment_score] || "?"}/10)")
+        street_note = if signals[:street], do: ", street: #{signals[:street]}", else: ""
+        Logger.info("  ✓ Property ##{property.id} analyzed (investment: #{signals[:investment_score] || "?"}/10#{street_note})")
         :ok
       {:error, changeset} ->
         Logger.error("  ✗ Failed to save: #{inspect(changeset.errors)}")
