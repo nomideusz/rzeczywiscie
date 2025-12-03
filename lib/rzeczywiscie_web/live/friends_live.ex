@@ -129,6 +129,21 @@ defmodule RzeczywiscieWeb.FriendsLive do
                 >
                   <div class="absolute inset-0 bg-base-content translate-x-1 translate-y-1 -z-10"></div>
                   
+                  <!-- Delete Button (visible on hover, only for own photos) -->
+                  <%= if photo.user_id == @user_id do %>
+                    <button
+                      type="button"
+                      phx-click="delete-photo"
+                      phx-value-id={photo.id}
+                      data-confirm="Delete this photo?"
+                      class="absolute top-2 right-2 z-10 p-2 bg-error text-error-content border-2 border-base-content opacity-0 group-hover:opacity-100 transition-opacity hover:bg-base-content hover:text-base-100"
+                    >
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="square" stroke-width="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  <% end %>
+                  
                   <!-- Image Container -->
                   <div class="aspect-square overflow-hidden bg-base-200">
                     <img
@@ -176,6 +191,34 @@ defmodule RzeczywiscieWeb.FriendsLive do
 
   def handle_event("cancel-upload", %{"ref" => ref}, socket) do
     {:noreply, cancel_upload(socket, :photo, ref)}
+  end
+
+  def handle_event("delete-photo", %{"id" => id}, socket) do
+    # Convert string ID to integer
+    photo_id = String.to_integer(id)
+    
+    # Verify the photo belongs to this user before deleting
+    case Friends.get_photo(photo_id) do
+      nil ->
+        {:noreply, put_flash(socket, :error, "Photo not found")}
+      
+      photo ->
+        if photo.user_id == socket.assigns.user_id do
+          case Friends.delete_photo(photo_id) do
+            {:ok, _} ->
+              {:noreply,
+               socket
+               |> assign(:photo_count, max(0, socket.assigns.photo_count - 1))
+               |> stream_delete(:photos, %{id: photo_id})
+               |> put_flash(:info, "🗑️ Photo deleted")}
+            
+            {:error, _} ->
+              {:noreply, put_flash(socket, :error, "Failed to delete photo")}
+          end
+        else
+          {:noreply, put_flash(socket, :error, "You can only delete your own photos")}
+        end
+    end
   end
 
   # Handle completed uploads
