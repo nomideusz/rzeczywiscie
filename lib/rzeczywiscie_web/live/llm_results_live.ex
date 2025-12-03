@@ -485,7 +485,7 @@ defmodule RzeczywiscieWeb.LLMResultsLive do
                   
                   <!-- Location & Price -->
                   <div class="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5 text-[11px]">
-                    <span class="opacity-60">📍 <%= property.district || property.city || "?" %></span>
+                    <span class="opacity-60">📍 <%= property.city || property.district || "?" %><%= if property.district && property.city && !String.contains?(String.downcase(property.city || ""), String.downcase(property.district || "")), do: " · #{property.district}" %><%= if property.street, do: " · #{property.street}" %></span>
                     <span class="font-bold text-primary"><%= format_price(property.price) %></span>
                     <span class="opacity-40"><%= format_area(property.area_sqm) %></span>
                     <%= if property.llm_monthly_fee do %>
