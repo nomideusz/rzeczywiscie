@@ -64,6 +64,10 @@ defmodule RzeczywiscieWeb.FriendsLive do
   def handle_params(%{"room" => room_code}, _uri, socket) do
     if socket.assigns.room.code != room_code do
       old_room = socket.assigns.room
+      
+      # Untrack presence from old room first
+      Presence.untrack(self(), old_room.code, socket.assigns.user_id)
+      
       Friends.unsubscribe(old_room.code)
       Phoenix.PubSub.unsubscribe(Rzeczywiscie.PubSub, "friends:presence:#{old_room.code}")
       

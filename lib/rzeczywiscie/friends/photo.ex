@@ -18,7 +18,7 @@ defmodule Rzeczywiscie.Friends.Photo do
   def changeset(photo, attrs) do
     photo
     |> cast(attrs, [:user_id, :user_color, :image_data, :content_type, :file_size, :room_id])
-    |> validate_required([:user_id, :user_color, :image_data])
+    |> validate_required([:user_id, :user_color, :image_data, :room_id])
   end
 end
 
