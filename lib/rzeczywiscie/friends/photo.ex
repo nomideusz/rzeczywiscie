@@ -1,0 +1,22 @@
+defmodule Rzeczywiscie.Friends.Photo do
+  use Ecto.Schema
+  import Ecto.Changeset
+
+  schema "friends_photos" do
+    field :user_id, :string
+    field :user_color, :string
+    field :image_data, :string
+    field :content_type, :string, default: "image/jpeg"
+    field :file_size, :integer
+
+    timestamps()
+  end
+
+  @doc false
+  def changeset(photo, attrs) do
+    photo
+    |> cast(attrs, [:user_id, :user_color, :image_data, :content_type, :file_size])
+    |> validate_required([:user_id, :user_color, :image_data])
+  end
+end
+

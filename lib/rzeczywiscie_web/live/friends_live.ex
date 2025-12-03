@@ -1,18 +1,16 @@
 defmodule RzeczywiscieWeb.FriendsLive do
   use RzeczywiscieWeb, :live_view
   import RzeczywiscieWeb.Layouts
-
-  @topic "friends:photos"
-  @max_photos 50
+  alias Rzeczywiscie.Friends
 
   def mount(_params, _session, socket) do
     if connected?(socket) do
-      Phoenix.PubSub.subscribe(Rzeczywiscie.PubSub, @topic)
+      Friends.subscribe()
     end
 
     user_id = get_or_create_user_id(socket)
     user_color = generate_user_color(user_id)
-    photos = get_photos()
+    photos = Friends.list_photos()
 
     socket =
       socket
@@ -20,7 +18,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
       |> assign(:user_color, user_color)
       |> assign(:page_title, "Friends")
       |> assign(:photos, photos)
-      |> assign(:online_count, 1)
+      |> assign(:photo_count, Friends.count_photos())
       |> assign(:uploading, false)
       |> stream(:photos, photos)
       |> allow_upload(:photo,
@@ -30,11 +28,6 @@ defmodule RzeczywiscieWeb.FriendsLive do
         auto_upload: true,
         progress: &handle_progress/3
       )
-
-    # Broadcast presence
-    if connected?(socket) do
-      Phoenix.PubSub.broadcast(Rzeczywiscie.PubSub, @topic, {:user_joined, user_id})
-    end
 
     {:ok, socket}
   end
@@ -51,7 +44,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
                 <div class="flex items-center gap-3 mb-2">
                   <div class="w-3 h-3 bg-error rounded-none animate-pulse"></div>
                   <span class="text-xs uppercase tracking-[0.3em] font-bold opacity-70">
-                    Live • {@online_count} online
+                    Live • {@photo_count} photos shared
                   </span>
                 </div>
                 <h1 class="text-4xl md:text-5xl font-black uppercase tracking-tighter">
@@ -142,6 +135,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
                       src={photo.data_url}
                       alt="Shared photo"
                       class="w-full h-full object-cover transition-transform group-hover:scale-105"
+                      loading="lazy"
                     />
                   </div>
                   
@@ -187,73 +181,75 @@ defmodule RzeczywiscieWeb.FriendsLive do
   # Handle completed uploads
   def handle_progress(:photo, entry, socket) when entry.done? do
     # Consume the uploaded entry
-    [photo_data] =
+    [photo_result] =
       consume_uploaded_entries(socket, :photo, fn %{path: path}, _entry ->
         # Read file and convert to base64 data URL
         binary = File.read!(path)
         base64 = Base.encode64(binary)
         content_type = entry.client_type || "image/jpeg"
-        {:ok, "data:#{content_type};base64,#{base64}"}
+        file_size = byte_size(binary)
+        data_url = "data:#{content_type};base64,#{base64}"
+        {:ok, %{data_url: data_url, content_type: content_type, file_size: file_size}}
       end)
 
     user_id = socket.assigns.user_id
     user_color = socket.assigns.user_color
 
-    photo = %{
-      id: generate_photo_id(),
+    # Save to database
+    case Friends.create_photo(%{
       user_id: user_id,
       user_color: user_color,
-      data_url: photo_data,
-      uploaded_at: DateTime.utc_now()
-    }
+      image_data: photo_result.data_url,
+      content_type: photo_result.content_type,
+      file_size: photo_result.file_size
+    }) do
+      {:ok, photo} ->
+        {:noreply,
+         socket
+         |> assign(:uploading, false)
+         |> assign(:photo_count, socket.assigns.photo_count + 1)
+         |> stream_insert(:photos, photo, at: 0)
+         |> put_flash(:info, "📸 Photo shared!")}
 
-    # Save photo to ETS
-    save_photo(photo)
-
-    # Broadcast to all connected users
-    Phoenix.PubSub.broadcast(
-      Rzeczywiscie.PubSub,
-      @topic,
-      {:new_photo, photo}
-    )
-
-    {:noreply,
-     socket
-     |> assign(:uploading, false)
-     |> stream_insert(:photos, photo, at: 0)
-     |> put_flash(:info, "📸 Photo shared!")}
+      {:error, _changeset} ->
+        {:noreply,
+         socket
+         |> assign(:uploading, false)
+         |> put_flash(:error, "Failed to save photo")}
+    end
   end
 
   def handle_progress(:photo, _entry, socket) do
     {:noreply, assign(socket, :uploading, true)}
   end
 
-  # Handle new photos from other users
+  # Handle new photos from other users (broadcast from context)
   def handle_info({:new_photo, photo}, socket) do
     # Only add if not from this user (we already added it locally)
     if photo.user_id != socket.assigns.user_id do
-      {:noreply, stream_insert(socket, :photos, photo, at: 0)}
+      {:noreply,
+       socket
+       |> assign(:photo_count, socket.assigns.photo_count + 1)
+       |> stream_insert(:photos, photo, at: 0)}
     else
       {:noreply, socket}
     end
   end
 
-  def handle_info({:user_joined, _user_id}, socket) do
-    {:noreply, assign(socket, :online_count, socket.assigns.online_count + 1)}
+  def handle_info({:photo_deleted, %{id: id}}, socket) do
+    {:noreply,
+     socket
+     |> assign(:photo_count, max(0, socket.assigns.photo_count - 1))
+     |> stream_delete(:photos, %{id: id})}
   end
 
-  def handle_info({:user_left, _user_id}, socket) do
-    count = max(1, socket.assigns.online_count - 1)
-    {:noreply, assign(socket, :online_count, count)}
-  end
-
-  def terminate(_reason, socket) do
-    Phoenix.PubSub.broadcast(
-      Rzeczywiscie.PubSub,
-      @topic,
-      {:user_left, socket.assigns.user_id}
-    )
-    :ok
+  def handle_info({:user_photos_deleted, %{user_id: _user_id}}, socket) do
+    # Reload photos when bulk deletion happens
+    photos = Friends.list_photos()
+    {:noreply,
+     socket
+     |> assign(:photo_count, Friends.count_photos())
+     |> stream(:photos, photos, reset: true)}
   end
 
   # --- Helper Functions ---
@@ -281,12 +277,16 @@ defmodule RzeczywiscieWeb.FriendsLive do
     "rgb(#{r}, #{g}, #{b})"
   end
 
-  defp generate_photo_id do
-    :crypto.strong_rand_bytes(16) |> Base.encode16(case: :lower)
-  end
-
   defp format_time(datetime) do
     now = DateTime.utc_now()
+    
+    # Handle NaiveDateTime from database
+    datetime = case datetime do
+      %NaiveDateTime{} -> DateTime.from_naive!(datetime, "Etc/UTC")
+      %DateTime{} -> datetime
+      _ -> DateTime.utc_now()
+    end
+    
     diff = DateTime.diff(now, datetime, :second)
     
     cond do
@@ -301,49 +301,4 @@ defmodule RzeczywiscieWeb.FriendsLive do
   defp error_to_string(:too_many_files), do: "Too many files"
   defp error_to_string(:not_accepted), do: "Invalid file type (use JPG, PNG, GIF, or WebP)"
   defp error_to_string(err), do: "Error: #{inspect(err)}"
-
-  # --- ETS Storage for Photos ---
-
-  defp photos_table do
-    table = :friends_photos
-    
-    case :ets.whereis(table) do
-      :undefined ->
-        :ets.new(table, [:named_table, :set, :public, read_concurrency: true])
-      _ ->
-        table
-    end
-  end
-
-  defp save_photo(photo) do
-    table = photos_table()
-    
-    # Get current photos
-    photos = get_photos_from_ets()
-    
-    # Keep only last N photos
-    photos = [photo | photos] |> Enum.take(@max_photos)
-    
-    # Store all photos
-    :ets.insert(table, {:photos, photos})
-  end
-
-  defp get_photos do
-    photos = get_photos_from_ets()
-    
-    # Return as stream-compatible format
-    Enum.map(photos, fn photo ->
-      photo
-    end)
-  end
-
-  defp get_photos_from_ets do
-    table = photos_table()
-    
-    case :ets.lookup(table, :photos) do
-      [{:photos, photos}] -> photos
-      [] -> []
-    end
-  end
 end
-
