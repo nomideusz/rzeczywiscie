@@ -157,18 +157,18 @@ defmodule RzeczywiscieWeb.FriendsLive do
                   </div>
                   
                   <!-- Photo Info -->
-                  <div class="p-3 border-t-4 border-base-content">
+                  <div class="p-3 border-t-4 border-base-content bg-base-100">
                     <div class="flex items-center justify-between">
                       <div class="flex items-center gap-2">
                         <div
                           class="w-4 h-4 border-2 border-base-content"
                           style={"background-color: #{photo.user_color}"}
                         ></div>
-                        <span class="text-xs font-bold uppercase tracking-wide opacity-70">
+                        <span class="text-xs font-bold uppercase tracking-wide text-base-content/70">
                           {String.slice(photo.user_id, 0, 8)}
                         </span>
                       </div>
-                      <span class="text-xs font-bold uppercase tracking-wide opacity-50">
+                      <span class="text-xs font-bold uppercase tracking-wide text-base-content/50">
                         {format_time(photo.uploaded_at)}
                       </span>
                     </div>
