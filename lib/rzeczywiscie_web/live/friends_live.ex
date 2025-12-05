@@ -1203,8 +1203,16 @@ defmodule RzeczywiscieWeb.FriendsLive do
     name = if name == "", do: nil, else: String.slice(name, 0, 20)
     
     # Check if name is taken by another user in the room
-    if name != nil && Presence.name_taken?(socket.assigns.room.code, name, socket.assigns.user_id) do
-      {:noreply, assign(socket, :name_error, "This name is already taken by someone in the room")}
+    # Check both presence system and local viewers list for robustness
+    name_taken_in_presence = name != nil && Presence.name_taken?(socket.assigns.room.code, name, socket.assigns.user_id)
+    name_taken_in_viewers = name != nil && Enum.any?(socket.assigns.viewers, fn v ->
+      v.user_id != socket.assigns.user_id &&
+        v.user_name != nil &&
+        String.downcase(String.trim(v.user_name)) == String.downcase(name)
+    end)
+    
+    if name_taken_in_presence || name_taken_in_viewers do
+      {:noreply, assign(socket, :name_error, "Name already taken in this room")}
     else
       # Update presence with the new name
       Presence.update_user(self(), socket.assigns.room.code, socket.assigns.user_id, socket.assigns.user_color, name)
