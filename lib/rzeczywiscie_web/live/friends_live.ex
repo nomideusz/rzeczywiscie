@@ -22,19 +22,29 @@ defmodule RzeczywiscieWeb.FriendsLive do
       r -> r
     end
 
-    if connected?(socket) do
+    # Only subscribe and load data when connected (not during static render)
+    {items, messages, viewers, item_count} = if connected?(socket) do
       Friends.subscribe(room.code)
       Phoenix.PubSub.subscribe(Rzeczywiscie.PubSub, "friends:presence:#{room.code}")
       Presence.track_user(self(), room.code, user_id, user_color, nil)
+      
+      # Load data only when connected
+      photos = Friends.list_photos(room.id, limit: 50)
+      notes = Friends.list_room_text_cards(room.id)
+      msgs = Friends.list_messages(room.id, limit: 100)
+      v = Presence.list_users(room.code)
+      combined = build_room_items(photos, notes)
+      {combined, msgs, v, length(combined)}
+    else
+      # During static render, send minimal data
+      {[], [], [], 0}
     end
 
-    photos = Friends.list_photos(room.id)
-    notes = Friends.list_room_text_cards(room.id)
-    messages = Friends.list_messages(room.id)
-    viewers = if connected?(socket), do: Presence.list_users(room.code), else: []
-
-    # Combine photos and notes into items, sorted by date
-    items = build_room_items(photos, notes)
+    # Build items map for quick lookup (only IDs and essential data)
+    items_map = Map.new(items, fn item -> 
+      key = "#{item.type}-#{item.id}"
+      {key, item}
+    end)
 
     socket =
       socket
@@ -46,11 +56,8 @@ defmodule RzeczywiscieWeb.FriendsLive do
       |> assign(:session_id, session_id)
       |> assign(:room, room)
       |> assign(:page_title, "#{room.emoji} #{room.name || room.code}")
-      |> assign(:photos, photos)
-      |> assign(:notes, notes)
-      |> assign(:items, items)
-      |> assign(:item_count, length(items))
-      |> assign(:messages, messages)
+      |> assign(:items_map, items_map)
+      |> assign(:item_count, item_count)
       |> assign(:message_input, "")
       |> assign(:viewers, viewers)
       |> assign(:uploading, false)
@@ -106,21 +113,19 @@ defmodule RzeczywiscieWeb.FriendsLive do
       Phoenix.PubSub.subscribe(Rzeczywiscie.PubSub, "friends:presence:#{room.code}")
       Presence.track_user(self(), room.code, socket.assigns.user_id, socket.assigns.user_color, socket.assigns.user_name)
       
-      photos = Friends.list_photos(room.id)
+      photos = Friends.list_photos(room.id, limit: 50)
       notes = Friends.list_room_text_cards(room.id)
-      messages = Friends.list_messages(room.id)
+      messages = Friends.list_messages(room.id, limit: 100)
       viewers = Presence.list_users(room.code)
       items = build_room_items(photos, notes)
+      items_map = Map.new(items, fn item -> {"#{item.type}-#{item.id}", item} end)
       
       {:noreply,
        socket
        |> assign(:room, room)
        |> assign(:page_title, "#{room.emoji} #{room.name || room.code}")
-       |> assign(:photos, photos)
-       |> assign(:notes, notes)
-       |> assign(:items, items)
+       |> assign(:items_map, items_map)
        |> assign(:item_count, length(items))
-       |> assign(:messages, messages)
        |> assign(:viewers, viewers)
        |> stream(:items, items, reset: true)
        |> stream(:messages, messages, reset: true)}
@@ -903,18 +908,15 @@ defmodule RzeczywiscieWeb.FriendsLive do
   end
 
   def handle_event("open-lightbox", %{"id" => id, "type" => type}, socket) do
-    item_id = String.to_integer(id)
-    item = Enum.find(socket.assigns.items, fn i -> 
-      i.id == item_id && to_string(i.type) == type
-    end)
+    key = "#{type}-#{id}"
+    item = Map.get(socket.assigns.items_map, key)
     {:noreply, socket |> assign(:show_lightbox, true) |> assign(:lightbox_item, item)}
   end
 
   def handle_event("open-lightbox", %{"id" => id}, socket) do
-    # Fallback for old photo-only calls
-    photo_id = String.to_integer(id)
-    photo = Enum.find(socket.assigns.photos, fn p -> p.id == photo_id end)
-    item = if photo, do: Map.put(photo, :type, :photo), else: nil
+    # Fallback for photo-only calls
+    key = "photo-#{id}"
+    item = Map.get(socket.assigns.items_map, key)
     {:noreply, socket |> assign(:show_lightbox, true) |> assign(:lightbox_item, item)}
   end
 
@@ -925,8 +927,8 @@ defmodule RzeczywiscieWeb.FriendsLive do
   # --- Photo Edit Events ---
 
   def handle_event("edit-photo-description", %{"id" => id}, socket) do
-    photo_id = String.to_integer(id)
-    photo = Enum.find(socket.assigns.items, fn i -> i.type == :photo && i.id == photo_id end)
+    key = "photo-#{id}"
+    photo = Map.get(socket.assigns.items_map, key)
     
     if photo && photo.user_id == socket.assigns.user_id do
       {:noreply,
@@ -962,13 +964,12 @@ defmodule RzeczywiscieWeb.FriendsLive do
     if user_id && photo do
       case Friends.update_photo_description(photo.id, description, user_id, with_room: false) do
         {:ok, updated_photo} ->
-          # Update the photo in the stream and assigns
+          updated_with_type = Map.put(updated_photo, :type, :photo)
+          key = "photo-#{photo.id}"
           {:noreply,
            socket
-           |> stream_insert(:photos, updated_photo)
-           |> assign(:photos, Enum.map(socket.assigns.photos, fn p -> 
-             if p.id == photo.id, do: updated_photo, else: p
-           end))
+           |> stream_insert(:items, updated_with_type)
+           |> assign(:items_map, Map.put(socket.assigns.items_map, key, updated_with_type))
            |> assign(:show_photo_edit_modal, false)
            |> assign(:editing_photo, nil)
            |> assign(:photo_description_input, "")
@@ -993,14 +994,14 @@ defmodule RzeczywiscieWeb.FriendsLive do
   def handle_event("delete-photo", %{"id" => id}, socket) do
     photo_id = String.to_integer(id)
     user_id = socket.assigns.user_id
+    key = "photo-#{photo_id}"
 
     case Friends.delete_photo(photo_id, user_id) do
       {:ok, _} ->
         {:noreply,
          socket
-         |> stream_delete(:items, %{id: "items-photo-#{photo_id}"})
-         |> assign(:photos, Enum.reject(socket.assigns.photos, &(&1.id == photo_id)))
-         |> assign(:items, Enum.reject(socket.assigns.items, &(&1.type == :photo && &1.id == photo_id)))
+         |> stream_delete(:items, %{id: "items-#{key}"})
+         |> assign(:items_map, Map.delete(socket.assigns.items_map, key))
          |> assign(:item_count, max(0, socket.assigns.item_count - 1))
          |> assign(:show_photo_edit_modal, false)
          |> assign(:editing_photo, nil)
@@ -1039,12 +1040,12 @@ defmodule RzeczywiscieWeb.FriendsLive do
       }, room.code) do
         {:ok, card} ->
           card_with_type = Map.put(card, :type, :note)
+          key = "note-#{card.id}"
           {:noreply,
            socket
            |> assign(:show_note_modal, false)
            |> assign(:note_input, "")
-           |> assign(:notes, [card | socket.assigns.notes])
-           |> assign(:items, [card_with_type | socket.assigns.items])
+           |> assign(:items_map, Map.put(socket.assigns.items_map, key, card_with_type))
            |> assign(:item_count, socket.assigns.item_count + 1)
            |> stream_insert(:items, card_with_type, at: 0)
            |> put_flash(:info, "📝 Note shared!")}
@@ -1059,15 +1060,17 @@ defmodule RzeczywiscieWeb.FriendsLive do
   def handle_event("delete-note", %{"id" => id}, socket) do
     note_id = String.to_integer(id)
     user_id = socket.assigns.user_id
+    key = "note-#{note_id}"
 
     case Friends.delete_text_card(note_id, user_id) do
       {:ok, _} ->
         {:noreply,
          socket
-         |> stream_delete(:items, %{id: "items-note-#{note_id}"})
-         |> assign(:notes, Enum.reject(socket.assigns.notes, &(&1.id == note_id)))
-         |> assign(:items, Enum.reject(socket.assigns.items, &(&1.type == :note && &1.id == note_id)))
+         |> stream_delete(:items, %{id: "items-#{key}"})
+         |> assign(:items_map, Map.delete(socket.assigns.items_map, key))
          |> assign(:item_count, max(0, socket.assigns.item_count - 1))
+         |> assign(:show_note_edit_modal, false)
+         |> assign(:editing_note, nil)
          |> put_flash(:info, "Note deleted")}
       {:error, _} ->
         {:noreply, put_flash(socket, :error, "Cannot delete")}
@@ -1075,8 +1078,8 @@ defmodule RzeczywiscieWeb.FriendsLive do
   end
 
   def handle_event("edit-note", %{"id" => id}, socket) do
-    note_id = String.to_integer(id)
-    note = Enum.find(socket.assigns.items, fn i -> i.type == :note && i.id == note_id end)
+    key = "note-#{id}"
+    note = Map.get(socket.assigns.items_map, key)
     
     if note && note.user_id == socket.assigns.user_id do
       {:noreply,
@@ -1112,15 +1115,11 @@ defmodule RzeczywiscieWeb.FriendsLive do
       case Friends.update_text_card(note.id, %{content: text}, user_id) do
         {:ok, updated} ->
           updated_with_type = Map.put(updated, :type, :note)
+          key = "note-#{note.id}"
           {:noreply,
            socket
            |> stream_insert(:items, updated_with_type)
-           |> assign(:notes, Enum.map(socket.assigns.notes, fn n -> 
-             if n.id == note.id, do: updated, else: n
-           end))
-           |> assign(:items, Enum.map(socket.assigns.items, fn i -> 
-             if i.type == :note && i.id == note.id, do: updated_with_type, else: i
-           end))
+           |> assign(:items_map, Map.put(socket.assigns.items_map, key, updated_with_type))
            |> assign(:show_note_edit_modal, false)
            |> assign(:editing_note, nil)
            |> assign(:note_edit_input, "")
@@ -1410,11 +1409,11 @@ defmodule RzeczywiscieWeb.FriendsLive do
       {:ok, photo} ->
         Friends.broadcast(room.code, :new_photo_from_session, photo, socket.assigns.session_id)
         photo_with_type = Map.put(photo, :type, :photo)
+        key = "photo-#{photo.id}"
         {:noreply,
          socket
          |> assign(:uploading, false)
-         |> assign(:photos, [photo | socket.assigns.photos])
-         |> assign(:items, [photo_with_type | socket.assigns.items])
+         |> assign(:items_map, Map.put(socket.assigns.items_map, key, photo_with_type))
          |> assign(:item_count, socket.assigns.item_count + 1)
          |> stream_insert(:items, photo_with_type, at: 0)
          |> push_event("photo_uploaded", %{photo_id: photo.id})
@@ -1433,10 +1432,10 @@ defmodule RzeczywiscieWeb.FriendsLive do
   def handle_info({:new_photo_from_session, photo, from_session_id}, socket) do
     if from_session_id != socket.assigns.session_id do
       photo_with_type = Map.put(photo, :type, :photo)
+      key = "photo-#{photo.id}"
       {:noreply,
        socket
-       |> assign(:photos, [photo | socket.assigns.photos])
-       |> assign(:items, [photo_with_type | socket.assigns.items])
+       |> assign(:items_map, Map.put(socket.assigns.items_map, key, photo_with_type))
        |> assign(:item_count, socket.assigns.item_count + 1)
        |> stream_insert(:items, photo_with_type, at: 0)}
     else
@@ -1448,10 +1447,10 @@ defmodule RzeczywiscieWeb.FriendsLive do
     # Note was added by another user in this room
     if note.user_id != socket.assigns.user_id do
       note_with_type = Map.put(note, :type, :note)
+      key = "note-#{note.id}"
       {:noreply,
        socket
-       |> assign(:notes, [note | socket.assigns.notes])
-       |> assign(:items, [note_with_type | socket.assigns.items])
+       |> assign(:items_map, Map.put(socket.assigns.items_map, key, note_with_type))
        |> assign(:item_count, socket.assigns.item_count + 1)
        |> stream_insert(:items, note_with_type, at: 0)}
     else

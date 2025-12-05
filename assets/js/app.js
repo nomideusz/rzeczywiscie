@@ -48,8 +48,8 @@ function generateDeviceFingerprint() {
     return (hash >>> 0).toString(16)
 }
 
-// Generate a thumbnail as base64 data URL
-function generateThumbnail(file, maxSize = 400) {
+// Generate a high-quality thumbnail as base64 data URL
+function generateThumbnail(file, maxSize = 600) {
     return new Promise((resolve) => {
         if (!file.type.startsWith('image/') || file.type === 'image/gif') {
             resolve(null)
@@ -74,10 +74,14 @@ function generateThumbnail(file, maxSize = 400) {
 
             canvas.width = width
             canvas.height = height
+            
+            // Use better image smoothing
+            ctx.imageSmoothingEnabled = true
+            ctx.imageSmoothingQuality = 'high'
             ctx.drawImage(img, 0, 0, width, height)
 
-            // Convert to base64 data URL with good quality
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.75)
+            // Convert to base64 data URL with high quality
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
             URL.revokeObjectURL(img.src)
             resolve(dataUrl)
         }
@@ -253,7 +257,7 @@ const Hooks = {
                 if (file.type.startsWith('image/') && file.type !== 'image/gif') {
                     // Generate thumbnail first (in parallel with optimization)
                     const [thumbnail, optimized] = await Promise.all([
-                        generateThumbnail(file, 400),
+                        generateThumbnail(file, 600),
                         optimizeImage(file, 1200)
                     ])
                     
@@ -372,7 +376,7 @@ const Hooks = {
                 if (file.type.startsWith('image/') && file.type !== 'image/gif') {
                     // Generate thumbnail and optimized image in parallel
                     const [thumbnail, optimized] = await Promise.all([
-                        generateThumbnail(file, 400),
+                        generateThumbnail(file, 600),
                         optimizeImage(file, 1200)
                     ])
                     
