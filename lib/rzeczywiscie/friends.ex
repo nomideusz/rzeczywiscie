@@ -555,7 +555,13 @@ defmodule Rzeczywiscie.Friends do
     (photos ++ text_cards)
     |> Enum.sort_by(fn item ->
       # Sort by position (nulls last), then by date descending
-      {item.position || 999_999, -DateTime.to_unix(item.uploaded_at || item.created_at)}
+      timestamp = item.uploaded_at || item.created_at
+      unix_time = case timestamp do
+        %DateTime{} -> DateTime.to_unix(timestamp)
+        %NaiveDateTime{} -> NaiveDateTime.diff(timestamp, ~N[1970-01-01 00:00:00])
+        _ -> 0
+      end
+      {item.position || 999_999, -unix_time}
     end)
   end
 
