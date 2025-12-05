@@ -255,6 +255,16 @@ const Hooks = {
             }
         }
     },
+    ModalScrollLock: {
+        mounted() {
+            // Prevent background scrolling when modal is open
+            document.body.style.overflow = 'hidden'
+        },
+        destroyed() {
+            // Restore scrolling when modal closes
+            document.body.style.overflow = ''
+        }
+    },
     UserPhotosApp: {
         mounted() {
             // Generate device fingerprint

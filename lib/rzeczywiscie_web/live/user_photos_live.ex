@@ -2,22 +2,6 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
   use RzeczywiscieWeb, :live_view
   import RzeczywiscieWeb.Layouts
   alias Rzeczywiscie.Friends
-  alias Rzeczywiscie.Friends.TextCard
-
-  @background_colors [
-    {"#1a1a2e", "Midnight"},
-    {"#16213e", "Navy"},
-    {"#0f3460", "Ocean"},
-    {"#533483", "Purple"},
-    {"#e94560", "Coral"},
-    {"#f39c12", "Amber"},
-    {"#1abc9c", "Teal"},
-    {"#2d3436", "Charcoal"},
-    {"#fdcb6e", "Sunny"},
-    {"#00b894", "Mint"},
-    {"#6c5ce7", "Violet"},
-    {"#ff7675", "Salmon"}
-  ]
 
   def mount(_params, _session, socket) do
     socket =
@@ -34,10 +18,6 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
       |> assign(:show_text_modal, false)
       |> assign(:editing_card, nil)
       |> assign(:text_input, "")
-      |> assign(:selected_bg, "#1a1a2e")
-      |> assign(:selected_text_color, "#ffffff")
-      |> assign(:selected_font, "normal")
-      |> assign(:background_colors, @background_colors)
       # Photo editing
       |> assign(:show_photo_modal, false)
       |> assign(:editing_photo, nil)
@@ -74,14 +54,14 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
               </div>
               
               <div class="flex items-center gap-2">
-                <!-- Add Text Card Button -->
+                <!-- Add Note Button -->
                 <button
                   type="button"
                   phx-click="open-text-modal"
                   class="px-4 py-2 border-2 border-base-content font-bold text-sm uppercase hover:bg-base-content hover:text-base-100 transition-colors flex items-center gap-2"
                 >
-                  <span class="text-lg">✎</span>
-                  <span class="hidden sm:inline">Add Text</span>
+                  <span class="text-lg">📝</span>
+                  <span class="hidden sm:inline">Add Note</span>
                 </button>
                 
                 <%= if @item_count > 1 do %>
@@ -121,7 +101,7 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
                   phx-click="open-text-modal"
                   class="px-6 py-3 border-2 border-base-content font-bold uppercase hover:bg-base-content hover:text-base-100 transition-colors"
                 >
-                  Add Text Card
+                  Add Note
                 </button>
               </div>
             </div>
@@ -261,138 +241,53 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
 
         <!-- Text Card Modal -->
         <%= if @show_text_modal do %>
-          <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-            <div class="bg-base-100 border-4 border-base-content p-6 max-w-lg w-full shadow-2xl" phx-click-away="close-text-modal">
-              <div class="flex justify-between items-center mb-6">
+          <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 overflow-y-auto" phx-hook="ModalScrollLock" id="text-card-modal-backdrop">
+            <div class="bg-base-100 border-4 border-base-content p-6 max-w-md w-full shadow-2xl my-8" phx-click-away="close-text-modal">
+              <div class="flex justify-between items-center mb-4">
                 <h2 class="text-xl font-black uppercase">
-                  <%= if @editing_card, do: "Edit Text Card", else: "New Text Card" %>
+                  <%= if @editing_card, do: "Edit Note", else: "New Note" %>
                 </h2>
                 <button type="button" phx-click="close-text-modal" class="text-2xl leading-none hover:opacity-60">×</button>
               </div>
               
-              <!-- Preview -->
-              <div
-                class={"mb-6 p-6 border-4 border-base-content aspect-square flex items-center justify-center #{font_class(@selected_font)}"}
-                style={"background-color: #{@selected_bg}; color: #{@selected_text_color}"}
-              >
-                <p class="text-center text-lg leading-relaxed break-words max-w-full">
-                  <%= if @text_input == "", do: "Your text here...", else: @text_input %>
-                </p>
-              </div>
-              
-              <!-- Text Input -->
-              <div class="mb-4">
-                <label class="text-xs font-bold uppercase opacity-60 mb-2 block">Text</label>
-                <textarea
-                  phx-change="update-text-input"
-                  name="text"
-                  value={@text_input}
-                  placeholder="Enter your text (max 500 chars)"
-                  maxlength="500"
-                  rows="3"
-                  class="w-full px-3 py-2 border-2 border-base-content text-sm bg-base-100 resize-none"
-                >{@text_input}</textarea>
-                <p class="text-xs opacity-40 mt-1">{String.length(@text_input)}/500</p>
-              </div>
-              
-              <!-- Background Color -->
-              <div class="mb-4">
-                <label class="text-xs font-bold uppercase opacity-60 mb-2 block">Background</label>
-                <div class="flex flex-wrap gap-2">
-                  <%= for {color, name} <- @background_colors do %>
+              <!-- Text Input Form -->
+              <form phx-submit="save-text-card" phx-change="update-text-form" id="text-card-form">
+                <div class="mb-4">
+                  <textarea
+                    name="content"
+                    id="text-card-content"
+                    value={@text_input}
+                    placeholder="Write your note here..."
+                    maxlength="500"
+                    rows="6"
+                    class="w-full px-4 py-3 border-2 border-base-content text-base bg-base-100 resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                    autofocus
+                  >{@text_input}</textarea>
+                  <p class="text-xs opacity-40 mt-1 text-right">{String.length(@text_input)}/500</p>
+                </div>
+                
+                <!-- Actions -->
+                <div class="flex gap-3">
+                  <button
+                    type="submit"
+                    disabled={String.trim(@text_input) == ""}
+                    class="flex-1 px-4 py-3 border-2 border-base-content bg-base-content text-base-100 font-bold uppercase disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <%= if @editing_card, do: "Save", else: "Add Note" %>
+                  </button>
+                  <%= if @editing_card do %>
                     <button
                       type="button"
-                      phx-click="select-bg"
-                      phx-value-color={color}
-                      title={name}
-                      class={[
-                        "w-8 h-8 rounded border-2 transition-transform hover:scale-110",
-                        if(@selected_bg == color, do: "border-base-content ring-2 ring-primary", else: "border-base-content/30")
-                      ]}
-                      style={"background-color: #{color}"}
-                    ></button>
-                  <% end %>
-                </div>
-              </div>
-              
-              <!-- Text Color -->
-              <div class="mb-4">
-                <label class="text-xs font-bold uppercase opacity-60 mb-2 block">Text Color</label>
-                <div class="flex gap-2">
-                  <button
-                    type="button"
-                    phx-click="select-text-color"
-                    phx-value-color="#ffffff"
-                    class={[
-                      "w-8 h-8 rounded border-2 bg-white transition-transform hover:scale-110",
-                      if(@selected_text_color == "#ffffff", do: "border-base-content ring-2 ring-primary", else: "border-base-content/30")
-                    ]}
-                  ></button>
-                  <button
-                    type="button"
-                    phx-click="select-text-color"
-                    phx-value-color="#000000"
-                    class={[
-                      "w-8 h-8 rounded border-2 bg-black transition-transform hover:scale-110",
-                      if(@selected_text_color == "#000000", do: "border-base-content ring-2 ring-primary", else: "border-base-content/30")
-                    ]}
-                  ></button>
-                  <button
-                    type="button"
-                    phx-click="select-text-color"
-                    phx-value-color="#ffd700"
-                    class={[
-                      "w-8 h-8 rounded border-2 transition-transform hover:scale-110",
-                      if(@selected_text_color == "#ffd700", do: "border-base-content ring-2 ring-primary", else: "border-base-content/30")
-                    ]}
-                    style="background-color: #ffd700"
-                  ></button>
-                </div>
-              </div>
-              
-              <!-- Font Style -->
-              <div class="mb-6">
-                <label class="text-xs font-bold uppercase opacity-60 mb-2 block">Font Style</label>
-                <div class="flex flex-wrap gap-2">
-                  <%= for style <- TextCard.font_styles() do %>
-                    <button
-                      type="button"
-                      phx-click="select-font"
-                      phx-value-font={style}
-                      class={[
-                        "px-3 py-1 border-2 text-sm transition-colors",
-                        font_class(style),
-                        if(@selected_font == style, do: "border-base-content bg-base-content text-base-100", else: "border-base-content/30 hover:border-base-content")
-                      ]}
+                      phx-click="delete-text-card"
+                      phx-value-id={@editing_card.id}
+                      data-confirm="Delete this note?"
+                      class="px-4 py-3 border-2 border-error text-error font-bold uppercase hover:bg-error hover:text-error-content transition-colors"
                     >
-                      {String.capitalize(style)}
+                      Delete
                     </button>
                   <% end %>
                 </div>
-              </div>
-              
-              <!-- Actions -->
-              <div class="flex gap-3">
-                <button
-                  type="button"
-                  phx-click="save-text-card"
-                  disabled={@text_input == ""}
-                  class="flex-1 px-4 py-3 border-2 border-base-content bg-base-content text-base-100 font-bold uppercase disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  <%= if @editing_card, do: "Save Changes", else: "Create Card" %>
-                </button>
-                <%= if @editing_card do %>
-                  <button
-                    type="button"
-                    phx-click="delete-text-card"
-                    phx-value-id={@editing_card.id}
-                    data-confirm="Delete this text card?"
-                    class="px-4 py-3 border-2 border-error text-error font-bold uppercase hover:bg-error hover:text-error-content transition-colors"
-                  >
-                    Delete
-                  </button>
-                <% end %>
-              </div>
+              </form>
             </div>
           </div>
         <% end %>
@@ -463,7 +358,7 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
       id={"text-#{@card.id}"}
       data-id={"text-#{@card.id}"}
       class={[
-        "photo-item group relative border-4 border-base-content overflow-hidden",
+        "photo-item group relative border-4 border-base-content overflow-hidden bg-base-100",
         if(@reordering, do: "cursor-grab active:cursor-grabbing", else: "cursor-pointer hover:translate-x-0.5 hover:translate-y-0.5"),
         "transition-transform"
       ]}
@@ -480,8 +375,7 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
         type="button"
         phx-click={unless @reordering, do: "edit-text-card"}
         phx-value-id={@card.id}
-        class={"w-full aspect-square flex items-center justify-center p-4 #{font_class(@card.font_style)}"}
-        style={"background-color: #{@card.background_color}; color: #{@card.text_color}"}
+        class="w-full aspect-square flex items-center justify-center p-4 bg-base-200"
         disabled={@reordering}
       >
         <p class="text-center text-sm leading-relaxed break-words max-w-full line-clamp-6">
@@ -491,20 +385,14 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
       
       <div class="p-2 border-t-2 border-base-content bg-base-100">
         <div class="flex items-center gap-1 text-[10px]">
-          <span class="opacity-40">✎</span>
-          <span class="font-bold">Text Card</span>
+          <span class="opacity-40">📝</span>
+          <span class="font-bold">Note</span>
         </div>
         <div class="text-[9px] opacity-40">{format_time(@card.created_at)}</div>
       </div>
     </div>
     """
   end
-
-  defp font_class("serif"), do: "font-serif"
-  defp font_class("mono"), do: "font-mono"
-  defp font_class("handwritten"), do: "font-serif italic"
-  defp font_class("bold"), do: "font-black"
-  defp font_class(_), do: "font-sans"
 
   # Handle device fingerprint from JS hook
   def handle_event("set_user_id", %{"user_id" => device_fingerprint, "user_name" => user_name}, socket) do
@@ -608,14 +496,15 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
      socket
      |> assign(:show_text_modal, true)
      |> assign(:editing_card, nil)
-     |> assign(:text_input, "")
-     |> assign(:selected_bg, "#1a1a2e")
-     |> assign(:selected_text_color, "#ffffff")
-     |> assign(:selected_font, "normal")}
+     |> assign(:text_input, "")}
   end
 
   def handle_event("close-text-modal", _params, socket) do
-    {:noreply, assign(socket, :show_text_modal, false)}
+    {:noreply,
+     socket
+     |> assign(:show_text_modal, false)
+     |> assign(:editing_card, nil)
+     |> assign(:text_input, "")}
   end
 
   def handle_event("edit-text-card", %{"id" => id}, socket) do
@@ -626,43 +515,25 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
        socket
        |> assign(:show_text_modal, true)
        |> assign(:editing_card, card)
-       |> assign(:text_input, card.content)
-       |> assign(:selected_bg, card.background_color)
-       |> assign(:selected_text_color, card.text_color)
-       |> assign(:selected_font, card.font_style)}
+       |> assign(:text_input, card.content)}
     else
       {:noreply, socket}
     end
   end
 
-  def handle_event("update-text-input", %{"text" => text}, socket) do
-    {:noreply, assign(socket, :text_input, text)}
+  def handle_event("update-text-form", %{"content" => content}, socket) do
+    {:noreply, assign(socket, :text_input, content)}
   end
 
-  def handle_event("select-bg", %{"color" => color}, socket) do
-    {:noreply, assign(socket, :selected_bg, color)}
-  end
-
-  def handle_event("select-text-color", %{"color" => color}, socket) do
-    {:noreply, assign(socket, :selected_text_color, color)}
-  end
-
-  def handle_event("select-font", %{"font" => font}, socket) do
-    {:noreply, assign(socket, :selected_font, font)}
-  end
-
-  def handle_event("save-text-card", _params, socket) do
+  def handle_event("save-text-card", %{"content" => content}, socket) do
     user_id = socket.assigns.user_id
-    text = String.trim(socket.assigns.text_input)
+    text = String.trim(content)
     
     if user_id && text != "" do
       attrs = %{
         user_id: user_id,
         user_color: socket.assigns.user_color,
-        content: text,
-        background_color: socket.assigns.selected_bg,
-        text_color: socket.assigns.selected_text_color,
-        font_style: socket.assigns.selected_font
+        content: text
       }
       
       result = if socket.assigns.editing_card do
@@ -679,9 +550,11 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
            |> assign(:items, items)
            |> assign(:item_count, length(items))
            |> assign(:show_text_modal, false)
-           |> put_flash(:info, if(socket.assigns.editing_card, do: "Card updated!", else: "Card created!"))}
+           |> assign(:editing_card, nil)
+           |> assign(:text_input, "")
+           |> put_flash(:info, if(socket.assigns.editing_card, do: "Note updated!", else: "Note added!"))}
         {:error, _} ->
-          {:noreply, put_flash(socket, :error, "Failed to save card")}
+          {:noreply, put_flash(socket, :error, "Failed to save note")}
       end
     else
       {:noreply, socket}
