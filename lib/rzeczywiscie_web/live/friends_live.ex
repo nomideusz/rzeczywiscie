@@ -940,10 +940,12 @@ defmodule RzeczywiscieWeb.FriendsLive do
           case Friends.delete_photo(photo_id, room.code) do
             {:ok, _} ->
               Friends.broadcast(room.code, :photo_deleted_from_session, %{id: photo_id}, socket.assigns.session_id)
+              key = "photo-#{photo_id}"
               {:noreply,
                socket
-               |> assign(:photo_count, max(0, socket.assigns.photo_count - 1))
-               |> stream_delete(:photos, %{id: photo_id})
+               |> assign(:item_count, max(0, socket.assigns.item_count - 1))
+               |> assign(:items_map, Map.delete(socket.assigns.items_map, key))
+               |> stream_delete(:items, %{id: "photo-#{photo_id}"})
                |> put_flash(:info, "Deleted")}
             {:error, _} ->
               {:noreply, put_flash(socket, :error, "Failed")}
@@ -1529,10 +1531,12 @@ defmodule RzeczywiscieWeb.FriendsLive do
 
   def handle_info({:photo_deleted_from_session, %{id: id}, from_session_id}, socket) do
     if from_session_id != socket.assigns.session_id do
+      key = "photo-#{id}"
       {:noreply,
        socket
-       |> assign(:photo_count, max(0, socket.assigns.photo_count - 1))
-       |> stream_delete(:photos, %{id: id})}
+       |> assign(:item_count, max(0, socket.assigns.item_count - 1))
+       |> assign(:items_map, Map.delete(socket.assigns.items_map, key))
+       |> stream_delete(:items, %{id: key})}
     else
       {:noreply, socket}
     end
