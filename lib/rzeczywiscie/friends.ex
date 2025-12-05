@@ -611,7 +611,8 @@ defmodule Rzeczywiscie.Friends do
     (photos ++ text_cards)
     |> Enum.sort_by(fn item ->
       # Sort by position (nulls last), then by date descending
-      timestamp = item.uploaded_at || item.created_at
+      # Photos have :uploaded_at, text_cards have :created_at
+      timestamp = Map.get(item, :uploaded_at) || Map.get(item, :created_at)
       unix_time = case timestamp do
         %DateTime{} -> DateTime.to_unix(timestamp)
         %NaiveDateTime{} -> NaiveDateTime.diff(timestamp, ~N[1970-01-01 00:00:00])
