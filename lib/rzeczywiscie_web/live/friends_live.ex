@@ -25,7 +25,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
     if connected?(socket) do
       Friends.subscribe(room.code)
       Phoenix.PubSub.subscribe(Rzeczywiscie.PubSub, "friends:presence:#{room.code}")
-      Presence.track_user(self(), room.code, user_id, user_color)
+      Presence.track_user(self(), room.code, user_id, user_color, nil)
     end
 
     photos = Friends.list_photos(room.id)
@@ -59,6 +59,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
       |> assign(:link_code, nil)
       |> assign(:link_code_input, "")
       |> assign(:link_error, nil)
+      |> assign(:name_error, nil)
       |> stream(:photos, photos)
       |> stream(:messages, messages)
       |> allow_upload(:photo,
@@ -89,7 +90,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
       
       Friends.subscribe(room.code)
       Phoenix.PubSub.subscribe(Rzeczywiscie.PubSub, "friends:presence:#{room.code}")
-      Presence.track_user(self(), room.code, socket.assigns.user_id, socket.assigns.user_color)
+      Presence.track_user(self(), room.code, socket.assigns.user_id, socket.assigns.user_color, socket.assigns.user_name)
       
       photos = Friends.list_photos(room.id)
       messages = Friends.list_messages(room.id)
@@ -133,6 +134,15 @@ defmodule RzeczywiscieWeb.FriendsLive do
                     <path stroke-linecap="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
+                
+                <!-- My Board -->
+                <.link
+                  navigate="/friends/my-photos"
+                  class="flex items-center gap-2 px-3 py-2 border-2 border-base-content/30 hover:border-base-content hover:bg-base-content hover:text-base-100 transition-colors text-sm"
+                >
+                  <span class="text-lg">🎨</span>
+                  <span class="font-bold hidden sm:inline">My Board</span>
+                </.link>
                 
                 <!-- User Name / Profile -->
                 <button
@@ -216,11 +226,11 @@ defmodule RzeczywiscieWeb.FriendsLive do
                   <p class="text-xs font-mono opacity-30">kruk.live/friends/{@room.code}</p>
                 </div>
               <% else %>
-                <div class="columns-2 sm:columns-3 gap-3 space-y-3" id="photos-grid" phx-update="stream">
+                <div class="columns-2 sm:columns-3 gap-3 space-y-3" id="photos-grid" phx-update="stream" phx-hook="PhotoGrid">
                   <%= for {dom_id, photo} <- @streams.photos do %>
                     <div
                       id={dom_id}
-                      class="group relative border-4 border-base-content bg-base-100 overflow-hidden hover:translate-x-0.5 hover:translate-y-0.5 transition-transform break-inside-avoid"
+                      class="photo-card group relative border-4 border-base-content bg-base-100 overflow-hidden hover:translate-x-0.5 hover:translate-y-0.5 transition-transform break-inside-avoid"
                     >
                       <div class="absolute inset-0 bg-base-content translate-x-1 translate-y-1 -z-10"></div>
                       
@@ -238,9 +248,10 @@ defmodule RzeczywiscieWeb.FriendsLive do
                         type="button"
                         phx-click="open-lightbox"
                         phx-value-id={photo.id}
-                        class="overflow-hidden bg-base-200 w-full cursor-zoom-in block"
+                        class="overflow-hidden bg-base-200 w-full cursor-zoom-in block relative"
                       >
-                        <img src={photo.data_url} alt="" class="w-full h-auto" loading="lazy" />
+                        <div class="photo-skeleton absolute inset-0 bg-base-300"></div>
+                        <img src={photo.data_url} alt="" class="photo-image w-full h-auto relative" loading="lazy" decoding="async" />
                       </button>
                       
                       <div class="p-2 border-t-2 border-base-content bg-base-100 flex items-center gap-2">
@@ -375,13 +386,17 @@ defmodule RzeczywiscieWeb.FriendsLive do
                     phx-change="update-name-input"
                     placeholder="Enter name (max 20 chars)"
                     maxlength="20"
-                    class="flex-1 px-3 py-2 border-2 border-base-content text-sm bg-base-100"
+                    class={["flex-1 px-3 py-2 border-2 text-sm bg-base-100", if(@name_error, do: "border-error", else: "border-base-content")]}
                   />
                   <button type="submit" class="px-4 py-2 border-2 border-base-content bg-base-content text-base-100 font-bold text-sm">
                     Save
                   </button>
                 </div>
-                <p class="text-xs opacity-40 mt-2">Your name is stored locally and shown with your messages and photos.</p>
+                <%= if @name_error do %>
+                  <p class="text-xs text-error mt-2">{@name_error}</p>
+                <% else %>
+                  <p class="text-xs opacity-40 mt-2">Your name is stored locally and shown with your messages and photos.</p>
+                <% end %>
               </form>
 
               <!-- Link Devices -->
@@ -589,8 +604,8 @@ defmodule RzeczywiscieWeb.FriendsLive do
       # Generate color based on the actual user_id (consistent across linked devices)
       new_user_color = generate_user_color(actual_user_id)
 
-      # Track with resolved user_id
-      Presence.track_user(self(), room.code, actual_user_id, new_user_color)
+      # Track with resolved user_id and name
+      Presence.track_user(self(), room.code, actual_user_id, new_user_color, user_name)
 
       {:noreply,
        socket
@@ -710,7 +725,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
   # --- Name Events ---
 
   def handle_event("open-name-modal", _params, socket) do
-    {:noreply, socket |> assign(:show_name_modal, true) |> assign(:name_input, socket.assigns.user_name || "")}
+    {:noreply, socket |> assign(:show_name_modal, true) |> assign(:name_input, socket.assigns.user_name || "") |> assign(:name_error, nil)}
   end
 
   def handle_event("close-name-modal", _params, socket) do
@@ -718,18 +733,27 @@ defmodule RzeczywiscieWeb.FriendsLive do
   end
 
   def handle_event("update-name-input", %{"name" => name}, socket) do
-    {:noreply, assign(socket, :name_input, name)}
+    {:noreply, socket |> assign(:name_input, name) |> assign(:name_error, nil)}
   end
 
   def handle_event("save-name", %{"name" => name}, socket) do
     name = String.trim(name)
     name = if name == "", do: nil, else: String.slice(name, 0, 20)
     
-    {:noreply,
-     socket
-     |> assign(:user_name, name)
-     |> assign(:show_name_modal, false)
-     |> push_event("save_user_name", %{name: name})}
+    # Check if name is taken by another user in the room
+    if name != nil && Presence.name_taken?(socket.assigns.room.code, name, socket.assigns.user_id) do
+      {:noreply, assign(socket, :name_error, "This name is already taken by someone in the room")}
+    else
+      # Update presence with the new name
+      Presence.update_user(self(), socket.assigns.room.code, socket.assigns.user_id, socket.assigns.user_color, name)
+      
+      {:noreply,
+       socket
+       |> assign(:user_name, name)
+       |> assign(:name_error, nil)
+       |> assign(:show_name_modal, false)
+       |> push_event("save_user_name", %{name: name})}
+    end
   end
 
   # --- Device Linking Events ---
@@ -776,7 +800,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
           if old_user_id != master_user_id do
             Presence.untrack(self(), room.code, old_user_id)
             new_user_color = generate_user_color(master_user_id)
-            Presence.track_user(self(), room.code, master_user_id, new_user_color)
+            Presence.track_user(self(), room.code, master_user_id, new_user_color, socket.assigns.user_name)
             
             {:noreply,
              socket
@@ -820,7 +844,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
       if old_user_id != device_fingerprint do
         Presence.untrack(self(), room.code, old_user_id)
         new_user_color = generate_user_color(device_fingerprint)
-        Presence.track_user(self(), room.code, device_fingerprint, new_user_color)
+        Presence.track_user(self(), room.code, device_fingerprint, new_user_color, socket.assigns.user_name)
         
         {:noreply,
          socket
@@ -991,14 +1015,9 @@ defmodule RzeczywiscieWeb.FriendsLive do
 
   # --- Helpers ---
 
-  defp get_or_create_user_id(socket) do
-    case get_connect_info(socket, :peer_data) do
-      %{address: address} ->
-        ip_string = :inet.ntoa(address) |> to_string()
-        :crypto.hash(:md5, ip_string) |> Base.encode16(case: :lower) |> String.slice(0, 16)
-      _ ->
-        :crypto.strong_rand_bytes(8) |> Base.encode16(case: :lower)
-    end
+  defp get_or_create_user_id(_socket) do
+    # Generate a random temporary ID - will be replaced by device fingerprint from client
+    :crypto.strong_rand_bytes(8) |> Base.encode16(case: :lower)
   end
 
   defp generate_user_color(user_id) do

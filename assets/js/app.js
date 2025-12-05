@@ -215,6 +215,158 @@ const Hooks = {
                 }
             })
         }
+    },
+    PhotoGrid: {
+        mounted() {
+            this.setupPhotoObserver()
+        },
+        updated() {
+            this.setupPhotoObserver()
+        },
+        setupPhotoObserver() {
+            // Find all images that haven't been processed yet
+            const images = this.el.querySelectorAll('img.photo-image:not(.processed)')
+            
+            images.forEach(img => {
+                img.classList.add('processed')
+                
+                // If already loaded, show immediately
+                if (img.complete && img.naturalHeight !== 0) {
+                    img.classList.add('loaded')
+                    this.hideSkeleton(img)
+                } else {
+                    // Wait for load
+                    img.addEventListener('load', () => {
+                        img.classList.add('loaded')
+                        this.hideSkeleton(img)
+                    }, { once: true })
+                    
+                    img.addEventListener('error', () => {
+                        img.classList.add('loaded')
+                        this.hideSkeleton(img)
+                    }, { once: true })
+                }
+            })
+        },
+        hideSkeleton(img) {
+            const skeleton = img.parentElement?.querySelector('.photo-skeleton')
+            if (skeleton) {
+                skeleton.style.display = 'none'
+            }
+        }
+    },
+    UserPhotosApp: {
+        mounted() {
+            // Generate device fingerprint
+            this.deviceId = generateDeviceFingerprint()
+            
+            // Load linked user ID from localStorage
+            const linkedUserId = localStorage.getItem(`friends_linked_user_id_${this.deviceId}`)
+            const effectiveUserId = linkedUserId || this.deviceId
+            const storedName = localStorage.getItem(`friends_user_name_${effectiveUserId}`)
+            
+            // Send to server
+            this.pushEvent("set_user_id", { 
+                user_id: this.deviceId,
+                user_name: storedName
+            })
+        }
+    },
+    SortablePhotos: {
+        mounted() {
+            this.initSortable()
+        },
+        updated() {
+            // Reinit if reordering state changed
+            const isReordering = this.el.dataset.reordering === 'true'
+            if (this.sortable) {
+                this.sortable.option('disabled', !isReordering)
+            }
+        },
+        destroyed() {
+            if (this.sortable) {
+                this.sortable.destroy()
+            }
+        },
+        initSortable() {
+            // Use native HTML5 drag and drop for simplicity
+            const grid = this.el
+            let draggedItem = null
+            let draggedOverItem = null
+            
+            const items = () => grid.querySelectorAll('.photo-item')
+            
+            const enableDrag = () => {
+                items().forEach(item => {
+                    item.setAttribute('draggable', 'true')
+                    
+                    item.addEventListener('dragstart', (e) => {
+                        if (grid.dataset.reordering !== 'true') {
+                            e.preventDefault()
+                            return
+                        }
+                        draggedItem = item
+                        item.classList.add('opacity-50', 'scale-95')
+                        e.dataTransfer.effectAllowed = 'move'
+                    })
+                    
+                    item.addEventListener('dragend', () => {
+                        if (draggedItem) {
+                            draggedItem.classList.remove('opacity-50', 'scale-95')
+                        }
+                        items().forEach(i => i.classList.remove('border-primary'))
+                        draggedItem = null
+                        draggedOverItem = null
+                    })
+                    
+                    item.addEventListener('dragover', (e) => {
+                        if (grid.dataset.reordering !== 'true') return
+                        e.preventDefault()
+                        e.dataTransfer.dropEffect = 'move'
+                        
+                        if (item !== draggedItem && item !== draggedOverItem) {
+                            items().forEach(i => i.classList.remove('border-primary'))
+                            item.classList.add('border-primary')
+                            draggedOverItem = item
+                        }
+                    })
+                    
+                    item.addEventListener('drop', (e) => {
+                        if (grid.dataset.reordering !== 'true') return
+                        e.preventDefault()
+                        
+                        if (draggedItem && item !== draggedItem) {
+                            // Swap positions in DOM
+                            const allItems = [...items()]
+                            const draggedIdx = allItems.indexOf(draggedItem)
+                            const targetIdx = allItems.indexOf(item)
+                            
+                            if (draggedIdx < targetIdx) {
+                                item.parentNode.insertBefore(draggedItem, item.nextSibling)
+                            } else {
+                                item.parentNode.insertBefore(draggedItem, item)
+                            }
+                            
+                            // Send new order to server
+                            const newOrder = [...grid.querySelectorAll('.photo-item')].map(i => i.dataset.id)
+                            this.pushEvent('reorder-photos', { order: newOrder })
+                        }
+                    })
+                })
+            }
+            
+            enableDrag()
+            
+            // Store reference for cleanup
+            this.sortable = {
+                option: (key, value) => {
+                    // Simple enable/disable toggle
+                },
+                destroy: () => {
+                    // Cleanup handled by removing elements
+                }
+            }
+        }
     }
 }
 

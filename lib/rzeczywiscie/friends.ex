@@ -5,7 +5,7 @@ defmodule Rzeczywiscie.Friends do
 
   import Ecto.Query, warn: false
   alias Rzeczywiscie.Repo
-  alias Rzeczywiscie.Friends.{Photo, Room, Message, DeviceLink, LinkCode}
+  alias Rzeczywiscie.Friends.{Photo, Room, Message, DeviceLink, LinkCode, TextCard}
 
   @max_photos 100
   @max_messages 50
@@ -167,6 +167,85 @@ defmodule Rzeczywiscie.Friends do
     |> Repo.aggregate(:count, :id)
   end
 
+  @doc """
+  List all photos by a user across all rooms, ordered by position then date.
+  """
+  def list_user_photos(user_id) do
+    Photo
+    |> where([p], p.user_id == ^user_id)
+    |> order_by([p], [asc_nulls_last: p.position, desc: p.inserted_at])
+    |> Repo.all()
+    |> Enum.map(&photo_to_map_with_room/1)
+  end
+
+  @doc """
+  Count photos by a user.
+  """
+  def count_user_photos(user_id) do
+    Photo
+    |> where([p], p.user_id == ^user_id)
+    |> Repo.aggregate(:count, :id)
+  end
+
+  @doc """
+  Update the position/order of a user's photos.
+  Accepts a list of photo IDs in the desired order.
+  """
+  def reorder_user_photos(user_id, photo_ids) when is_list(photo_ids) do
+    Repo.transaction(fn ->
+      photo_ids
+      |> Enum.with_index()
+      |> Enum.each(fn {photo_id, index} ->
+        Photo
+        |> where([p], p.id == ^photo_id and p.user_id == ^user_id)
+        |> Repo.update_all(set: [position: index])
+      end)
+    end)
+  end
+
+  @doc """
+  Update a photo's description.
+  """
+  def update_photo_description(photo_id, description, user_id) do
+    case Repo.get(Photo, photo_id) do
+      nil ->
+        {:error, :not_found}
+
+      photo ->
+        if photo.user_id == user_id do
+          photo
+          |> Photo.changeset(%{description: description})
+          |> Repo.update()
+          |> case do
+            {:ok, updated} -> {:ok, photo_to_map_with_room(updated)}
+            error -> error
+          end
+        else
+          {:error, :unauthorized}
+        end
+    end
+  end
+
+  # Convert Photo struct to map for LiveView (with room info)
+  defp photo_to_map_with_room(photo) do
+    room = Repo.get(Room, photo.room_id)
+    %{
+      id: photo.id,
+      user_id: photo.user_id,
+      user_color: photo.user_color,
+      user_name: photo.user_name,
+      data_url: photo.image_data,
+      content_type: photo.content_type,
+      file_size: photo.file_size,
+      position: photo.position,
+      description: photo.description,
+      uploaded_at: photo.inserted_at,
+      room_code: room && room.code,
+      room_name: room && (room.name || room.code),
+      room_emoji: room && room.emoji
+    }
+  end
+
   # Convert Photo struct to map for LiveView
   defp photo_to_map(photo) do
     %{
@@ -177,6 +256,7 @@ defmodule Rzeczywiscie.Friends do
       data_url: photo.image_data,
       content_type: photo.content_type,
       file_size: photo.file_size,
+      description: photo.description,
       uploaded_at: photo.inserted_at
     }
   end
@@ -377,5 +457,146 @@ defmodule Rzeczywiscie.Friends do
     LinkCode
     |> where([c], c.expires_at < ^now)
     |> Repo.delete_all()
+  end
+
+  # --- Text Cards ---
+
+  @doc """
+  List all text cards by a user, ordered by position.
+  """
+  def list_user_text_cards(user_id) do
+    TextCard
+    |> where([t], t.user_id == ^user_id)
+    |> order_by([t], [asc_nulls_last: t.position, desc: t.inserted_at])
+    |> Repo.all()
+    |> Enum.map(&text_card_to_map/1)
+  end
+
+  @doc """
+  Get a text card by ID.
+  """
+  def get_text_card(id), do: Repo.get(TextCard, id)
+
+  @doc """
+  Create a new text card.
+  """
+  def create_text_card(attrs) do
+    %TextCard{}
+    |> TextCard.changeset(attrs)
+    |> Repo.insert()
+    |> case do
+      {:ok, card} -> {:ok, text_card_to_map(card)}
+      error -> error
+    end
+  end
+
+  @doc """
+  Update a text card.
+  """
+  def update_text_card(id, attrs, user_id) do
+    case Repo.get(TextCard, id) do
+      nil ->
+        {:error, :not_found}
+
+      card ->
+        if card.user_id == user_id do
+          card
+          |> TextCard.changeset(attrs)
+          |> Repo.update()
+          |> case do
+            {:ok, updated} -> {:ok, text_card_to_map(updated)}
+            error -> error
+          end
+        else
+          {:error, :unauthorized}
+        end
+    end
+  end
+
+  @doc """
+  Delete a text card.
+  """
+  def delete_text_card(id, user_id) do
+    case Repo.get(TextCard, id) do
+      nil ->
+        {:error, :not_found}
+
+      card ->
+        if card.user_id == user_id do
+          Repo.delete(card)
+        else
+          {:error, :unauthorized}
+        end
+    end
+  end
+
+  @doc """
+  Update the position/order of a user's text cards.
+  """
+  def reorder_user_text_cards(user_id, card_ids) when is_list(card_ids) do
+    Repo.transaction(fn ->
+      card_ids
+      |> Enum.with_index()
+      |> Enum.each(fn {card_id, index} ->
+        TextCard
+        |> where([t], t.id == ^card_id and t.user_id == ^user_id)
+        |> Repo.update_all(set: [position: index])
+      end)
+    end)
+  end
+
+  @doc """
+  List all user items (photos and text cards) combined and sorted.
+  """
+  def list_user_items(user_id) do
+    photos = list_user_photos(user_id) |> Enum.map(&Map.put(&1, :type, :photo))
+    text_cards = list_user_text_cards(user_id) |> Enum.map(&Map.put(&1, :type, :text_card))
+
+    (photos ++ text_cards)
+    |> Enum.sort_by(fn item ->
+      # Sort by position (nulls last), then by date descending
+      {item.position || 999_999, -DateTime.to_unix(item.uploaded_at || item.created_at)}
+    end)
+  end
+
+  @doc """
+  Reorder all user items (both photos and text cards).
+  """
+  def reorder_user_items(user_id, item_ids) when is_list(item_ids) do
+    Repo.transaction(fn ->
+      item_ids
+      |> Enum.with_index()
+      |> Enum.each(fn {item_id, index} ->
+        # Item ID format: "photo-123" or "text-456"
+        case String.split(item_id, "-", parts: 2) do
+          ["photo", id] ->
+            Photo
+            |> where([p], p.id == ^String.to_integer(id) and p.user_id == ^user_id)
+            |> Repo.update_all(set: [position: index])
+
+          ["text", id] ->
+            TextCard
+            |> where([t], t.id == ^String.to_integer(id) and t.user_id == ^user_id)
+            |> Repo.update_all(set: [position: index])
+
+          _ ->
+            :ok
+        end
+      end)
+    end)
+  end
+
+  defp text_card_to_map(card) do
+    %{
+      id: card.id,
+      user_id: card.user_id,
+      user_color: card.user_color,
+      content: card.content,
+      background_color: card.background_color,
+      text_color: card.text_color,
+      font_style: card.font_style,
+      position: card.position,
+      created_at: card.inserted_at
+    }
   end
 end
