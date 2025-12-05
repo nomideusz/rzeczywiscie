@@ -249,7 +249,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
           <div class="grid lg:grid-cols-3 gap-6">
             <!-- Content Grid (2/3) - Masonry Layout with Photos and Notes -->
             <div class="lg:col-span-2">
-              <%= if @items == [] do %>
+              <%= if @item_count == 0 do %>
                 <div class="flex flex-col items-center justify-center py-16 text-center border-4 border-dashed border-base-content/20">
                   <div class="text-5xl mb-4">{@room.emoji}</div>
                   <h3 class="text-xl font-black uppercase mb-2 opacity-50">Nothing Here Yet</h3>
