@@ -323,9 +323,9 @@ defmodule RzeczywiscieWeb.FriendsLive do
                           phx-click={if item.user_id == @user_id, do: "edit-note", else: "open-lightbox"}
                           phx-value-id={item.id}
                           phx-value-type="note"
-                          class="w-full p-4 min-h-[120px] flex items-center justify-center cursor-pointer"
+                          class="w-full p-4 min-h-[120px] flex items-center justify-center cursor-pointer bg-base-200 hover:bg-base-300 text-base-content"
                         >
-                          <p class="text-sm leading-relaxed text-center break-words line-clamp-6">{item.content}</p>
+                          <p class="text-sm leading-relaxed text-center break-words line-clamp-6 text-base-content">{item.content}</p>
                         </button>
                         
                         <div class="p-2 border-t-2 border-base-content bg-base-100 flex items-center gap-2">

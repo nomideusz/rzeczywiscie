@@ -442,10 +442,10 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
         type="button"
         phx-click={unless @reordering, do: "edit-text-card"}
         phx-value-id={@card.id}
-        class={["w-full aspect-square flex items-center justify-center p-4 bg-base-200", if(@reordering, do: "pointer-events-none", else: "")]}
+        class={["w-full aspect-square flex items-center justify-center p-4 bg-base-200 hover:bg-base-300 text-base-content", if(@reordering, do: "pointer-events-none", else: "")]}
         disabled={@reordering}
       >
-        <p class="text-center text-sm leading-relaxed break-words max-w-full line-clamp-6">
+        <p class="text-center text-sm leading-relaxed break-words max-w-full line-clamp-6 text-base-content">
           {@card.content}
         </p>
       </button>
