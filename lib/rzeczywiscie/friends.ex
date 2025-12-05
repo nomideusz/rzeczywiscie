@@ -536,8 +536,11 @@ defmodule Rzeczywiscie.Friends do
   Returns {user_id, username} where user_id may be master_user_id if linked.
   """
   def get_device_info(device_fingerprint) when is_binary(device_fingerprint) do
-    case Repo.get_by(DeviceLink, device_fingerprint: device_fingerprint) do
+    result = Repo.get_by(DeviceLink, device_fingerprint: device_fingerprint)
+    
+    case result do
       nil -> 
+        # No device link found - this is a new device
         {device_fingerprint, nil}
       link -> 
         user_id = link.master_user_id || device_fingerprint
