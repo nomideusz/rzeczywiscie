@@ -48,8 +48,8 @@ function generateDeviceFingerprint() {
     return (hash >>> 0).toString(16)
 }
 
-// Generate a small thumbnail as base64 data URL
-function generateThumbnail(file, maxSize = 200) {
+// Generate a thumbnail as base64 data URL
+function generateThumbnail(file, maxSize = 400) {
     return new Promise((resolve) => {
         if (!file.type.startsWith('image/') || file.type === 'image/gif') {
             resolve(null)
@@ -76,8 +76,8 @@ function generateThumbnail(file, maxSize = 200) {
             canvas.height = height
             ctx.drawImage(img, 0, 0, width, height)
 
-            // Convert to base64 data URL with lower quality
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.6)
+            // Convert to base64 data URL with good quality
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.75)
             URL.revokeObjectURL(img.src)
             resolve(dataUrl)
         }
@@ -253,7 +253,7 @@ const Hooks = {
                 if (file.type.startsWith('image/') && file.type !== 'image/gif') {
                     // Generate thumbnail first (in parallel with optimization)
                     const [thumbnail, optimized] = await Promise.all([
-                        generateThumbnail(file, 200),
+                        generateThumbnail(file, 400),
                         optimizeImage(file, 1200)
                     ])
                     
@@ -372,7 +372,7 @@ const Hooks = {
                 if (file.type.startsWith('image/') && file.type !== 'image/gif') {
                     // Generate thumbnail and optimized image in parallel
                     const [thumbnail, optimized] = await Promise.all([
-                        generateThumbnail(file, 200),
+                        generateThumbnail(file, 400),
                         optimizeImage(file, 1200)
                     ])
                     
