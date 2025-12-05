@@ -29,9 +29,9 @@ defmodule RzeczywiscieWeb.FriendsLive do
       Presence.track_user(self(), room.code, user_id, user_color, nil)
       
       # Load data only when connected
-      photos = Friends.list_photos(room.id, limit: 50)
+      photos = Friends.list_photos(room.id, 50)
       notes = Friends.list_room_text_cards(room.id)
-      msgs = Friends.list_messages(room.id, limit: 100)
+      msgs = Friends.list_messages(room.id, 100)
       v = Presence.list_users(room.code)
       combined = build_room_items(photos, notes)
       {combined, msgs, v, length(combined)}
@@ -113,9 +113,9 @@ defmodule RzeczywiscieWeb.FriendsLive do
       Phoenix.PubSub.subscribe(Rzeczywiscie.PubSub, "friends:presence:#{room.code}")
       Presence.track_user(self(), room.code, socket.assigns.user_id, socket.assigns.user_color, socket.assigns.user_name)
       
-      photos = Friends.list_photos(room.id, limit: 50)
+      photos = Friends.list_photos(room.id, 50)
       notes = Friends.list_room_text_cards(room.id)
-      messages = Friends.list_messages(room.id, limit: 100)
+      messages = Friends.list_messages(room.id, 100)
       viewers = Presence.list_users(room.code)
       items = build_room_items(photos, notes)
       items_map = Map.new(items, fn item -> {"#{item.type}-#{item.id}", item} end)
