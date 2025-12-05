@@ -29,8 +29,12 @@ defmodule RzeczywiscieWeb.FriendsLive do
     end
 
     photos = Friends.list_photos(room.id)
+    notes = Friends.list_room_text_cards(room.id)
     messages = Friends.list_messages(room.id)
     viewers = if connected?(socket), do: Presence.list_users(room.code), else: []
+
+    # Combine photos and notes into items, sorted by date
+    items = build_room_items(photos, notes)
 
     socket =
       socket
@@ -43,7 +47,9 @@ defmodule RzeczywiscieWeb.FriendsLive do
       |> assign(:room, room)
       |> assign(:page_title, "#{room.emoji} #{room.name || room.code}")
       |> assign(:photos, photos)
-      |> assign(:photo_count, Friends.count_photos(room.id))
+      |> assign(:notes, notes)
+      |> assign(:items, items)
+      |> assign(:item_count, length(items))
       |> assign(:messages, messages)
       |> assign(:message_input, "")
       |> assign(:viewers, viewers)
@@ -52,7 +58,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
       |> assign(:show_name_modal, false)
       |> assign(:show_link_modal, false)
       |> assign(:show_lightbox, false)
-      |> assign(:lightbox_photo, nil)
+      |> assign(:lightbox_item, nil)
       |> assign(:join_room_code, "")
       |> assign(:new_room_name, "")
       |> assign(:name_input, "")
@@ -65,7 +71,10 @@ defmodule RzeczywiscieWeb.FriendsLive do
       |> assign(:show_photo_edit_modal, false)
       |> assign(:editing_photo, nil)
       |> assign(:photo_description_input, "")
-      |> stream(:photos, photos)
+      |> assign(:show_note_edit_modal, false)
+      |> assign(:editing_note, nil)
+      |> assign(:note_edit_input, "")
+      |> stream(:items, items)
       |> stream(:messages, messages)
       |> allow_upload(:photo,
         accept: ~w(.jpg .jpeg .png .gif .webp),
@@ -98,18 +107,22 @@ defmodule RzeczywiscieWeb.FriendsLive do
       Presence.track_user(self(), room.code, socket.assigns.user_id, socket.assigns.user_color, socket.assigns.user_name)
       
       photos = Friends.list_photos(room.id)
+      notes = Friends.list_room_text_cards(room.id)
       messages = Friends.list_messages(room.id)
       viewers = Presence.list_users(room.code)
+      items = build_room_items(photos, notes)
       
       {:noreply,
        socket
        |> assign(:room, room)
        |> assign(:page_title, "#{room.emoji} #{room.name || room.code}")
        |> assign(:photos, photos)
-       |> assign(:photo_count, Friends.count_photos(room.id))
+       |> assign(:notes, notes)
+       |> assign(:items, items)
+       |> assign(:item_count, length(items))
        |> assign(:messages, messages)
        |> assign(:viewers, viewers)
-       |> stream(:photos, photos, reset: true)
+       |> stream(:items, items, reset: true)
        |> stream(:messages, messages, reset: true)}
     else
       {:noreply, socket}
@@ -229,57 +242,96 @@ defmodule RzeczywiscieWeb.FriendsLive do
         <!-- Main Content: Photos + Chat -->
         <div class="container mx-auto px-4 py-6">
           <div class="grid lg:grid-cols-3 gap-6">
-            <!-- Photos Grid (2/3) - Masonry Layout -->
+            <!-- Content Grid (2/3) - Masonry Layout with Photos and Notes -->
             <div class="lg:col-span-2">
-              <%= if @photos == [] do %>
+              <%= if @items == [] do %>
                 <div class="flex flex-col items-center justify-center py-16 text-center border-4 border-dashed border-base-content/20">
                   <div class="text-5xl mb-4">{@room.emoji}</div>
-                  <h3 class="text-xl font-black uppercase mb-2 opacity-50">No Photos Yet</h3>
-                  <p class="text-sm opacity-40 mb-4">Share the first photo in this room!</p>
+                  <h3 class="text-xl font-black uppercase mb-2 opacity-50">Nothing Here Yet</h3>
+                  <p class="text-sm opacity-40 mb-4">Share the first photo or note in this room!</p>
                   <p class="text-xs font-mono opacity-30">kruk.live/friends/{@room.code}</p>
                 </div>
               <% else %>
-                <div class="columns-2 sm:columns-3 gap-3 space-y-3" id="photos-grid" phx-update="stream" phx-hook="PhotoGrid">
-                  <%= for {dom_id, photo} <- @streams.photos do %>
-                    <div
-                      id={dom_id}
-                      class="photo-card group relative border-4 border-base-content bg-base-100 overflow-hidden hover:translate-x-0.5 hover:translate-y-0.5 transition-transform break-inside-avoid"
-                    >
-                      <div class="absolute inset-0 bg-base-content translate-x-1 translate-y-1 -z-10"></div>
-                      
-                      <%= if photo.user_id == @user_id do %>
+                <div class="columns-2 sm:columns-3 gap-3 space-y-3" id="items-grid" phx-update="stream" phx-hook="PhotoGrid">
+                  <%= for {dom_id, item} <- @streams.items do %>
+                    <%= if item.type == :photo do %>
+                      <div
+                        id={dom_id}
+                        class="photo-card group relative border-4 border-base-content bg-base-100 overflow-hidden hover:translate-x-0.5 hover:translate-y-0.5 transition-transform break-inside-avoid"
+                      >
+                        <div class="absolute inset-0 bg-base-content translate-x-1 translate-y-1 -z-10"></div>
+                        
+                        <%= if item.user_id == @user_id do %>
+                          <button
+                            type="button"
+                            phx-click="delete-photo"
+                            phx-value-id={item.id}
+                            data-confirm="Delete?"
+                            class="absolute top-1 right-1 z-10 p-1.5 bg-error/90 text-error-content text-xs opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                          >✕</button>
+                        <% end %>
+                        
                         <button
                           type="button"
-                          phx-click="delete-photo"
-                          phx-value-id={photo.id}
-                          data-confirm="Delete?"
-                          class="absolute top-1 right-1 z-10 p-1.5 bg-error/90 text-error-content text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-                        >✕</button>
-                      <% end %>
-                      
-                      <button
-                        type="button"
-                        phx-click="open-lightbox"
-                        phx-value-id={photo.id}
-                        class="overflow-hidden bg-base-200 w-full cursor-zoom-in block relative"
-                      >
-                        <div class="photo-skeleton absolute inset-0 bg-base-300"></div>
-                        <img src={photo.thumbnail_url || photo.data_url} alt="" class="photo-image w-full h-auto relative" loading="lazy" decoding="async" />
-                        <%= if photo.description do %>
-                          <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2 pt-4">
-                            <p class="text-white text-[10px] leading-tight line-clamp-2">{photo.description}</p>
-                          </div>
-                        <% end %>
-                      </button>
-                      
-                      <div class="p-2 border-t-2 border-base-content bg-base-100 flex items-center gap-2">
-                        <div class="w-3 h-3 rounded-full border border-base-content flex-shrink-0" style={"background-color: #{photo.user_color}"}></div>
-                        <span class="text-[10px] font-bold truncate flex-1">
-                          {photo.user_name || String.slice(photo.user_id, 0, 6)}
-                        </span>
-                        <span class="text-[10px] opacity-50 flex-shrink-0">{format_time(photo.uploaded_at)}</span>
+                          phx-click="open-lightbox"
+                          phx-value-id={item.id}
+                          phx-value-type="photo"
+                          class="overflow-hidden bg-base-200 w-full cursor-zoom-in block relative"
+                        >
+                          <div class="photo-skeleton absolute inset-0 bg-base-300"></div>
+                          <img src={item.thumbnail_url || item.data_url} alt="" class="photo-image w-full h-auto relative" loading="lazy" decoding="async" />
+                          <%= if item.description do %>
+                            <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2 pt-4">
+                              <p class="text-white text-[10px] leading-tight line-clamp-2">{item.description}</p>
+                            </div>
+                          <% end %>
+                        </button>
+                        
+                        <div class="p-2 border-t-2 border-base-content bg-base-100 flex items-center gap-2">
+                          <div class="w-3 h-3 rounded-full border border-base-content flex-shrink-0" style={"background-color: #{item.user_color}"}></div>
+                          <span class="text-[10px] font-bold truncate flex-1">
+                            {item.user_name || String.slice(item.user_id, 0, 6)}
+                          </span>
+                          <span class="text-[10px] opacity-50 flex-shrink-0">{format_time(item.uploaded_at)}</span>
+                        </div>
                       </div>
-                    </div>
+                    <% else %>
+                      <%!-- Note card --%>
+                      <div
+                        id={dom_id}
+                        class="note-card group relative border-4 border-base-content bg-base-200 overflow-hidden hover:translate-x-0.5 hover:translate-y-0.5 transition-transform break-inside-avoid"
+                      >
+                        <div class="absolute inset-0 bg-base-content translate-x-1 translate-y-1 -z-10"></div>
+                        
+                        <%= if item.user_id == @user_id do %>
+                          <button
+                            type="button"
+                            phx-click="delete-note"
+                            phx-value-id={item.id}
+                            data-confirm="Delete?"
+                            class="absolute top-1 right-1 z-10 p-1.5 bg-error/90 text-error-content text-xs opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                          >✕</button>
+                        <% end %>
+                        
+                        <button
+                          type="button"
+                          phx-click={if item.user_id == @user_id, do: "edit-note", else: "open-lightbox"}
+                          phx-value-id={item.id}
+                          phx-value-type="note"
+                          class="w-full p-4 min-h-[120px] flex items-center justify-center cursor-pointer"
+                        >
+                          <p class="text-sm leading-relaxed text-center break-words line-clamp-6">{item.content}</p>
+                        </button>
+                        
+                        <div class="p-2 border-t-2 border-base-content bg-base-100 flex items-center gap-2">
+                          <div class="w-3 h-3 rounded-full border border-base-content flex-shrink-0" style={"background-color: #{item.user_color}"}></div>
+                          <span class="text-[10px] font-bold truncate flex-1">
+                            {item.user_name || String.slice(item.user_id, 0, 6)}
+                          </span>
+                          <span class="text-[10px] opacity-50 flex-shrink-0">{format_time(item.created_at)}</span>
+                        </div>
+                      </div>
+                    <% end %>
                   <% end %>
                 </div>
               <% end %>
@@ -345,8 +397,8 @@ defmodule RzeczywiscieWeb.FriendsLive do
           </div>
         </div>
 
-        <!-- Lightbox Modal -->
-        <%= if @show_lightbox && @lightbox_photo do %>
+        <!-- Lightbox Modal for Photos -->
+        <%= if @show_lightbox && @lightbox_item && @lightbox_item.type == :photo do %>
           <div 
             class="fixed inset-0 z-50 flex items-center justify-center bg-black/90 cursor-zoom-out"
             phx-click="close-lightbox"
@@ -357,11 +409,11 @@ defmodule RzeczywiscieWeb.FriendsLive do
               class="absolute top-4 right-4 text-white text-3xl hover:opacity-60 z-10 cursor-pointer"
             >×</button>
             
-            <%= if @lightbox_photo.user_id == @user_id do %>
+            <%= if @lightbox_item.user_id == @user_id do %>
               <button
                 type="button"
                 phx-click="edit-photo-description"
-                phx-value-id={@lightbox_photo.id}
+                phx-value-id={@lightbox_item.id}
                 class="absolute top-4 left-4 text-white text-sm px-3 py-2 bg-white/10 hover:bg-white/20 transition-colors z-10 flex items-center gap-2 cursor-pointer"
               >
                 ✎ Edit
@@ -369,20 +421,44 @@ defmodule RzeczywiscieWeb.FriendsLive do
             <% end %>
             
             <img 
-              src={@lightbox_photo.data_url} 
-              alt={@lightbox_photo.description || ""} 
+              src={@lightbox_item.data_url} 
+              alt={@lightbox_item.description || ""} 
               class="max-w-[95vw] max-h-[80vh] object-contain"
               phx-click="close-lightbox"
             />
             <div class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/70 text-white px-4 py-2 rounded text-center max-w-md">
               <div class="flex items-center justify-center gap-3 mb-1">
-                <div class="w-4 h-4 rounded-full" style={"background-color: #{@lightbox_photo.user_color}"}></div>
-                <span class="font-bold">{@lightbox_photo.user_name || String.slice(@lightbox_photo.user_id, 0, 6)}</span>
-                <span class="opacity-60">{format_time(@lightbox_photo.uploaded_at)}</span>
+                <div class="w-4 h-4 rounded-full" style={"background-color: #{@lightbox_item.user_color}"}></div>
+                <span class="font-bold">{@lightbox_item.user_name || String.slice(@lightbox_item.user_id, 0, 6)}</span>
+                <span class="opacity-60">{format_time(@lightbox_item.uploaded_at)}</span>
               </div>
-              <%= if @lightbox_photo.description do %>
-                <p class="text-sm opacity-80 mt-1">{@lightbox_photo.description}</p>
+              <%= if @lightbox_item.description do %>
+                <p class="text-sm opacity-80 mt-1">{@lightbox_item.description}</p>
               <% end %>
+            </div>
+          </div>
+        <% end %>
+        
+        <!-- Lightbox Modal for Notes -->
+        <%= if @show_lightbox && @lightbox_item && @lightbox_item.type == :note do %>
+          <div 
+            class="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
+            phx-click="close-lightbox"
+          >
+            <button 
+              type="button" 
+              phx-click="close-lightbox"
+              class="absolute top-4 right-4 text-white text-3xl hover:opacity-60 z-10 cursor-pointer"
+            >×</button>
+            
+            <div class="bg-base-200 border-4 border-base-content p-8 max-w-lg mx-4">
+              <p class="text-lg leading-relaxed text-center">{@lightbox_item.content}</p>
+              <div class="mt-6 flex items-center justify-center gap-3 text-sm opacity-60">
+                <div class="w-4 h-4 rounded-full" style={"background-color: #{@lightbox_item.user_color}"}></div>
+                <span class="font-bold">{@lightbox_item.user_name || String.slice(@lightbox_item.user_id, 0, 6)}</span>
+                <span>•</span>
+                <span>{format_time(@lightbox_item.created_at)}</span>
+              </div>
             </div>
           </div>
         <% end %>
@@ -414,10 +490,55 @@ defmodule RzeczywiscieWeb.FriendsLive do
                 <button
                   type="submit"
                   disabled={String.trim(@note_input) == ""}
-                  class="w-full px-4 py-3 border-2 border-base-content bg-base-content text-base-100 font-bold uppercase disabled:opacity-40 disabled:cursor-not-allowed"
+                  class="w-full px-4 py-3 border-2 border-base-content bg-base-content text-base-100 font-bold uppercase disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                 >
-                  Add Note
+                  Share Note
                 </button>
+              </form>
+            </div>
+          </div>
+        <% end %>
+
+        <!-- Note Edit Modal -->
+        <%= if @show_note_edit_modal && @editing_note do %>
+          <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 overflow-y-auto" phx-hook="ModalScrollLock" id="note-edit-modal-backdrop">
+            <div class="bg-base-100 border-4 border-base-content p-6 max-w-md w-full shadow-2xl my-8" phx-click-away="close-note-edit-modal">
+              <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-black uppercase">Edit Note</h2>
+                <button type="button" phx-click="close-note-edit-modal" class="text-2xl leading-none hover:opacity-60 cursor-pointer">×</button>
+              </div>
+              
+              <form phx-submit="save-note-edit" phx-change="update-note-edit-input" id="note-edit-form">
+                <div class="mb-4">
+                  <textarea
+                    name="content"
+                    value={@note_edit_input}
+                    maxlength="500"
+                    rows="6"
+                    class="w-full px-4 py-3 border-2 border-base-content text-base bg-base-100 resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                    autofocus
+                  >{@note_edit_input}</textarea>
+                  <p class="text-xs opacity-40 mt-1 text-right">{String.length(@note_edit_input)}/500</p>
+                </div>
+                
+                <div class="flex gap-2">
+                  <button
+                    type="submit"
+                    disabled={String.trim(@note_edit_input) == ""}
+                    class="flex-1 px-4 py-3 border-2 border-base-content bg-base-content text-base-100 font-bold uppercase disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    phx-click="delete-note"
+                    phx-value-id={@editing_note.id}
+                    data-confirm="Delete this note?"
+                    class="px-4 py-3 border-2 border-error text-error font-bold uppercase cursor-pointer hover:bg-error hover:text-error-content transition-colors"
+                  >
+                    🗑
+                  </button>
+                </div>
               </form>
             </div>
           </div>
@@ -781,28 +902,37 @@ defmodule RzeczywiscieWeb.FriendsLive do
     end
   end
 
+  def handle_event("open-lightbox", %{"id" => id, "type" => type}, socket) do
+    item_id = String.to_integer(id)
+    item = Enum.find(socket.assigns.items, fn i -> 
+      i.id == item_id && to_string(i.type) == type
+    end)
+    {:noreply, socket |> assign(:show_lightbox, true) |> assign(:lightbox_item, item)}
+  end
+
   def handle_event("open-lightbox", %{"id" => id}, socket) do
+    # Fallback for old photo-only calls
     photo_id = String.to_integer(id)
-    # Find the photo in the stream
     photo = Enum.find(socket.assigns.photos, fn p -> p.id == photo_id end)
-    {:noreply, socket |> assign(:show_lightbox, true) |> assign(:lightbox_photo, photo)}
+    item = if photo, do: Map.put(photo, :type, :photo), else: nil
+    {:noreply, socket |> assign(:show_lightbox, true) |> assign(:lightbox_item, item)}
   end
 
   def handle_event("close-lightbox", _params, socket) do
-    {:noreply, socket |> assign(:show_lightbox, false) |> assign(:lightbox_photo, nil)}
+    {:noreply, socket |> assign(:show_lightbox, false) |> assign(:lightbox_item, nil)}
   end
 
   # --- Photo Edit Events ---
 
   def handle_event("edit-photo-description", %{"id" => id}, socket) do
     photo_id = String.to_integer(id)
-    photo = Enum.find(socket.assigns.photos, fn p -> p.id == photo_id end)
+    photo = Enum.find(socket.assigns.items, fn i -> i.type == :photo && i.id == photo_id end)
     
     if photo && photo.user_id == socket.assigns.user_id do
       {:noreply,
        socket
        |> assign(:show_lightbox, false)
-       |> assign(:lightbox_photo, nil)
+       |> assign(:lightbox_item, nil)
        |> assign(:show_photo_edit_modal, true)
        |> assign(:editing_photo, photo)
        |> assign(:photo_description_input, photo.description || "")}
@@ -868,9 +998,10 @@ defmodule RzeczywiscieWeb.FriendsLive do
       {:ok, _} ->
         {:noreply,
          socket
-         |> stream_delete(:photos, %{id: photo_id})
+         |> stream_delete(:items, %{id: "items-photo-#{photo_id}"})
          |> assign(:photos, Enum.reject(socket.assigns.photos, &(&1.id == photo_id)))
-         |> assign(:photo_count, max(0, socket.assigns.photo_count - 1))
+         |> assign(:items, Enum.reject(socket.assigns.items, &(&1.type == :photo && &1.id == photo_id)))
+         |> assign(:item_count, max(0, socket.assigns.item_count - 1))
          |> assign(:show_photo_edit_modal, false)
          |> assign(:editing_photo, nil)
          |> put_flash(:info, "Photo deleted")}
@@ -895,22 +1026,107 @@ defmodule RzeczywiscieWeb.FriendsLive do
 
   def handle_event("save-note", %{"content" => content}, socket) do
     user_id = socket.assigns.user_id
+    room = socket.assigns.room
     text = String.trim(content)
 
     if user_id && text != "" do
       case Friends.create_text_card(%{
         user_id: user_id,
         user_color: socket.assigns.user_color,
-        content: text
-      }) do
-        {:ok, _card} ->
+        user_name: socket.assigns.user_name,
+        content: text,
+        room_id: room.id
+      }, room.code) do
+        {:ok, card} ->
+          card_with_type = Map.put(card, :type, :note)
           {:noreply,
            socket
            |> assign(:show_note_modal, false)
            |> assign(:note_input, "")
-           |> put_flash(:info, "📝 Note added to your board!")}
+           |> assign(:notes, [card | socket.assigns.notes])
+           |> assign(:items, [card_with_type | socket.assigns.items])
+           |> assign(:item_count, socket.assigns.item_count + 1)
+           |> stream_insert(:items, card_with_type, at: 0)
+           |> put_flash(:info, "📝 Note shared!")}
         {:error, _} ->
           {:noreply, put_flash(socket, :error, "Failed to save note")}
+      end
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("delete-note", %{"id" => id}, socket) do
+    note_id = String.to_integer(id)
+    user_id = socket.assigns.user_id
+
+    case Friends.delete_text_card(note_id, user_id) do
+      {:ok, _} ->
+        {:noreply,
+         socket
+         |> stream_delete(:items, %{id: "items-note-#{note_id}"})
+         |> assign(:notes, Enum.reject(socket.assigns.notes, &(&1.id == note_id)))
+         |> assign(:items, Enum.reject(socket.assigns.items, &(&1.type == :note && &1.id == note_id)))
+         |> assign(:item_count, max(0, socket.assigns.item_count - 1))
+         |> put_flash(:info, "Note deleted")}
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Cannot delete")}
+    end
+  end
+
+  def handle_event("edit-note", %{"id" => id}, socket) do
+    note_id = String.to_integer(id)
+    note = Enum.find(socket.assigns.items, fn i -> i.type == :note && i.id == note_id end)
+    
+    if note && note.user_id == socket.assigns.user_id do
+      {:noreply,
+       socket
+       |> assign(:show_lightbox, false)
+       |> assign(:lightbox_item, nil)
+       |> assign(:show_note_edit_modal, true)
+       |> assign(:editing_note, note)
+       |> assign(:note_edit_input, note.content)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("close-note-edit-modal", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:show_note_edit_modal, false)
+     |> assign(:editing_note, nil)
+     |> assign(:note_edit_input, "")}
+  end
+
+  def handle_event("update-note-edit-input", %{"content" => content}, socket) do
+    {:noreply, assign(socket, :note_edit_input, content)}
+  end
+
+  def handle_event("save-note-edit", %{"content" => content}, socket) do
+    user_id = socket.assigns.user_id
+    note = socket.assigns.editing_note
+    text = String.trim(content)
+
+    if user_id && note && text != "" do
+      case Friends.update_text_card(note.id, %{content: text}, user_id) do
+        {:ok, updated} ->
+          updated_with_type = Map.put(updated, :type, :note)
+          {:noreply,
+           socket
+           |> stream_insert(:items, updated_with_type)
+           |> assign(:notes, Enum.map(socket.assigns.notes, fn n -> 
+             if n.id == note.id, do: updated, else: n
+           end))
+           |> assign(:items, Enum.map(socket.assigns.items, fn i -> 
+             if i.type == :note && i.id == note.id, do: updated_with_type, else: i
+           end))
+           |> assign(:show_note_edit_modal, false)
+           |> assign(:editing_note, nil)
+           |> assign(:note_edit_input, "")
+           |> put_flash(:info, "Note updated!")}
+        {:error, _} ->
+          {:noreply, put_flash(socket, :error, "Failed to update")}
       end
     else
       {:noreply, socket}
@@ -1193,11 +1409,14 @@ defmodule RzeczywiscieWeb.FriendsLive do
     }, room.code) do
       {:ok, photo} ->
         Friends.broadcast(room.code, :new_photo_from_session, photo, socket.assigns.session_id)
+        photo_with_type = Map.put(photo, :type, :photo)
         {:noreply,
          socket
          |> assign(:uploading, false)
-         |> assign(:photo_count, socket.assigns.photo_count + 1)
-         |> stream_insert(:photos, photo, at: 0)
+         |> assign(:photos, [photo | socket.assigns.photos])
+         |> assign(:items, [photo_with_type | socket.assigns.items])
+         |> assign(:item_count, socket.assigns.item_count + 1)
+         |> stream_insert(:items, photo_with_type, at: 0)
          |> push_event("photo_uploaded", %{photo_id: photo.id})
          |> put_flash(:info, "📸 Shared!")}
       {:error, _} ->
@@ -1213,10 +1432,28 @@ defmodule RzeczywiscieWeb.FriendsLive do
 
   def handle_info({:new_photo_from_session, photo, from_session_id}, socket) do
     if from_session_id != socket.assigns.session_id do
+      photo_with_type = Map.put(photo, :type, :photo)
       {:noreply,
        socket
-       |> assign(:photo_count, socket.assigns.photo_count + 1)
-       |> stream_insert(:photos, photo, at: 0)}
+       |> assign(:photos, [photo | socket.assigns.photos])
+       |> assign(:items, [photo_with_type | socket.assigns.items])
+       |> assign(:item_count, socket.assigns.item_count + 1)
+       |> stream_insert(:items, photo_with_type, at: 0)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info({:new_note, note}, socket) do
+    # Note was added by another user in this room
+    if note.user_id != socket.assigns.user_id do
+      note_with_type = Map.put(note, :type, :note)
+      {:noreply,
+       socket
+       |> assign(:notes, [note | socket.assigns.notes])
+       |> assign(:items, [note_with_type | socket.assigns.items])
+       |> assign(:item_count, socket.assigns.item_count + 1)
+       |> stream_insert(:items, note_with_type, at: 0)}
     else
       {:noreply, socket}
     end
@@ -1276,6 +1513,22 @@ defmodule RzeczywiscieWeb.FriendsLive do
   end
 
   defp generate_session_id, do: :crypto.strong_rand_bytes(16) |> Base.encode16(case: :lower)
+
+  # Build combined items list from photos and notes
+  defp build_room_items(photos, notes) do
+    photo_items = Enum.map(photos, &Map.put(&1, :type, :photo))
+    note_items = Enum.map(notes, &Map.put(&1, :type, :note))
+    
+    (photo_items ++ note_items)
+    |> Enum.sort_by(fn item ->
+      timestamp = Map.get(item, :uploaded_at) || Map.get(item, :created_at)
+      case timestamp do
+        %DateTime{} -> DateTime.to_unix(timestamp)
+        %NaiveDateTime{} -> NaiveDateTime.diff(timestamp, ~N[1970-01-01 00:00:00])
+        _ -> 0
+      end
+    end, :desc)
+  end
 
   defp format_time(datetime) do
     now = DateTime.utc_now()

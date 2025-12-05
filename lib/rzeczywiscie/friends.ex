@@ -525,6 +525,17 @@ defmodule Rzeczywiscie.Friends do
     |> where([t], t.user_id == ^user_id)
     |> order_by([t], [asc_nulls_last: t.position, desc: t.inserted_at])
     |> Repo.all()
+    |> Enum.map(&text_card_to_map_with_room/1)
+  end
+
+  @doc """
+  List all text cards for a room.
+  """
+  def list_room_text_cards(room_id) do
+    TextCard
+    |> where([t], t.room_id == ^room_id)
+    |> order_by([t], desc: t.inserted_at)
+    |> Repo.all()
     |> Enum.map(&text_card_to_map/1)
   end
 
@@ -536,12 +547,17 @@ defmodule Rzeczywiscie.Friends do
   @doc """
   Create a new text card.
   """
-  def create_text_card(attrs) do
+  def create_text_card(attrs, room_code \\ nil) do
     %TextCard{}
     |> TextCard.changeset(attrs)
     |> Repo.insert()
     |> case do
-      {:ok, card} -> {:ok, text_card_to_map(card)}
+      {:ok, card} -> 
+        # Broadcast to room if it's a room note
+        if room_code do
+          broadcast(room_code, :new_note, text_card_to_map(card))
+        end
+        {:ok, text_card_to_map(card)}
       error -> error
     end
   end
@@ -654,12 +670,26 @@ defmodule Rzeczywiscie.Friends do
       id: card.id,
       user_id: card.user_id,
       user_color: card.user_color,
+      user_name: card.user_name,
       content: card.content,
-      background_color: card.background_color,
-      text_color: card.text_color,
-      font_style: card.font_style,
       position: card.position,
       created_at: card.inserted_at
+    }
+  end
+
+  defp text_card_to_map_with_room(card) do
+    room = if card.room_id, do: Repo.get(Room, card.room_id), else: nil
+    %{
+      id: card.id,
+      user_id: card.user_id,
+      user_color: card.user_color,
+      user_name: card.user_name,
+      content: card.content,
+      position: card.position,
+      created_at: card.inserted_at,
+      room_code: room && room.code,
+      room_name: room && (room.name || room.code),
+      room_emoji: room && room.emoji
     }
   end
 end
