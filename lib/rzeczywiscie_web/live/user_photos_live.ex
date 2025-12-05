@@ -58,13 +58,14 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
           content_type: photo_result.content_type,
           file_size: photo_result.file_size
         }) do
-          {:ok, _photo} ->
+          {:ok, photo} ->
             items = Friends.list_user_items(user_id)
             {:noreply,
              socket
              |> assign(:uploading, false)
              |> assign(:items, items)
              |> assign(:item_count, length(items))
+             |> push_event("photo_uploaded", %{photo_id: photo.id})
              |> put_flash(:info, "📸 Photo added!")}
           {:error, _} ->
             {:noreply, socket |> assign(:uploading, false) |> put_flash(:error, "Failed to upload")}
@@ -388,7 +389,7 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
         disabled={@reordering}
       >
         <img
-          src={@photo.data_url}
+          src={@photo.thumbnail_url || @photo.data_url}
           alt={@photo.description || ""}
           class="w-full h-full object-cover"
           loading="lazy"
@@ -497,6 +498,14 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
 
   def handle_event("close-lightbox", _params, socket) do
     {:noreply, socket |> assign(:show_lightbox, false) |> assign(:lightbox_item, nil)}
+  end
+
+  # Handle thumbnail from JS (sent after upload completes)
+  def handle_event("set_thumbnail", %{"photo_id" => photo_id, "thumbnail" => thumbnail}, socket) do
+    if socket.assigns.user_id && thumbnail do
+      Friends.set_photo_thumbnail(photo_id, thumbnail, socket.assigns.user_id)
+    end
+    {:noreply, socket}
   end
 
   # Photo Edit Events

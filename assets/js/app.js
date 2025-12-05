@@ -48,6 +48,45 @@ function generateDeviceFingerprint() {
     return (hash >>> 0).toString(16)
 }
 
+// Generate a small thumbnail as base64 data URL
+function generateThumbnail(file, maxSize = 200) {
+    return new Promise((resolve) => {
+        if (!file.type.startsWith('image/') || file.type === 'image/gif') {
+            resolve(null)
+            return
+        }
+
+        const img = new Image()
+        const canvas = document.createElement('canvas')
+        const ctx = canvas.getContext('2d')
+
+        img.onload = () => {
+            let { width, height } = img
+            
+            // Resize to thumbnail size
+            if (width > height) {
+                height = Math.round((height * maxSize) / width)
+                width = maxSize
+            } else {
+                width = Math.round((width * maxSize) / height)
+                height = maxSize
+            }
+
+            canvas.width = width
+            canvas.height = height
+            ctx.drawImage(img, 0, 0, width, height)
+
+            // Convert to base64 data URL with lower quality
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.6)
+            URL.revokeObjectURL(img.src)
+            resolve(dataUrl)
+        }
+
+        img.onerror = () => resolve(null)
+        img.src = URL.createObjectURL(file)
+    })
+}
+
 // Optimize image before upload - resize to max dimension while preserving aspect ratio
 function optimizeImage(file, maxSize = 1200) {
     return new Promise((resolve) => {
@@ -189,6 +228,20 @@ const Hooks = {
             const fileInput = form.querySelector('input[type="file"]')
             if (!fileInput) return
             
+            // Store pending thumbnail
+            this.pendingThumbnail = null
+            
+            // Listen for photo_uploaded event to associate thumbnail
+            this.handleEvent("photo_uploaded", ({ photo_id }) => {
+                if (this.pendingThumbnail && photo_id) {
+                    this.pushEvent("set_thumbnail", { 
+                        photo_id: photo_id, 
+                        thumbnail: this.pendingThumbnail 
+                    })
+                    this.pendingThumbnail = null
+                }
+            })
+            
             // Create a hidden optimized file input
             fileInput.addEventListener('change', async (e) => {
                 const files = e.target.files
@@ -198,10 +251,16 @@ const Hooks = {
                 
                 // Check if it's an image that needs optimization
                 if (file.type.startsWith('image/') && file.type !== 'image/gif') {
-                    // Show that we're optimizing
-                    const originalSize = file.size
+                    // Generate thumbnail first (in parallel with optimization)
+                    const [thumbnail, optimized] = await Promise.all([
+                        generateThumbnail(file, 200),
+                        optimizeImage(file, 1200)
+                    ])
                     
-                    const optimized = await optimizeImage(file, 1200)
+                    // Store thumbnail for when upload completes
+                    this.pendingThumbnail = thumbnail
+                    
+                    const originalSize = file.size
                     
                     // Only use optimized if it's actually smaller
                     if (optimized.size < originalSize) {
@@ -279,6 +338,53 @@ const Hooks = {
             this.pushEvent("set_user_id", { 
                 user_id: this.deviceId,
                 user_name: storedName
+            })
+            
+            // Setup thumbnail generation for uploads
+            this.setupThumbnailGeneration()
+        },
+        
+        setupThumbnailGeneration() {
+            const form = this.el.querySelector('#board-upload-form')
+            if (!form) return
+            
+            const fileInput = form.querySelector('input[type="file"]')
+            if (!fileInput) return
+            
+            this.pendingThumbnail = null
+            
+            // Listen for photo_uploaded event
+            this.handleEvent("photo_uploaded", ({ photo_id }) => {
+                if (this.pendingThumbnail && photo_id) {
+                    this.pushEvent("set_thumbnail", {
+                        photo_id: photo_id,
+                        thumbnail: this.pendingThumbnail
+                    })
+                    this.pendingThumbnail = null
+                }
+            })
+            
+            fileInput.addEventListener('change', async (e) => {
+                const files = e.target.files
+                if (!files || files.length === 0) return
+                
+                const file = files[0]
+                if (file.type.startsWith('image/') && file.type !== 'image/gif') {
+                    // Generate thumbnail and optimized image in parallel
+                    const [thumbnail, optimized] = await Promise.all([
+                        generateThumbnail(file, 200),
+                        optimizeImage(file, 1200)
+                    ])
+                    
+                    this.pendingThumbnail = thumbnail
+                    
+                    const originalSize = file.size
+                    if (optimized.size < originalSize) {
+                        const dt = new DataTransfer()
+                        dt.items.add(optimized)
+                        fileInput.files = dt.files
+                    }
+                }
             })
         }
     },

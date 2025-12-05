@@ -264,7 +264,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
                         class="overflow-hidden bg-base-200 w-full cursor-zoom-in block relative"
                       >
                         <div class="photo-skeleton absolute inset-0 bg-base-300"></div>
-                        <img src={photo.data_url} alt="" class="photo-image w-full h-auto relative" loading="lazy" decoding="async" />
+                        <img src={photo.thumbnail_url || photo.data_url} alt="" class="photo-image w-full h-auto relative" loading="lazy" decoding="async" />
                       </button>
                       
                       <div class="p-2 border-t-2 border-base-content bg-base-100 flex items-center gap-2">
@@ -429,7 +429,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
               
               <!-- Photo Preview -->
               <div class="mb-4 border-2 border-base-content overflow-hidden">
-                <img src={@editing_photo.data_url} alt="" class="w-full h-48 object-cover" />
+                <img src={@editing_photo.thumbnail_url || @editing_photo.data_url} alt="" class="w-full h-48 object-cover" />
               </div>
               
               <!-- Description Input -->
@@ -835,6 +835,14 @@ defmodule RzeczywiscieWeb.FriendsLive do
     end
   end
 
+  # Handle thumbnail from JS (sent after upload completes)
+  def handle_event("set_thumbnail", %{"photo_id" => photo_id, "thumbnail" => thumbnail}, socket) do
+    if socket.assigns.user_id && thumbnail do
+      Friends.set_photo_thumbnail(photo_id, thumbnail, socket.assigns.user_id)
+    end
+    {:noreply, socket}
+  end
+
   # --- Note Events ---
 
   def handle_event("open-note-modal", _params, socket) do
@@ -1154,6 +1162,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
          |> assign(:uploading, false)
          |> assign(:photo_count, socket.assigns.photo_count + 1)
          |> stream_insert(:photos, photo, at: 0)
+         |> push_event("photo_uploaded", %{photo_id: photo.id})
          |> put_flash(:info, "📸 Shared!")}
       {:error, _} ->
         {:noreply, socket |> assign(:uploading, false) |> put_flash(:error, "Failed")}

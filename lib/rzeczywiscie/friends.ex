@@ -244,6 +244,25 @@ defmodule Rzeczywiscie.Friends do
     end
   end
 
+  @doc """
+  Set the thumbnail for a photo. Only the photo owner can set it.
+  """
+  def set_photo_thumbnail(photo_id, thumbnail_data, user_id) do
+    case Repo.get(Photo, photo_id) do
+      nil ->
+        {:error, :not_found}
+
+      photo ->
+        if photo.user_id == user_id do
+          photo
+          |> Photo.changeset(%{thumbnail_data: thumbnail_data})
+          |> Repo.update()
+        else
+          {:error, :unauthorized}
+        end
+    end
+  end
+
   # Convert Photo struct to map for LiveView (with room info)
   defp photo_to_map_with_room(photo) do
     room = Repo.get(Room, photo.room_id)
@@ -253,6 +272,7 @@ defmodule Rzeczywiscie.Friends do
       user_color: photo.user_color,
       user_name: photo.user_name,
       data_url: photo.image_data,
+      thumbnail_url: photo.thumbnail_data || photo.image_data,
       content_type: photo.content_type,
       file_size: photo.file_size,
       position: photo.position,
@@ -272,6 +292,7 @@ defmodule Rzeczywiscie.Friends do
       user_color: photo.user_color,
       user_name: photo.user_name,
       data_url: photo.image_data,
+      thumbnail_url: photo.thumbnail_data || photo.image_data,
       content_type: photo.content_type,
       file_size: photo.file_size,
       description: photo.description,
