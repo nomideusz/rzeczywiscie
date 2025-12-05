@@ -22,8 +22,10 @@ defmodule RzeczywiscieWeb.FriendsLive do
       r -> r
     end
 
-    # Only subscribe and load data when connected (not during static render)
-    {items, messages, viewers, item_count} = if connected?(socket) do
+    # Check if connected - data loads after connection established
+    is_connected = connected?(socket)
+
+    {items, messages, viewers, item_count} = if is_connected do
       Friends.subscribe(room.code)
       Phoenix.PubSub.subscribe(Rzeczywiscie.PubSub, "friends:presence:#{room.code}")
       Presence.track_user(self(), room.code, user_id, user_color, nil)
@@ -36,7 +38,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
       combined = build_room_items(photos, notes)
       {combined, msgs, v, length(combined)}
     else
-      # During static render, send minimal data
+      # During static render, send minimal data - show loading state
       {[], [], [], 0}
     end
 
@@ -58,6 +60,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
       |> assign(:page_title, "#{room.emoji} #{room.name || room.code}")
       |> assign(:items_map, items_map)
       |> assign(:item_count, item_count)
+      |> assign(:loading, not is_connected)
       |> assign(:message_input, "")
       |> assign(:viewers, viewers)
       |> assign(:uploading, false)
@@ -174,7 +177,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
                   class="h-10 px-3 border-2 border-base-content/30 hover:border-base-content transition-colors flex items-center gap-2 cursor-pointer"
                 >
                   <div class="w-5 h-5 rounded-full border border-base-content" style={"background-color: #{@user_color}"}></div>
-                  <span class="font-bold">{@user_name || String.slice(@user_id, 0, 6)}</span>
+                  <span class="font-bold">{@user_name || if(@loading, do: "...", else: String.slice(@user_id, 0, 6))}</span>
                   <svg class="w-3 h-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                   </svg>
@@ -249,14 +252,28 @@ defmodule RzeczywiscieWeb.FriendsLive do
           <div class="grid lg:grid-cols-3 gap-6">
             <!-- Content Grid (2/3) - Masonry Layout with Photos and Notes -->
             <div class="lg:col-span-2">
-              <%= if @item_count == 0 do %>
-                <div class="flex flex-col items-center justify-center py-16 text-center border-4 border-dashed border-base-content/20">
-                  <div class="text-5xl mb-4">{@room.emoji}</div>
-                  <h3 class="text-xl font-black uppercase mb-2 opacity-50">Nothing Here Yet</h3>
-                  <p class="text-sm opacity-40 mb-4">Share the first photo or note in this room!</p>
-                  <p class="text-xs font-mono opacity-30">kruk.live/friends/{@room.code}</p>
-                </div>
-              <% else %>
+              <%= cond do %>
+                <% @loading -> %>
+                  <%!-- Loading skeleton grid --%>
+                  <div class="columns-2 sm:columns-3 gap-3 space-y-3">
+                    <%= for i <- 1..6 do %>
+                      <div class="border-4 border-base-content/30 bg-base-200 overflow-hidden break-inside-avoid animate-pulse">
+                        <div class={"aspect-square bg-base-300 #{if rem(i, 3) == 0, do: "aspect-[3/4]", else: if(rem(i, 2) == 0, do: "aspect-[4/3]", else: "aspect-square")}"}></div>
+                        <div class="p-2 border-t-2 border-base-content/30 bg-base-100 flex items-center gap-2">
+                          <div class="w-3 h-3 rounded-full bg-base-300"></div>
+                          <div class="h-2 bg-base-300 rounded w-16"></div>
+                        </div>
+                      </div>
+                    <% end %>
+                  </div>
+                <% @item_count == 0 -> %>
+                  <div class="flex flex-col items-center justify-center py-16 text-center border-4 border-dashed border-base-content/20">
+                    <div class="text-5xl mb-4">{@room.emoji}</div>
+                    <h3 class="text-xl font-black uppercase mb-2 opacity-50">Nothing Here Yet</h3>
+                    <p class="text-sm opacity-40 mb-4">Share the first photo or note in this room!</p>
+                    <p class="text-xs font-mono opacity-30">kruk.live/friends/{@room.code}</p>
+                  </div>
+                <% true -> %>
                 <div class="columns-2 sm:columns-3 gap-3 space-y-3" id="items-grid" phx-update="stream" phx-hook="PhotoGrid">
                   <%= for {dom_id, item} <- @streams.items do %>
                     <%= if item.type == :photo do %>
@@ -352,31 +369,44 @@ defmodule RzeczywiscieWeb.FriendsLive do
 
                 <!-- Messages -->
                 <div class="flex-1 overflow-y-auto p-3 space-y-3" id="messages-container" phx-update="stream" phx-hook="ScrollToBottom">
-                  <%= for {dom_id, message} <- @streams.messages do %>
-                    <div id={dom_id} class="group flex gap-2">
-                      <div class="w-6 h-6 rounded-full border border-base-content flex-shrink-0" style={"background-color: #{message.user_color}"}></div>
-                      <div class="flex-1 min-w-0">
-                        <div class="text-[10px] font-bold opacity-40 mb-0.5 flex items-center gap-2">
-                          <span>{message.user_name || String.slice(message.user_id, 0, 6)}</span>
-                          <span>·</span>
-                          <span>{format_time(message.sent_at)}</span>
-                          <%= if message.user_id == @user_id do %>
-                            <button
-                              type="button"
-                              phx-click="delete-message"
-                              phx-value-id={message.id}
-                              class="opacity-0 group-hover:opacity-100 text-error hover:text-error/80 transition-opacity"
-                            >✕</button>
-                          <% end %>
+                  <%= if @loading do %>
+                    <%!-- Loading skeleton for messages --%>
+                    <%= for i <- 1..3 do %>
+                      <div class="flex gap-2 animate-pulse">
+                        <div class="w-6 h-6 rounded-full bg-base-300 flex-shrink-0"></div>
+                        <div class="flex-1">
+                          <div class="h-2 bg-base-300 rounded w-20 mb-2"></div>
+                          <div class={"h-4 bg-base-300 rounded #{if rem(i, 2) == 0, do: "w-32", else: "w-48"}"}></div>
                         </div>
-                        <div class="text-sm break-words">{message.content}</div>
                       </div>
+                    <% end %>
+                  <% else %>
+                    <%= for {dom_id, message} <- @streams.messages do %>
+                      <div id={dom_id} class="group flex gap-2">
+                        <div class="w-6 h-6 rounded-full border border-base-content flex-shrink-0" style={"background-color: #{message.user_color}"}></div>
+                        <div class="flex-1 min-w-0">
+                          <div class="text-[10px] font-bold opacity-40 mb-0.5 flex items-center gap-2">
+                            <span>{message.user_name || String.slice(message.user_id, 0, 6)}</span>
+                            <span>·</span>
+                            <span>{format_time(message.sent_at)}</span>
+                            <%= if message.user_id == @user_id do %>
+                              <button
+                                type="button"
+                                phx-click="delete-message"
+                                phx-value-id={message.id}
+                                class="opacity-0 group-hover:opacity-100 text-error hover:text-error/80 transition-opacity"
+                              >✕</button>
+                            <% end %>
+                          </div>
+                          <div class="text-sm break-words">{message.content}</div>
+                        </div>
+                      </div>
+                    <% end %>
+                    <%!-- Empty state shown via CSS :only-child when no messages --%>
+                    <div class="hidden only:block text-center text-sm opacity-40 py-8">
+                      No messages yet.<br/>Say hi! 👋
                     </div>
                   <% end %>
-                  <%!-- Empty state shown via CSS :only-child when no messages --%>
-                  <div class="hidden only:block text-center text-sm opacity-40 py-8">
-                    No messages yet.<br/>Say hi! 👋
-                  </div>
                 </div>
 
                 <!-- Message Input -->
@@ -613,7 +643,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
               <div class="mb-6 flex items-center gap-4">
                 <div class="w-12 h-12 rounded-full border-2 border-base-content" style={"background-color: #{@user_color}"}></div>
                 <div>
-                  <div class="font-bold">{@user_name || String.slice(@user_id, 0, 6)}</div>
+                  <div class="font-bold">{@user_name || if(@loading, do: "...", else: String.slice(@user_id, 0, 6))}</div>
                   <div class="text-xs opacity-40 flex items-center gap-1">
                     ID: {String.slice(@user_id, 0, 8)}
                     <%= if @is_linked_device do %>

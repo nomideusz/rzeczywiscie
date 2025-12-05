@@ -11,6 +11,7 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
       |> assign(:user_color, nil)
       |> assign(:items, [])
       |> assign(:item_count, 0)
+      |> assign(:loading, true)
       |> assign(:page_title, "My Board")
       |> assign(:show_lightbox, false)
       |> assign(:lightbox_item, nil)
@@ -154,25 +155,39 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
 
         <!-- Items Grid -->
         <div class="container mx-auto px-4 py-6">
-          <%= if @items == [] do %>
-            <div class="flex flex-col items-center justify-center py-16 text-center border-4 border-dashed border-base-content/20 bg-base-100">
-              <div class="text-5xl mb-4">🎨</div>
-              <h3 class="text-xl font-black uppercase mb-2 opacity-50">Your Board is Empty</h3>
-              <p class="text-sm opacity-40 mb-6">Share photos in rooms or add text cards!</p>
-              <div class="flex gap-3">
-                <.link navigate="/friends" class="px-6 py-3 border-2 border-base-content bg-base-content text-base-100 font-bold uppercase hover:opacity-80 transition-opacity">
-                  Go to Friends
-                </.link>
-                <button
-                  type="button"
-                  phx-click="open-text-modal"
-                  class="px-6 py-3 border-2 border-base-content font-bold uppercase hover:bg-base-content hover:text-base-100 transition-colors"
-                >
-                  Add Note
-                </button>
+          <%= cond do %>
+            <% @loading -> %>
+              <%!-- Loading skeleton grid --%>
+              <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                <%= for i <- 1..8 do %>
+                  <div class="border-4 border-base-content/30 bg-base-200 overflow-hidden animate-pulse">
+                    <div class={"aspect-square bg-base-300 #{if rem(i, 3) == 0, do: "aspect-[3/4]", else: "aspect-square"}"}></div>
+                    <div class="p-2 border-t-2 border-base-content/30 bg-base-100">
+                      <div class="h-2 bg-base-300 rounded w-16 mb-1"></div>
+                      <div class="h-2 bg-base-300 rounded w-10"></div>
+                    </div>
+                  </div>
+                <% end %>
               </div>
-            </div>
-          <% else %>
+            <% @items == [] -> %>
+              <div class="flex flex-col items-center justify-center py-16 text-center border-4 border-dashed border-base-content/20 bg-base-100">
+                <div class="text-5xl mb-4">🎨</div>
+                <h3 class="text-xl font-black uppercase mb-2 opacity-50">Your Board is Empty</h3>
+                <p class="text-sm opacity-40 mb-6">Share photos in rooms or add text cards!</p>
+                <div class="flex gap-3">
+                  <.link navigate="/friends" class="px-6 py-3 border-2 border-base-content bg-base-content text-base-100 font-bold uppercase hover:opacity-80 transition-opacity">
+                    Go to Friends
+                  </.link>
+                  <button
+                    type="button"
+                    phx-click="open-text-modal"
+                    class="px-6 py-3 border-2 border-base-content font-bold uppercase hover:bg-base-content hover:text-base-100 transition-colors"
+                  >
+                    Add Note
+                  </button>
+                </div>
+              </div>
+            <% true -> %>
             <div
               id="user-items-grid"
               class={[
@@ -475,7 +490,8 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
      |> assign(:user_name, user_name)
      |> assign(:user_color, user_color)
      |> assign(:items, items)
-     |> assign(:item_count, length(items))}
+     |> assign(:item_count, length(items))
+     |> assign(:loading, false)}
   end
 
   def handle_event("validate-upload", _params, socket), do: {:noreply, socket}
