@@ -177,21 +177,26 @@
 
 /* User photos reorder mode */
 .reorder-mode .photo-item {
-  transition: transform 0.2s ease, opacity 0.2s ease, border-color 0.15s ease;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
-.reorder-mode .photo-item:hover {
-  transform: scale(1.02);
+/* Drag placeholder */
+.photo-item-placeholder {
+  background: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 5px,
+    oklch(50% 0 0 / 0.1) 5px,
+    oklch(50% 0 0 / 0.1) 10px
+  );
+  animation: placeholder-pulse 1s ease-in-out infinite;
 }
 
-.reorder-mode .photo-item.dragging {
-  opacity: 0.5;
-  transform: scale(0.95);
-}
-
-/* Drag target highlight */
-.photo-item.border-primary {
-  border-color: oklch(var(--color-primary)) !important;
+@keyframes placeholder-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.6; }
 }
 
 /* Text card line clamping */

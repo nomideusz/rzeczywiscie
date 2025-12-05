@@ -374,16 +374,15 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
       id={"photo-#{@photo.id}"}
       data-id={"photo-#{@photo.id}"}
       class={[
-        "photo-item group relative border-4 border-base-content bg-base-100 overflow-hidden",
-        if(@reordering, do: "cursor-grab active:cursor-grabbing", else: "cursor-zoom-in hover:translate-x-0.5 hover:translate-y-0.5"),
-        "transition-transform"
+        "photo-item group relative border-4 bg-base-100 overflow-hidden transition-all select-none",
+        if(@reordering, do: "cursor-grab active:cursor-grabbing border-primary/50 ring-2 ring-primary/30", else: "cursor-zoom-in hover:translate-x-0.5 hover:translate-y-0.5 border-base-content")
       ]}
     >
       <div class="absolute inset-0 bg-base-content translate-x-1 translate-y-1 -z-10"></div>
       
       <%= if @reordering do %>
-        <div class="absolute inset-0 z-10 flex items-center justify-center bg-base-content/20 opacity-0 group-hover:opacity-100 transition-opacity">
-          <div class="text-4xl text-base-content/60">⋮⋮</div>
+        <div class="absolute top-1 right-1 z-20 bg-primary text-primary-content text-xs px-1.5 py-0.5 font-bold rounded">
+          ↕
         </div>
       <% end %>
       
@@ -392,7 +391,7 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
         phx-click={unless @reordering, do: "open-lightbox"}
         phx-value-id={@photo.id}
         phx-value-type="photo"
-        class="w-full aspect-square overflow-hidden bg-base-200 block relative"
+        class={["w-full aspect-square overflow-hidden bg-base-200 block relative", if(@reordering, do: "pointer-events-none", else: "")]}
         disabled={@reordering}
       >
         <img
@@ -409,7 +408,7 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
         <% end %>
       </button>
       
-      <div class="p-2 border-t-2 border-base-content bg-base-100">
+      <div class={["p-2 border-t-2 border-base-content bg-base-100", if(@reordering, do: "pointer-events-none", else: "")]}>
         <div class="flex items-center gap-1 text-[10px]">
           <span class="opacity-40">{@photo.room_emoji}</span>
           <span class="font-bold truncate">{@photo.room_name}</span>
@@ -428,16 +427,15 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
       id={"text-#{@card.id}"}
       data-id={"text-#{@card.id}"}
       class={[
-        "photo-item group relative border-4 border-base-content overflow-hidden bg-base-100",
-        if(@reordering, do: "cursor-grab active:cursor-grabbing", else: "cursor-pointer hover:translate-x-0.5 hover:translate-y-0.5"),
-        "transition-transform"
+        "photo-item group relative border-4 overflow-hidden bg-base-100 transition-all select-none",
+        if(@reordering, do: "cursor-grab active:cursor-grabbing border-primary/50 ring-2 ring-primary/30", else: "cursor-pointer hover:translate-x-0.5 hover:translate-y-0.5 border-base-content")
       ]}
     >
       <div class="absolute inset-0 bg-base-content translate-x-1 translate-y-1 -z-10"></div>
       
       <%= if @reordering do %>
-        <div class="absolute inset-0 z-10 flex items-center justify-center bg-base-content/20 opacity-0 group-hover:opacity-100 transition-opacity">
-          <div class="text-4xl text-base-content/60">⋮⋮</div>
+        <div class="absolute top-1 right-1 z-20 bg-primary text-primary-content text-xs px-1.5 py-0.5 font-bold rounded">
+          ↕
         </div>
       <% end %>
       
@@ -445,7 +443,7 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
         type="button"
         phx-click={unless @reordering, do: "edit-text-card"}
         phx-value-id={@card.id}
-        class="w-full aspect-square flex items-center justify-center p-4 bg-base-200"
+        class={["w-full aspect-square flex items-center justify-center p-4 bg-base-200", if(@reordering, do: "pointer-events-none", else: "")]}
         disabled={@reordering}
       >
         <p class="text-center text-sm leading-relaxed break-words max-w-full line-clamp-6">
@@ -453,7 +451,7 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
         </p>
       </button>
       
-      <div class="p-2 border-t-2 border-base-content bg-base-100">
+      <div class={["p-2 border-t-2 border-base-content bg-base-100", if(@reordering, do: "pointer-events-none", else: "")]}>
         <div class="flex items-center gap-1 text-[10px]">
           <span class="opacity-40">📝</span>
           <span class="font-bold">Note</span>

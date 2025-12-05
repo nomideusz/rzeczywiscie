@@ -284,98 +284,169 @@ const Hooks = {
     },
     SortablePhotos: {
         mounted() {
+            this.draggedItem = null
+            this.placeholder = null
             this.initSortable()
         },
         updated() {
-            // Reinit if reordering state changed
-            const isReordering = this.el.dataset.reordering === 'true'
-            if (this.sortable) {
-                this.sortable.option('disabled', !isReordering)
-            }
+            // Re-apply event listeners after DOM updates
+            this.cleanupListeners()
+            this.initSortable()
         },
         destroyed() {
-            if (this.sortable) {
-                this.sortable.destroy()
-            }
+            this.cleanupListeners()
         },
-        initSortable() {
-            // Use native HTML5 drag and drop for simplicity
-            const grid = this.el
-            let draggedItem = null
-            let draggedOverItem = null
-            
-            const items = () => grid.querySelectorAll('.photo-item')
-            
-            const enableDrag = () => {
-                items().forEach(item => {
-                    item.setAttribute('draggable', 'true')
-                    
-                    item.addEventListener('dragstart', (e) => {
-                        if (grid.dataset.reordering !== 'true') {
-                            e.preventDefault()
-                            return
-                        }
-                        draggedItem = item
-                        item.classList.add('opacity-50', 'scale-95')
-                        e.dataTransfer.effectAllowed = 'move'
-                    })
-                    
-                    item.addEventListener('dragend', () => {
-                        if (draggedItem) {
-                            draggedItem.classList.remove('opacity-50', 'scale-95')
-                        }
-                        items().forEach(i => i.classList.remove('border-primary'))
-                        draggedItem = null
-                        draggedOverItem = null
-                    })
-                    
-                    item.addEventListener('dragover', (e) => {
-                        if (grid.dataset.reordering !== 'true') return
-                        e.preventDefault()
-                        e.dataTransfer.dropEffect = 'move'
-                        
-                        if (item !== draggedItem && item !== draggedOverItem) {
-                            items().forEach(i => i.classList.remove('border-primary'))
-                            item.classList.add('border-primary')
-                            draggedOverItem = item
-                        }
-                    })
-                    
-                    item.addEventListener('drop', (e) => {
-                        if (grid.dataset.reordering !== 'true') return
-                        e.preventDefault()
-                        
-                        if (draggedItem && item !== draggedItem) {
-                            // Swap positions in DOM
-                            const allItems = [...items()]
-                            const draggedIdx = allItems.indexOf(draggedItem)
-                            const targetIdx = allItems.indexOf(item)
-                            
-                            if (draggedIdx < targetIdx) {
-                                item.parentNode.insertBefore(draggedItem, item.nextSibling)
-                            } else {
-                                item.parentNode.insertBefore(draggedItem, item)
-                            }
-                            
-                            // Send new order to server
-                            const newOrder = [...grid.querySelectorAll('.photo-item')].map(i => i.dataset.id)
-                            this.pushEvent('reorder-photos', { order: newOrder })
-                        }
-                    })
+        cleanupListeners() {
+            if (this.listeners) {
+                this.listeners.forEach(({ el, event, handler }) => {
+                    el.removeEventListener(event, handler)
                 })
             }
+            this.listeners = []
+        },
+        initSortable() {
+            const grid = this.el
+            const hook = this
+            this.listeners = []
             
-            enableDrag()
+            const addListener = (el, event, handler) => {
+                el.addEventListener(event, handler)
+                this.listeners.push({ el, event, handler })
+            }
             
-            // Store reference for cleanup
-            this.sortable = {
-                option: (key, value) => {
-                    // Simple enable/disable toggle
-                },
-                destroy: () => {
-                    // Cleanup handled by removing elements
+            const items = () => [...grid.querySelectorAll('.photo-item')]
+            
+            const getItemAtPoint = (x, y) => {
+                const elements = document.elementsFromPoint(x, y)
+                return elements.find(el => el.classList.contains('photo-item') && el !== hook.draggedItem)
+            }
+            
+            const saveOrder = () => {
+                const newOrder = items().map(i => i.dataset.id)
+                hook.pushEvent('reorder-photos', { order: newOrder })
+            }
+            
+            items().forEach(item => {
+                // Mouse events
+                addListener(item, 'mousedown', (e) => {
+                    if (grid.dataset.reordering !== 'true') return
+                    if (e.button !== 0) return // Only left click
+                    
+                    e.preventDefault()
+                    hook.startDrag(item, e.clientX, e.clientY)
+                })
+                
+                // Touch events
+                addListener(item, 'touchstart', (e) => {
+                    if (grid.dataset.reordering !== 'true') return
+                    
+                    const touch = e.touches[0]
+                    hook.startDrag(item, touch.clientX, touch.clientY)
+                }, { passive: true })
+            })
+            
+            // Global move/end events
+            addListener(document, 'mousemove', (e) => {
+                if (!hook.draggedItem) return
+                hook.onDrag(e.clientX, e.clientY, getItemAtPoint)
+            })
+            
+            addListener(document, 'touchmove', (e) => {
+                if (!hook.draggedItem) return
+                const touch = e.touches[0]
+                hook.onDrag(touch.clientX, touch.clientY, getItemAtPoint)
+            }, { passive: true })
+            
+            addListener(document, 'mouseup', () => {
+                if (hook.draggedItem) {
+                    hook.endDrag(saveOrder)
+                }
+            })
+            
+            addListener(document, 'touchend', () => {
+                if (hook.draggedItem) {
+                    hook.endDrag(saveOrder)
+                }
+            })
+        },
+        startDrag(item, x, y) {
+            this.draggedItem = item
+            this.startX = x
+            this.startY = y
+            this.initialRect = item.getBoundingClientRect()
+            
+            // Style the dragged item
+            item.style.position = 'fixed'
+            item.style.zIndex = '1000'
+            item.style.width = this.initialRect.width + 'px'
+            item.style.height = this.initialRect.height + 'px'
+            item.style.left = this.initialRect.left + 'px'
+            item.style.top = this.initialRect.top + 'px'
+            item.style.pointerEvents = 'none'
+            item.style.opacity = '0.9'
+            item.style.transform = 'scale(1.05) rotate(2deg)'
+            item.style.transition = 'transform 0.1s, opacity 0.1s'
+            item.style.boxShadow = '0 10px 30px rgba(0,0,0,0.3)'
+            
+            // Create placeholder
+            this.placeholder = document.createElement('div')
+            this.placeholder.className = 'photo-item-placeholder'
+            this.placeholder.style.width = this.initialRect.width + 'px'
+            this.placeholder.style.height = this.initialRect.height + 'px'
+            this.placeholder.style.border = '3px dashed currentColor'
+            this.placeholder.style.opacity = '0.4'
+            this.placeholder.style.borderRadius = '4px'
+            item.parentNode.insertBefore(this.placeholder, item)
+        },
+        onDrag(x, y, getItemAtPoint) {
+            if (!this.draggedItem) return
+            
+            // Move the dragged item
+            const dx = x - this.startX
+            const dy = y - this.startY
+            this.draggedItem.style.left = (this.initialRect.left + dx) + 'px'
+            this.draggedItem.style.top = (this.initialRect.top + dy) + 'px'
+            
+            // Find item under cursor
+            const targetItem = getItemAtPoint(x, y)
+            if (targetItem && targetItem !== this.placeholder) {
+                const targetRect = targetItem.getBoundingClientRect()
+                const midY = targetRect.top + targetRect.height / 2
+                
+                if (y < midY) {
+                    targetItem.parentNode.insertBefore(this.placeholder, targetItem)
+                } else {
+                    targetItem.parentNode.insertBefore(this.placeholder, targetItem.nextSibling)
                 }
             }
+        },
+        endDrag(saveOrder) {
+            if (!this.draggedItem) return
+            
+            // Reset styles
+            this.draggedItem.style.position = ''
+            this.draggedItem.style.zIndex = ''
+            this.draggedItem.style.width = ''
+            this.draggedItem.style.height = ''
+            this.draggedItem.style.left = ''
+            this.draggedItem.style.top = ''
+            this.draggedItem.style.pointerEvents = ''
+            this.draggedItem.style.opacity = ''
+            this.draggedItem.style.transform = ''
+            this.draggedItem.style.transition = ''
+            this.draggedItem.style.boxShadow = ''
+            
+            // Move item to placeholder position
+            if (this.placeholder && this.placeholder.parentNode) {
+                this.placeholder.parentNode.insertBefore(this.draggedItem, this.placeholder)
+                this.placeholder.remove()
+            }
+            
+            this.draggedItem = null
+            this.placeholder = null
+            
+            // Save the new order
+            saveOrder()
         }
     }
 }
