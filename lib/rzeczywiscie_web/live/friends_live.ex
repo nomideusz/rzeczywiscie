@@ -373,11 +373,10 @@ defmodule RzeczywiscieWeb.FriendsLive do
                       </div>
                     </div>
                   <% end %>
-                  <%= if @messages == [] do %>
-                    <div class="text-center text-sm opacity-40 py-8">
-                      No messages yet.<br/>Say hi! 👋
-                    </div>
-                  <% end %>
+                  <%!-- Empty state shown via CSS :only-child when no messages --%>
+                  <div class="hidden only:block text-center text-sm opacity-40 py-8">
+                    No messages yet.<br/>Say hi! 👋
+                  </div>
                 </div>
 
                 <!-- Message Input -->
