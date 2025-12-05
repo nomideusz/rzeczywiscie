@@ -9,6 +9,7 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
       |> assign(:user_id, nil)
       |> assign(:user_name, nil)
       |> assign(:user_color, nil)
+      |> assign(:device_fingerprint, nil)
       |> assign(:items, [])
       |> assign(:item_count, 0)
       |> assign(:loading, true)
@@ -477,21 +478,29 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
   end
 
   # Handle device fingerprint from JS hook
-  def handle_event("set_user_id", %{"user_id" => device_fingerprint, "user_name" => user_name}, socket) do
-    linked_id = Friends.get_linked_user_id(device_fingerprint)
-    user_id = linked_id || device_fingerprint
+  def handle_event("set_user_id", %{"user_id" => device_fingerprint, "user_name" => client_user_name}, socket) do
+    # Get device info from server (includes linked user_id and stored username)
+    {user_id, server_user_name} = Friends.get_device_info(device_fingerprint)
     user_color = generate_user_color(user_id)
     
+    # Prefer server-stored username over client-stored
+    user_name = server_user_name || client_user_name
+    
     items = Friends.list_user_items(user_id)
+    
+    # Subscribe to username updates for this device
+    Phoenix.PubSub.subscribe(Rzeczywiscie.PubSub, "friends:user:#{device_fingerprint}")
     
     {:noreply,
      socket
      |> assign(:user_id, user_id)
      |> assign(:user_name, user_name)
+     |> assign(:device_fingerprint, device_fingerprint)
      |> assign(:user_color, user_color)
      |> assign(:items, items)
      |> assign(:item_count, length(items))
-     |> assign(:loading, false)}
+     |> assign(:loading, false)
+     |> push_event("save_user_name", %{name: user_name})}
   end
 
   def handle_event("validate-upload", _params, socket), do: {:noreply, socket}
@@ -692,6 +701,14 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
     else
       {:noreply, socket}
     end
+  end
+
+  # Handle username changes from other sessions of the same device
+  def handle_info({:username_changed, new_name}, socket) do
+    {:noreply,
+     socket
+     |> assign(:user_name, new_name)
+     |> push_event("save_user_name", %{name: new_name})}
   end
 
   defp generate_user_color(user_id) do

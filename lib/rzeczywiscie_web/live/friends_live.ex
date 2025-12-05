@@ -862,18 +862,24 @@ defmodule RzeczywiscieWeb.FriendsLive do
     # Client sends device-specific user_id (fingerprint based on hardware)
     old_user_id = socket.assigns.user_id
     room = socket.assigns.room
-    user_name = params["user_name"]
+    client_user_name = params["user_name"]
     client_linked_id = params["linked_user_id"]
 
-    # Check if this device is linked to another account (server-side check)
-    server_linked_id = Friends.get_linked_user_id(device_fingerprint)
+    # Get device info from server (includes linked user_id and stored username)
+    {server_user_id, server_user_name} = Friends.get_device_info(device_fingerprint)
     
     # Use server link first, then client stored link, then fingerprint
     {actual_user_id, is_linked} = cond do
-      server_linked_id != nil -> {server_linked_id, true}
+      server_user_id != device_fingerprint -> {server_user_id, true}
       client_linked_id != nil && client_linked_id != "" -> {client_linked_id, true}
       true -> {device_fingerprint, false}
     end
+
+    # Prefer server-stored username, fall back to client-stored
+    user_name = server_user_name || client_user_name
+
+    # Subscribe to username updates for this device
+    Phoenix.PubSub.subscribe(Rzeczywiscie.PubSub, "friends:user:#{device_fingerprint}")
 
     if old_user_id != actual_user_id do
       # Update presence with the resolved user_id
@@ -892,13 +898,22 @@ defmodule RzeczywiscieWeb.FriendsLive do
        |> assign(:user_name, user_name)
        |> assign(:device_fingerprint, device_fingerprint)
        |> assign(:is_linked_device, is_linked)
-       |> push_event("linked_user_id", %{user_id: actual_user_id, is_linked: is_linked})}
+       |> assign(:loading, false)
+       |> push_event("linked_user_id", %{user_id: actual_user_id, is_linked: is_linked})
+       |> push_event("save_user_name", %{name: user_name})}
     else
+      # Update presence with correct name if it changed
+      if user_name != socket.assigns.user_name do
+        Presence.update_user(self(), room.code, actual_user_id, socket.assigns.user_color, user_name)
+      end
+
       {:noreply,
        socket
        |> assign(:user_name, user_name)
        |> assign(:device_fingerprint, device_fingerprint)
-       |> assign(:is_linked_device, is_linked)}
+       |> assign(:is_linked_device, is_linked)
+       |> assign(:loading, false)
+       |> push_event("save_user_name", %{name: user_name})}
     end
   end
 
@@ -1231,6 +1246,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
   def handle_event("save-name", %{"name" => name}, socket) do
     name = String.trim(name)
     name = if name == "", do: nil, else: String.slice(name, 0, 20)
+    device_fingerprint = socket.assigns.device_fingerprint
     
     # Check if name is taken by another user in the room
     # Check both presence system and local viewers list for robustness
@@ -1244,6 +1260,17 @@ defmodule RzeczywiscieWeb.FriendsLive do
     if name_taken_in_presence || name_taken_in_viewers do
       {:noreply, assign(socket, :name_error, "Name already taken in this room")}
     else
+      # Save username to server (linked to device fingerprint)
+      if device_fingerprint do
+        Friends.save_username(device_fingerprint, name)
+        # Broadcast to all sessions of this device
+        Phoenix.PubSub.broadcast(
+          Rzeczywiscie.PubSub,
+          "friends:user:#{device_fingerprint}",
+          {:username_changed, name}
+        )
+      end
+      
       # Update presence with the new name
       Presence.update_user(self(), socket.assigns.room.code, socket.assigns.user_id, socket.assigns.user_color, name)
       
@@ -1533,6 +1560,21 @@ defmodule RzeczywiscieWeb.FriendsLive do
   def handle_info(%{event: "presence_diff", payload: _}, socket) do
     viewers = Presence.list_users(socket.assigns.room.code)
     {:noreply, assign(socket, :viewers, viewers)}
+  end
+
+  # Handle username changes from other sessions of the same device
+  def handle_info({:username_changed, new_name}, socket) do
+    room = socket.assigns.room
+    user_id = socket.assigns.user_id
+    user_color = socket.assigns.user_color
+
+    # Update presence with the new name
+    Presence.update_user(self(), room.code, user_id, user_color, new_name)
+
+    {:noreply,
+     socket
+     |> assign(:user_name, new_name)
+     |> push_event("save_user_name", %{name: new_name})}
   end
 
   # --- Helpers ---

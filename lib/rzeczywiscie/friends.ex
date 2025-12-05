@@ -484,6 +484,68 @@ defmodule Rzeczywiscie.Friends do
     end
   end
 
+  # --- Username Management ---
+
+  @doc """
+  Get the stored username for a device fingerprint.
+  Returns nil if no username is stored.
+  """
+  def get_username(device_fingerprint) when is_binary(device_fingerprint) do
+    case Repo.get_by(DeviceLink, device_fingerprint: device_fingerprint) do
+      nil -> nil
+      link -> link.user_name
+    end
+  end
+  def get_username(_), do: nil
+
+  @doc """
+  Save/update username for a device fingerprint.
+  Creates a DeviceLink record if one doesn't exist.
+  Returns {:ok, username} on success.
+  """
+  def save_username(device_fingerprint, user_name) when is_binary(device_fingerprint) do
+    user_name = if user_name, do: String.trim(user_name), else: nil
+    user_name = if user_name == "", do: nil, else: user_name
+
+    case Repo.get_by(DeviceLink, device_fingerprint: device_fingerprint) do
+      nil ->
+        # Create new device link with username
+        %DeviceLink{}
+        |> DeviceLink.changeset(%{device_fingerprint: device_fingerprint, user_name: user_name})
+        |> Repo.insert()
+        |> case do
+          {:ok, _} -> {:ok, user_name}
+          {:error, changeset} -> {:error, changeset}
+        end
+
+      existing ->
+        # Update existing device link
+        existing
+        |> DeviceLink.name_changeset(%{user_name: user_name})
+        |> Repo.update()
+        |> case do
+          {:ok, _} -> {:ok, user_name}
+          {:error, changeset} -> {:error, changeset}
+        end
+    end
+  end
+  def save_username(_, _), do: {:error, :invalid_fingerprint}
+
+  @doc """
+  Get device info (user_id and username) for a device fingerprint.
+  Returns {user_id, username} where user_id may be master_user_id if linked.
+  """
+  def get_device_info(device_fingerprint) when is_binary(device_fingerprint) do
+    case Repo.get_by(DeviceLink, device_fingerprint: device_fingerprint) do
+      nil -> 
+        {device_fingerprint, nil}
+      link -> 
+        user_id = link.master_user_id || device_fingerprint
+        {user_id, link.user_name}
+    end
+  end
+  def get_device_info(_), do: {nil, nil}
+
   @doc """
   Unlink a device (remove the device link).
   """
