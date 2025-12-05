@@ -87,7 +87,10 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
           <div class="container mx-auto px-4 py-4">
             <div class="flex items-center justify-between flex-wrap gap-3">
               <div class="flex items-center gap-4">
-                <.link navigate="/friends" class="text-2xl hover:opacity-60 transition-opacity">←</.link>
+                <.link navigate="/friends" class="h-10 px-3 border-2 border-base-content font-bold uppercase text-sm bg-base-100 hover:bg-base-content hover:text-base-100 transition-colors flex items-center gap-2 cursor-pointer">
+                  <span>←</span>
+                  <span class="hidden sm:inline">Lobby</span>
+                </.link>
                 <div class="flex items-center gap-3">
                   <%= if @user_color do %>
                     <div class="w-10 h-10 rounded-full border-2 border-base-content" style={"background-color: #{@user_color}"}></div>
@@ -283,20 +286,22 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
               </div>
               
               <!-- Actions -->
-              <div class="flex gap-3">
+              <div class="flex gap-2">
                 <button
                   type="button"
                   phx-click="save-photo-description"
-                  class="flex-1 px-4 py-3 border-2 border-base-content bg-base-content text-base-100 font-bold uppercase"
+                  class="flex-1 px-4 py-3 border-2 border-base-content bg-base-content text-base-100 font-bold uppercase cursor-pointer"
                 >
                   Save
                 </button>
                 <button
                   type="button"
-                  phx-click="close-photo-modal"
-                  class="px-4 py-3 border-2 border-base-content font-bold uppercase hover:bg-base-200 transition-colors"
+                  phx-click="delete-photo"
+                  phx-value-id={@editing_photo.id}
+                  data-confirm="Are you sure you want to delete this photo?"
+                  class="px-4 py-3 border-2 border-error text-error font-bold uppercase cursor-pointer hover:bg-error hover:text-error-content transition-colors"
                 >
-                  Cancel
+                  🗑
                 </button>
               </div>
             </div>
@@ -559,6 +564,25 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
       end
     else
       {:noreply, socket}
+    end
+  end
+
+  def handle_event("delete-photo", %{"id" => id}, socket) do
+    photo_id = String.to_integer(id)
+    user_id = socket.assigns.user_id
+
+    case Friends.delete_photo(photo_id, user_id) do
+      {:ok, _} ->
+        items = Friends.list_user_items(user_id)
+        {:noreply,
+         socket
+         |> assign(:items, items)
+         |> assign(:item_count, length(items))
+         |> assign(:show_photo_modal, false)
+         |> assign(:editing_photo, nil)
+         |> put_flash(:info, "Photo deleted")}
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Cannot delete")}
     end
   end
 

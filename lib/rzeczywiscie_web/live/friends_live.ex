@@ -143,17 +143,17 @@ defmodule RzeczywiscieWeb.FriendsLive do
                 <!-- My Board -->
                 <.link
                   navigate="/friends/my-photos"
-                  class="flex items-center gap-2 px-3 py-2 border-2 border-base-content/30 hover:border-base-content hover:bg-base-content hover:text-base-100 transition-colors text-sm"
+                  class="h-10 px-3 border-2 border-base-content font-bold uppercase text-sm bg-base-100 hover:bg-base-content hover:text-base-100 transition-colors flex items-center gap-2 cursor-pointer"
                 >
-                  <span class="text-lg">🎨</span>
-                  <span class="font-bold hidden sm:inline">My Board</span>
+                  <span>🎨</span>
+                  <span class="hidden sm:inline">Board</span>
                 </.link>
                 
                 <!-- User Name / Profile -->
                 <button
                   type="button"
                   phx-click="open-name-modal"
-                  class="flex items-center gap-2 px-3 py-2 border-2 border-base-content/30 hover:border-base-content transition-colors text-sm"
+                  class="h-10 px-3 border-2 border-base-content/30 hover:border-base-content transition-colors flex items-center gap-2 cursor-pointer"
                 >
                   <div class="w-5 h-5 rounded-full border border-base-content" style={"background-color: #{@user_color}"}></div>
                   <span class="font-bold">{@user_name || String.slice(@user_id, 0, 6)}</span>
@@ -265,6 +265,11 @@ defmodule RzeczywiscieWeb.FriendsLive do
                       >
                         <div class="photo-skeleton absolute inset-0 bg-base-300"></div>
                         <img src={photo.thumbnail_url || photo.data_url} alt="" class="photo-image w-full h-auto relative" loading="lazy" decoding="async" />
+                        <%= if photo.description do %>
+                          <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2 pt-4">
+                            <p class="text-white text-[10px] leading-tight line-clamp-2">{photo.description}</p>
+                          </div>
+                        <% end %>
                       </button>
                       
                       <div class="p-2 border-t-2 border-base-content bg-base-100 flex items-center gap-2">
@@ -448,12 +453,23 @@ defmodule RzeczywiscieWeb.FriendsLive do
                   <p class="text-xs opacity-40 mt-1 text-right">{String.length(@photo_description_input)}/200</p>
                 </div>
                 
-                <button
-                  type="submit"
-                  class="w-full px-4 py-3 border-2 border-base-content bg-base-content text-base-100 font-bold uppercase cursor-pointer"
-                >
-                  Save
-                </button>
+                <div class="flex gap-2">
+                  <button
+                    type="submit"
+                    class="flex-1 px-4 py-3 border-2 border-base-content bg-base-content text-base-100 font-bold uppercase cursor-pointer"
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    phx-click="delete-photo"
+                    phx-value-id={@editing_photo.id}
+                    data-confirm="Are you sure you want to delete this photo?"
+                    class="px-4 py-3 border-2 border-error text-error font-bold uppercase cursor-pointer hover:bg-error hover:text-error-content transition-colors"
+                  >
+                    🗑 Delete
+                  </button>
+                </div>
               </form>
             </div>
           </div>
@@ -841,6 +857,26 @@ defmodule RzeczywiscieWeb.FriendsLive do
       Friends.set_photo_thumbnail(photo_id, thumbnail, socket.assigns.user_id)
     end
     {:noreply, socket}
+  end
+
+  # Delete photo
+  def handle_event("delete-photo", %{"id" => id}, socket) do
+    photo_id = String.to_integer(id)
+    user_id = socket.assigns.user_id
+
+    case Friends.delete_photo(photo_id, user_id) do
+      {:ok, _} ->
+        {:noreply,
+         socket
+         |> stream_delete(:photos, %{id: photo_id})
+         |> assign(:photos, Enum.reject(socket.assigns.photos, &(&1.id == photo_id)))
+         |> assign(:photo_count, max(0, socket.assigns.photo_count - 1))
+         |> assign(:show_photo_edit_modal, false)
+         |> assign(:editing_photo, nil)
+         |> put_flash(:info, "Photo deleted")}
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Cannot delete")}
+    end
   end
 
   # --- Note Events ---

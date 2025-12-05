@@ -263,6 +263,23 @@ defmodule Rzeczywiscie.Friends do
     end
   end
 
+  @doc """
+  Delete a photo. Only the photo owner can delete it.
+  """
+  def delete_photo(photo_id, user_id) do
+    case Repo.get(Photo, photo_id) do
+      nil ->
+        {:error, :not_found}
+
+      photo ->
+        if photo.user_id == user_id do
+          Repo.delete(photo)
+        else
+          {:error, :unauthorized}
+        end
+    end
+  end
+
   # Convert Photo struct to map for LiveView (with room info)
   defp photo_to_map_with_room(photo) do
     room = Repo.get(Room, photo.room_id)
