@@ -590,15 +590,21 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
 
   defp format_time(nil), do: ""
   defp format_time(datetime) do
-    now = DateTime.utc_now()
-    diff = DateTime.diff(now, datetime, :second)
+    now = NaiveDateTime.utc_now()
+    # Handle both DateTime and NaiveDateTime
+    naive_datetime = case datetime do
+      %DateTime{} -> DateTime.to_naive(datetime)
+      %NaiveDateTime{} -> datetime
+      _ -> now
+    end
+    diff = NaiveDateTime.diff(now, naive_datetime, :second)
 
     cond do
       diff < 60 -> "now"
       diff < 3600 -> "#{div(diff, 60)}m"
       diff < 86400 -> "#{div(diff, 3600)}h"
       diff < 604_800 -> "#{div(diff, 86400)}d"
-      true -> Calendar.strftime(datetime, "%b %d")
+      true -> Calendar.strftime(naive_datetime, "%b %d")
     end
   end
 end
