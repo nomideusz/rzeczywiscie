@@ -219,7 +219,7 @@ defmodule Rzeczywiscie.Friends do
   @doc """
   Update a photo's description.
   """
-  def update_photo_description(photo_id, description, user_id) do
+  def update_photo_description(photo_id, description, user_id, opts \\ []) do
     case Repo.get(Photo, photo_id) do
       nil ->
         {:error, :not_found}
@@ -230,7 +230,12 @@ defmodule Rzeczywiscie.Friends do
           |> Photo.changeset(%{description: description})
           |> Repo.update()
           |> case do
-            {:ok, updated} -> {:ok, photo_to_map_with_room(updated)}
+            {:ok, updated} -> 
+              if Keyword.get(opts, :with_room, true) do
+                {:ok, photo_to_map_with_room(updated)}
+              else
+                {:ok, photo_to_map(updated)}
+              end
             error -> error
           end
         else

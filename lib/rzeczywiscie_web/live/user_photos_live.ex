@@ -106,20 +106,16 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
               
               <div class="flex items-center gap-2">
                 <!-- Upload Photo Button -->
-                <form id="board-upload-form" phx-change="validate-upload" class="relative">
+                <form id="board-upload-form" phx-change="validate-upload">
                   <label
                     for={@uploads.photo.ref}
                     class={[
-                      "px-4 py-2 border-2 border-base-content font-bold text-sm uppercase transition-colors flex items-center gap-2 cursor-pointer",
-                      if(@uploading, do: "opacity-50", else: "hover:bg-base-content hover:text-base-100")
+                      "h-10 px-3 border-2 border-base-content font-bold text-sm uppercase transition-colors flex items-center gap-2 cursor-pointer",
+                      if(@uploading, do: "bg-base-content text-base-100 opacity-70", else: "bg-primary text-primary-content hover:opacity-80")
                     ]}
                   >
-                    <%= if @uploading do %>
-                      <span class="animate-spin">⏳</span>
-                    <% else %>
-                      <span class="text-lg">📷</span>
-                    <% end %>
-                    <span class="hidden sm:inline"><%= if @uploading, do: "Uploading...", else: "Add Photo" %></span>
+                    <span>📷</span>
+                    <span class="hidden sm:inline"><%= if @uploading, do: "...", else: "Photo" %></span>
                   </label>
                   <.live_file_input upload={@uploads.photo} class="sr-only" />
                 </form>
@@ -128,10 +124,10 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
                 <button
                   type="button"
                   phx-click="open-text-modal"
-                  class="px-4 py-2 border-2 border-base-content font-bold text-sm uppercase hover:bg-base-content hover:text-base-100 transition-colors flex items-center gap-2"
+                  class="h-10 px-3 border-2 border-base-content font-bold text-sm uppercase bg-base-100 hover:bg-base-content hover:text-base-100 transition-colors flex items-center gap-2 cursor-pointer"
                 >
-                  <span class="text-lg">📝</span>
-                  <span class="hidden sm:inline">Add Note</span>
+                  <span>📝</span>
+                  <span class="hidden sm:inline">Note</span>
                 </button>
                 
                 <%= if @item_count > 1 do %>
@@ -139,15 +135,12 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
                     type="button"
                     phx-click="toggle-reorder"
                     class={[
-                      "px-4 py-2 border-2 border-base-content font-bold text-sm uppercase transition-colors",
-                      if(@reordering, do: "bg-primary text-primary-content", else: "hover:bg-base-content hover:text-base-100")
+                      "h-10 px-3 border-2 border-base-content font-bold text-sm uppercase transition-colors flex items-center gap-2 cursor-pointer",
+                      if(@reordering, do: "bg-primary text-primary-content", else: "bg-base-100 hover:bg-base-content hover:text-base-100")
                     ]}
                   >
-                    <%= if @reordering do %>
-                      ✓ Done
-                    <% else %>
-                      ↕ Reorder
-                    <% end %>
+                    <span><%= if @reordering, do: "✓", else: "↕" %></span>
+                    <span class="hidden sm:inline"><%= if @reordering, do: "Done", else: "Reorder" %></span>
                   </button>
                 <% end %>
               </div>

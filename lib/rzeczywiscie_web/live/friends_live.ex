@@ -62,6 +62,9 @@ defmodule RzeczywiscieWeb.FriendsLive do
       |> assign(:name_error, nil)
       |> assign(:show_note_modal, false)
       |> assign(:note_input, "")
+      |> assign(:show_photo_edit_modal, false)
+      |> assign(:editing_photo, nil)
+      |> assign(:photo_description_input, "")
       |> stream(:photos, photos)
       |> stream(:messages, messages)
       |> allow_upload(:photo,
@@ -178,35 +181,32 @@ defmodule RzeczywiscieWeb.FriendsLive do
                 </div>
               </div>
 
-              <!-- Add Note Button -->
-              <button
-                type="button"
-                phx-click="open-note-modal"
-                class="relative flex-shrink-0 flex items-center gap-2 px-4 py-2 border-4 border-base-content font-bold uppercase text-sm bg-base-100 hover:bg-base-content hover:text-base-100 transition-colors"
-              >
-                <span class="text-lg">📝</span>
-                <span class="hidden sm:inline">Note</span>
-                <div class="absolute inset-0 bg-base-content translate-x-1 translate-y-1 -z-10"></div>
-              </button>
-
-              <!-- Upload Button -->
-              <form id="upload-form" phx-submit="save" phx-change="validate" class="relative flex-shrink-0">
-                <label
-                  for={@uploads.photo.ref}
-                  class={[
-                    "cursor-pointer flex items-center gap-2 px-4 py-2 border-4 border-base-content font-bold uppercase text-sm transition-all",
-                    @uploading && "bg-base-content text-base-100",
-                    not @uploading && "bg-error text-error-content hover:translate-x-1 hover:translate-y-1"
-                  ]}
+              <div class="flex items-center gap-2">
+                <!-- Add Note Button -->
+                <button
+                  type="button"
+                  phx-click="open-note-modal"
+                  class="h-10 px-3 border-2 border-base-content font-bold uppercase text-sm bg-base-100 hover:bg-base-content hover:text-base-100 transition-colors flex items-center gap-2 cursor-pointer"
                 >
-                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="square" stroke-width="2.5" d="M12 4v16m8-8H4" />
-                  </svg>
-                  <span class="hidden sm:inline"><%= if @uploading, do: "Uploading...", else: "Photo" %></span>
-                </label>
-                <.live_file_input upload={@uploads.photo} class="hidden" />
-                <div class="absolute inset-0 bg-base-content translate-x-1 translate-y-1 -z-10"></div>
-              </form>
+                  <span>📝</span>
+                  <span class="hidden sm:inline">Note</span>
+                </button>
+
+                <!-- Upload Button -->
+                <form id="upload-form" phx-submit="save" phx-change="validate">
+                  <label
+                    for={@uploads.photo.ref}
+                    class={[
+                      "h-10 px-3 border-2 border-base-content font-bold uppercase text-sm transition-colors flex items-center gap-2 cursor-pointer",
+                      if(@uploading, do: "bg-base-content text-base-100 opacity-70", else: "bg-primary text-primary-content hover:opacity-80")
+                    ]}
+                  >
+                    <span>📷</span>
+                    <span class="hidden sm:inline"><%= if @uploading, do: "...", else: "Photo" %></span>
+                  </label>
+                  <.live_file_input upload={@uploads.photo} class="sr-only" />
+                </form>
+              </div>
             </div>
           </div>
         </div>
@@ -349,18 +349,35 @@ defmodule RzeczywiscieWeb.FriendsLive do
             <button 
               type="button" 
               phx-click="close-lightbox"
-              class="absolute top-4 right-4 text-white text-3xl hover:opacity-60 z-10"
+              class="absolute top-4 right-4 text-white text-3xl hover:opacity-60 z-10 cursor-pointer"
             >×</button>
+            
+            <%= if @lightbox_photo.user_id == @user_id do %>
+              <button
+                type="button"
+                phx-click="edit-photo-description"
+                phx-value-id={@lightbox_photo.id}
+                class="absolute top-4 left-4 text-white text-sm px-3 py-2 bg-white/10 hover:bg-white/20 transition-colors z-10 flex items-center gap-2 cursor-pointer"
+              >
+                ✎ Edit
+              </button>
+            <% end %>
+            
             <img 
               src={@lightbox_photo.data_url} 
-              alt="" 
-              class="max-w-[95vw] max-h-[95vh] object-contain"
+              alt={@lightbox_photo.description || ""} 
+              class="max-w-[95vw] max-h-[80vh] object-contain"
               phx-click="close-lightbox"
             />
-            <div class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/70 text-white px-4 py-2 rounded flex items-center gap-3">
-              <div class="w-4 h-4 rounded-full" style={"background-color: #{@lightbox_photo.user_color}"}></div>
-              <span class="font-bold">{@lightbox_photo.user_name || String.slice(@lightbox_photo.user_id, 0, 6)}</span>
-              <span class="opacity-60">{format_time(@lightbox_photo.uploaded_at)}</span>
+            <div class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/70 text-white px-4 py-2 rounded text-center max-w-md">
+              <div class="flex items-center justify-center gap-3 mb-1">
+                <div class="w-4 h-4 rounded-full" style={"background-color: #{@lightbox_photo.user_color}"}></div>
+                <span class="font-bold">{@lightbox_photo.user_name || String.slice(@lightbox_photo.user_id, 0, 6)}</span>
+                <span class="opacity-60">{format_time(@lightbox_photo.uploaded_at)}</span>
+              </div>
+              <%= if @lightbox_photo.description do %>
+                <p class="text-sm opacity-80 mt-1">{@lightbox_photo.description}</p>
+              <% end %>
             </div>
           </div>
         <% end %>
@@ -395,6 +412,47 @@ defmodule RzeczywiscieWeb.FriendsLive do
                   class="w-full px-4 py-3 border-2 border-base-content bg-base-content text-base-100 font-bold uppercase disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Add Note
+                </button>
+              </form>
+            </div>
+          </div>
+        <% end %>
+
+        <!-- Photo Edit Modal -->
+        <%= if @show_photo_edit_modal && @editing_photo do %>
+          <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 overflow-y-auto" phx-hook="ModalScrollLock" id="photo-edit-modal-backdrop">
+            <div class="bg-base-100 border-4 border-base-content p-6 max-w-lg w-full shadow-2xl my-8" phx-click-away="close-photo-edit-modal">
+              <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-black uppercase">Edit Photo</h2>
+                <button type="button" phx-click="close-photo-edit-modal" class="text-2xl leading-none hover:opacity-60 cursor-pointer">×</button>
+              </div>
+              
+              <!-- Photo Preview -->
+              <div class="mb-4 border-2 border-base-content overflow-hidden">
+                <img src={@editing_photo.data_url} alt="" class="w-full h-48 object-cover" />
+              </div>
+              
+              <!-- Description Input -->
+              <form phx-submit="save-photo-description" phx-change="update-photo-description-form" id="photo-description-form">
+                <div class="mb-4">
+                  <label class="text-xs font-bold uppercase opacity-60 mb-2 block">Description</label>
+                  <textarea
+                    name="description"
+                    value={@photo_description_input}
+                    placeholder="Add a short description (max 200 chars)"
+                    maxlength="200"
+                    rows="3"
+                    class="w-full px-4 py-3 border-2 border-base-content text-base bg-base-100 resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                    autofocus
+                  >{@photo_description_input}</textarea>
+                  <p class="text-xs opacity-40 mt-1 text-right">{String.length(@photo_description_input)}/200</p>
+                </div>
+                
+                <button
+                  type="submit"
+                  class="w-full px-4 py-3 border-2 border-base-content bg-base-content text-base-100 font-bold uppercase cursor-pointer"
+                >
+                  Save
                 </button>
               </form>
             </div>
@@ -716,6 +774,65 @@ defmodule RzeczywiscieWeb.FriendsLive do
 
   def handle_event("close-lightbox", _params, socket) do
     {:noreply, socket |> assign(:show_lightbox, false) |> assign(:lightbox_photo, nil)}
+  end
+
+  # --- Photo Edit Events ---
+
+  def handle_event("edit-photo-description", %{"id" => id}, socket) do
+    photo_id = String.to_integer(id)
+    photo = Enum.find(socket.assigns.photos, fn p -> p.id == photo_id end)
+    
+    if photo && photo.user_id == socket.assigns.user_id do
+      {:noreply,
+       socket
+       |> assign(:show_lightbox, false)
+       |> assign(:lightbox_photo, nil)
+       |> assign(:show_photo_edit_modal, true)
+       |> assign(:editing_photo, photo)
+       |> assign(:photo_description_input, photo.description || "")}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("close-photo-edit-modal", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:show_photo_edit_modal, false)
+     |> assign(:editing_photo, nil)
+     |> assign(:photo_description_input, "")}
+  end
+
+  def handle_event("update-photo-description-form", %{"description" => description}, socket) do
+    {:noreply, assign(socket, :photo_description_input, description)}
+  end
+
+  def handle_event("save-photo-description", %{"description" => description}, socket) do
+    user_id = socket.assigns.user_id
+    photo = socket.assigns.editing_photo
+    description = String.trim(description)
+    description = if description == "", do: nil, else: description
+
+    if user_id && photo do
+      case Friends.update_photo_description(photo.id, description, user_id, with_room: false) do
+        {:ok, updated_photo} ->
+          # Update the photo in the stream and assigns
+          {:noreply,
+           socket
+           |> stream_insert(:photos, updated_photo)
+           |> assign(:photos, Enum.map(socket.assigns.photos, fn p -> 
+             if p.id == photo.id, do: updated_photo, else: p
+           end))
+           |> assign(:show_photo_edit_modal, false)
+           |> assign(:editing_photo, nil)
+           |> assign(:photo_description_input, "")
+           |> put_flash(:info, "Photo updated!")}
+        {:error, _} ->
+          {:noreply, put_flash(socket, :error, "Failed to update")}
+      end
+    else
+      {:noreply, socket}
+    end
   end
 
   # --- Note Events ---
