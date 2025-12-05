@@ -60,6 +60,8 @@ defmodule RzeczywiscieWeb.FriendsLive do
       |> assign(:link_code_input, "")
       |> assign(:link_error, nil)
       |> assign(:name_error, nil)
+      |> assign(:show_note_modal, false)
+      |> assign(:note_input, "")
       |> stream(:photos, photos)
       |> stream(:messages, messages)
       |> allow_upload(:photo,
@@ -175,6 +177,17 @@ defmodule RzeczywiscieWeb.FriendsLive do
                   <span class="text-xs font-bold opacity-60">👀 {length(@viewers)}</span>
                 </div>
               </div>
+
+              <!-- Add Note Button -->
+              <button
+                type="button"
+                phx-click="open-note-modal"
+                class="relative flex-shrink-0 flex items-center gap-2 px-4 py-2 border-4 border-base-content font-bold uppercase text-sm bg-base-100 hover:bg-base-content hover:text-base-100 transition-colors"
+              >
+                <span class="text-lg">📝</span>
+                <span class="hidden sm:inline">Note</span>
+                <div class="absolute inset-0 bg-base-content translate-x-1 translate-y-1 -z-10"></div>
+              </button>
 
               <!-- Upload Button -->
               <form id="upload-form" phx-submit="save" phx-change="validate" class="relative flex-shrink-0">
@@ -348,6 +361,42 @@ defmodule RzeczywiscieWeb.FriendsLive do
               <div class="w-4 h-4 rounded-full" style={"background-color: #{@lightbox_photo.user_color}"}></div>
               <span class="font-bold">{@lightbox_photo.user_name || String.slice(@lightbox_photo.user_id, 0, 6)}</span>
               <span class="opacity-60">{format_time(@lightbox_photo.uploaded_at)}</span>
+            </div>
+          </div>
+        <% end %>
+
+        <!-- Note Modal -->
+        <%= if @show_note_modal do %>
+          <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 overflow-y-auto" phx-hook="ModalScrollLock" id="note-modal-backdrop">
+            <div class="bg-base-100 border-4 border-base-content p-6 max-w-md w-full shadow-2xl my-8" phx-click-away="close-note-modal">
+              <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-black uppercase">Add Note</h2>
+                <button type="button" phx-click="close-note-modal" class="text-2xl leading-none hover:opacity-60">×</button>
+              </div>
+              
+              <form phx-submit="save-note" phx-change="update-note-form" id="note-form">
+                <div class="mb-4">
+                  <textarea
+                    name="content"
+                    id="note-content"
+                    value={@note_input}
+                    placeholder="Write your note here..."
+                    maxlength="500"
+                    rows="6"
+                    class="w-full px-4 py-3 border-2 border-base-content text-base bg-base-100 resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                    autofocus
+                  >{@note_input}</textarea>
+                  <p class="text-xs opacity-40 mt-1 text-right">{String.length(@note_input)}/500</p>
+                </div>
+                
+                <button
+                  type="submit"
+                  disabled={String.trim(@note_input) == ""}
+                  class="w-full px-4 py-3 border-2 border-base-content bg-base-content text-base-100 font-bold uppercase disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Add Note
+                </button>
+              </form>
             </div>
           </div>
         <% end %>
@@ -667,6 +716,44 @@ defmodule RzeczywiscieWeb.FriendsLive do
 
   def handle_event("close-lightbox", _params, socket) do
     {:noreply, socket |> assign(:show_lightbox, false) |> assign(:lightbox_photo, nil)}
+  end
+
+  # --- Note Events ---
+
+  def handle_event("open-note-modal", _params, socket) do
+    {:noreply, socket |> assign(:show_note_modal, true) |> assign(:note_input, "")}
+  end
+
+  def handle_event("close-note-modal", _params, socket) do
+    {:noreply, socket |> assign(:show_note_modal, false) |> assign(:note_input, "")}
+  end
+
+  def handle_event("update-note-form", %{"content" => content}, socket) do
+    {:noreply, assign(socket, :note_input, content)}
+  end
+
+  def handle_event("save-note", %{"content" => content}, socket) do
+    user_id = socket.assigns.user_id
+    text = String.trim(content)
+
+    if user_id && text != "" do
+      case Friends.create_text_card(%{
+        user_id: user_id,
+        user_color: socket.assigns.user_color,
+        content: text
+      }) do
+        {:ok, _card} ->
+          {:noreply,
+           socket
+           |> assign(:show_note_modal, false)
+           |> assign(:note_input, "")
+           |> put_flash(:info, "📝 Note added to your board!")}
+        {:error, _} ->
+          {:noreply, put_flash(socket, :error, "Failed to save note")}
+      end
+    else
+      {:noreply, socket}
+    end
   end
 
   # --- Message Events ---

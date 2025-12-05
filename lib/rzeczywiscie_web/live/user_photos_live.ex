@@ -22,8 +22,59 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
       |> assign(:show_photo_modal, false)
       |> assign(:editing_photo, nil)
       |> assign(:photo_description_input, "")
+      |> assign(:uploading, false)
+      |> allow_upload(:photo,
+        accept: ~w(.jpg .jpeg .png .gif .webp),
+        max_entries: 1,
+        max_file_size: 10_000_000,
+        auto_upload: true,
+        progress: &handle_progress/3
+      )
 
     {:ok, socket}
+  end
+
+  defp handle_progress(:photo, entry, socket) do
+    if entry.done? do
+      photo_result =
+        consume_uploaded_entry(socket, entry, fn %{path: path} ->
+          # Read file and convert to base64 data URL
+          data = File.read!(path)
+          base64 = Base.encode64(data)
+          content_type = entry.client_type || "image/jpeg"
+          data_url = "data:#{content_type};base64,#{base64}"
+
+          {:ok, %{data_url: data_url, content_type: content_type, file_size: entry.client_size}}
+        end)
+
+      user_id = socket.assigns.user_id
+
+      if user_id do
+        case Friends.create_personal_photo(%{
+          user_id: user_id,
+          user_color: socket.assigns.user_color,
+          user_name: socket.assigns.user_name,
+          image_data: photo_result.data_url,
+          content_type: photo_result.content_type,
+          file_size: photo_result.file_size
+        }) do
+          {:ok, _photo} ->
+            items = Friends.list_user_items(user_id)
+            {:noreply,
+             socket
+             |> assign(:uploading, false)
+             |> assign(:items, items)
+             |> assign(:item_count, length(items))
+             |> put_flash(:info, "📸 Photo added!")}
+          {:error, _} ->
+            {:noreply, socket |> assign(:uploading, false) |> put_flash(:error, "Failed to upload")}
+        end
+      else
+        {:noreply, assign(socket, :uploading, false)}
+      end
+    else
+      {:noreply, assign(socket, :uploading, true)}
+    end
   end
 
   def render(assigns) do
@@ -54,6 +105,25 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
               </div>
               
               <div class="flex items-center gap-2">
+                <!-- Upload Photo Button -->
+                <form id="board-upload-form" phx-change="validate-upload" class="relative">
+                  <label
+                    for={@uploads.photo.ref}
+                    class={[
+                      "px-4 py-2 border-2 border-base-content font-bold text-sm uppercase transition-colors flex items-center gap-2 cursor-pointer",
+                      if(@uploading, do: "opacity-50", else: "hover:bg-base-content hover:text-base-100")
+                    ]}
+                  >
+                    <%= if @uploading do %>
+                      <span class="animate-spin">⏳</span>
+                    <% else %>
+                      <span class="text-lg">📷</span>
+                    <% end %>
+                    <span class="hidden sm:inline"><%= if @uploading, do: "Uploading...", else: "Add Photo" %></span>
+                  </label>
+                  <.live_file_input upload={@uploads.photo} class="sr-only" />
+                </form>
+                
                 <!-- Add Note Button -->
                 <button
                   type="button"
@@ -410,6 +480,8 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
      |> assign(:items, items)
      |> assign(:item_count, length(items))}
   end
+
+  def handle_event("validate-upload", _params, socket), do: {:noreply, socket}
 
   def handle_event("toggle-reorder", _params, socket) do
     {:noreply, assign(socket, :reordering, !socket.assigns.reordering)}

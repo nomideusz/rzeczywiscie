@@ -139,6 +139,19 @@ defmodule Rzeczywiscie.Friends do
   end
 
   @doc """
+  Create a personal photo (no room association, for My Board).
+  """
+  def create_personal_photo(attrs) do
+    %Photo{}
+    |> Photo.changeset(attrs)
+    |> Repo.insert()
+    |> case do
+      {:ok, photo} -> {:ok, photo_to_map_with_room(photo)}
+      error -> error
+    end
+  end
+
+  @doc """
   Delete a photo and broadcast the deletion.
   """
   def delete_photo(id, room_code) do
