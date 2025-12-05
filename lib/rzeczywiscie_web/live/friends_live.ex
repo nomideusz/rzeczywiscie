@@ -22,24 +22,26 @@ defmodule RzeczywiscieWeb.FriendsLive do
       r -> r
     end
 
-    # Check if connected - data loads after connection established
     is_connected = connected?(socket)
 
-    {items, messages, viewers, item_count} = if is_connected do
+    # ALWAYS load data - even on static render for instant content
+    # This makes the first page load show real content immediately
+    photos = Friends.list_photos(room.id, 20)
+    notes = Friends.list_room_text_cards(room.id)
+    items = build_room_items(photos, notes)
+    item_count = length(items)
+
+    # Only subscribe and track presence when connected
+    {messages, viewers} = if is_connected do
       Friends.subscribe(room.code)
       Phoenix.PubSub.subscribe(Rzeczywiscie.PubSub, "friends:presence:#{room.code}")
       Presence.track_user(self(), room.code, user_id, user_color, nil)
       
-      # Load data only when connected
-      photos = Friends.list_photos(room.id, 50)
-      notes = Friends.list_room_text_cards(room.id)
-      msgs = Friends.list_messages(room.id, 100)
+      msgs = Friends.list_messages(room.id, 50)
       v = Presence.list_users(room.code)
-      combined = build_room_items(photos, notes)
-      {combined, msgs, v, length(combined)}
+      {msgs, v}
     else
-      # During static render, send minimal data - show loading state
-      {[], [], [], 0}
+      {[], []}
     end
 
     # Build items map for quick lookup (only IDs and essential data)
@@ -60,7 +62,8 @@ defmodule RzeczywiscieWeb.FriendsLive do
       |> assign(:page_title, "#{room.emoji} #{room.name || room.code}")
       |> assign(:items_map, items_map)
       |> assign(:item_count, item_count)
-      |> assign(:loading, not is_connected)
+      |> assign(:loading, false)
+      |> assign(:chat_loading, not is_connected)
       |> assign(:message_input, "")
       |> assign(:viewers, viewers)
       |> assign(:uploading, false)
@@ -177,7 +180,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
                   class="h-10 px-3 border-2 border-base-content/30 hover:border-base-content transition-colors flex items-center gap-2 cursor-pointer"
                 >
                   <div class="w-5 h-5 rounded-full border border-base-content" style={"background-color: #{@user_color}"}></div>
-                  <span class="font-bold">{@user_name || if(@loading, do: "...", else: String.slice(@user_id, 0, 6))}</span>
+                  <span class="font-bold">{@user_name || if(is_nil(@device_fingerprint), do: "...", else: String.slice(@user_id, 0, 6))}</span>
                   <svg class="w-3 h-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                   </svg>
@@ -369,7 +372,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
 
                 <!-- Messages -->
                 <div class="flex-1 overflow-y-auto p-3 space-y-3" id="messages-container" phx-update="stream" phx-hook="ScrollToBottom">
-                  <%= if @loading do %>
+                  <%= if @chat_loading do %>
                     <%!-- Loading skeleton for messages --%>
                     <%= for i <- 1..3 do %>
                       <div class="flex gap-2 animate-pulse">
@@ -643,7 +646,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
               <div class="mb-6 flex items-center gap-4">
                 <div class="w-12 h-12 rounded-full border-2 border-base-content" style={"background-color: #{@user_color}"}></div>
                 <div>
-                  <div class="font-bold">{@user_name || if(@loading, do: "...", else: String.slice(@user_id, 0, 6))}</div>
+                  <div class="font-bold">{@user_name || if(is_nil(@device_fingerprint), do: "...", else: String.slice(@user_id, 0, 6))}</div>
                   <div class="text-xs opacity-40 flex items-center gap-1">
                     ID: {String.slice(@user_id, 0, 8)}
                     <%= if @is_linked_device do %>
@@ -898,7 +901,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
        |> assign(:user_name, user_name)
        |> assign(:device_fingerprint, device_fingerprint)
        |> assign(:is_linked_device, is_linked)
-       |> assign(:loading, false)
+       |> assign(:chat_loading, false)
        |> push_event("linked_user_id", %{user_id: actual_user_id, is_linked: is_linked})
        |> push_event("save_user_name", %{name: user_name})}
     else
@@ -912,7 +915,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
        |> assign(:user_name, user_name)
        |> assign(:device_fingerprint, device_fingerprint)
        |> assign(:is_linked_device, is_linked)
-       |> assign(:loading, false)
+       |> assign(:chat_loading, false)
        |> push_event("save_user_name", %{name: user_name})}
     end
   end

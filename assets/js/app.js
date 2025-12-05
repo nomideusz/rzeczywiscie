@@ -564,10 +564,19 @@ const Hooks = {
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 let liveSocket = new LiveSocket("/live", Socket, {hooks: Hooks, params: {_csrf_token: csrfToken}})
 
-// Show progress bar on live navigation and form submits
+// Show progress bar on live navigation and form submits - but not on initial connect
 topbar.config({barColors: {0: "#29d"}, shadowColor: "rgba(0, 0, 0, .3)"})
-window.addEventListener("phx:page-loading-start", _info => topbar.show(300))
-window.addEventListener("phx:page-loading-stop", _info => topbar.hide())
+let initialLoad = true
+window.addEventListener("phx:page-loading-start", info => {
+    // Don't show topbar on initial page load - content is already there
+    if (!initialLoad && info.detail.kind === "redirect") {
+        topbar.show(200)
+    }
+})
+window.addEventListener("phx:page-loading-stop", _info => {
+    initialLoad = false
+    topbar.hide()
+})
 
 // Handle CSV download from LiveView
 window.addEventListener("phx:download_csv", (e) => {
