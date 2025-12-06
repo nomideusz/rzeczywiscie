@@ -220,7 +220,6 @@ defmodule RzeczywiscieWeb.Layouts do
           <div class="hidden md:flex items-center gap-1">
             <.nav_link href={~p"/draw"} current_path={@current_path}>Draw</.nav_link>
             <.nav_link href={~p"/kanban"} current_path={@current_path}>Kanban</.nav_link>
-            <.nav_link href={~p"/world"} current_path={@current_path}>World</.nav_link>
             <.nav_link href={~p"/pixels"} current_path={@current_path}>Pixels</.nav_link>
             <.nav_link href={~p"/friends"} current_path={@current_path}>Friends</.nav_link>
             <.nav_link href={~p"/real-estate"} current_path={@current_path} match_prefix="/real-estate,/favorites,/stats,/admin">Properties</.nav_link>
@@ -242,7 +241,6 @@ defmodule RzeczywiscieWeb.Layouts do
           <div class="flex flex-col space-y-2">
             <.mobile_nav_link href={~p"/draw"} current_path={@current_path} icon="✏️">Draw</.mobile_nav_link>
             <.mobile_nav_link href={~p"/kanban"} current_path={@current_path} icon="📋">Kanban</.mobile_nav_link>
-            <.mobile_nav_link href={~p"/world"} current_path={@current_path} icon="🌍">World</.mobile_nav_link>
             <.mobile_nav_link href={~p"/pixels"} current_path={@current_path} icon="🎨">Pixels</.mobile_nav_link>
             <.mobile_nav_link href={~p"/friends"} current_path={@current_path} icon="📸">Friends</.mobile_nav_link>
             <.mobile_nav_link href={~p"/real-estate"} current_path={@current_path} icon="🏠" match_prefix="/real-estate,/favorites,/stats,/admin">Properties</.mobile_nav_link>
@@ -297,14 +295,6 @@ defmodule RzeczywiscieWeb.Layouts do
                   class="text-sm font-bold hover:underline hover:underline-offset-4 decoration-2 decoration-secondary"
                 >
                   Kanban Board
-                </a>
-              </li>
-              <li>
-                <a
-                  href={~p"/world"}
-                  class="text-sm font-bold hover:underline hover:underline-offset-4 decoration-2 decoration-accent"
-                >
-                  Live World Map
                 </a>
               </li>
               <li>
