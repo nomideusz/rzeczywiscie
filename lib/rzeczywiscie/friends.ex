@@ -552,8 +552,13 @@ defmodule Rzeczywiscie.Friends do
     case Repo.get_by(DeviceLink, device_fingerprint: device_fingerprint) do
       nil ->
         # Create new device link with username
+        # Set master_user_id to fingerprint (device is its own master until linked)
         result = %DeviceLink{}
-        |> DeviceLink.changeset(%{device_fingerprint: device_fingerprint, user_name: user_name})
+        |> DeviceLink.changeset(%{
+          device_fingerprint: device_fingerprint,
+          master_user_id: device_fingerprint,
+          user_name: user_name
+        })
         |> Repo.insert()
         
         case result do
