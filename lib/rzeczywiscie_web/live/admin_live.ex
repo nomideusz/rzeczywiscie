@@ -152,7 +152,7 @@ defmodule RzeczywiscieWeb.FriendsAdminLive do
                 
                 <span class="px-4 py-2 text-sm opacity-60">Page {@page + 1}</span>
                 
-                <%= if length(@photos) == 50 do %>
+                <%= if length(@photos) == @photos_per_page do %>
                   <button
                     type="button"
                     phx-click="next-page"
