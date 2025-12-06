@@ -51,6 +51,24 @@ function generateDeviceFingerprint() {
     return (hash >>> 0).toString(16)
 }
 
+// Generate or retrieve browser UUID (unique per browser, stored in localStorage)
+function getBrowserId() {
+    const storageKey = 'friends_browser_id'
+    let browserId = localStorage.getItem(storageKey)
+    
+    if (!browserId) {
+        // Generate a new UUID
+        browserId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            const r = Math.random() * 16 | 0
+            const v = c === 'x' ? r : (r & 0x3 | 0x8)
+            return v.toString(16)
+        })
+        localStorage.setItem(storageKey, browserId)
+    }
+    
+    return browserId
+}
+
 // Generate a high-quality thumbnail as base64 data URL
 function generateThumbnail(file, maxSize = 600) {
     return new Promise((resolve) => {
@@ -176,51 +194,45 @@ const Hooks = {
     },
     DeviceFingerprint: {
         mounted() {
-            // Generate device fingerprint and send to server
-            const deviceId = generateDeviceFingerprint()
-            this.pushEvent("set_user_id", { user_id: deviceId })
+            // Get browser UUID and device fingerprint
+            const browserId = getBrowserId()
+            const deviceFingerprint = generateDeviceFingerprint()
+            this.pushEvent("set_user_id", { 
+                browser_id: browserId,
+                device_fingerprint: deviceFingerprint,
+                // For backwards compatibility, also send combined user_id
+                user_id: browserId
+            })
         }
     },
     FriendsApp: {
         mounted() {
-            // Generate device fingerprint
-            this.deviceId = generateDeviceFingerprint()
+            // Get browser UUID (unique per browser, stored in localStorage)
+            this.browserId = getBrowserId()
+            // Get device fingerprint (same across browsers on same device)
+            this.deviceFingerprint = generateDeviceFingerprint()
             
-            // Load linked user ID from localStorage (if previously linked)
-            const linkedUserId = localStorage.getItem(`friends_linked_user_id_${this.deviceId}`)
-            
-            // Load user name from localStorage (keyed by actual user ID for consistency)
-            const effectiveUserId = linkedUserId || this.deviceId
-            const storedName = localStorage.getItem(`friends_user_name_${effectiveUserId}`)
-            
-            // Send device ID, linked ID, and stored name to server
+            // Send both IDs to server for registration
             this.pushEvent("set_user_id", { 
-                user_id: this.deviceId,
-                linked_user_id: linkedUserId,
-                user_name: storedName
+                browser_id: this.browserId,
+                device_fingerprint: this.deviceFingerprint
             })
             
             // Listen for save_user_name event from server
             this.handleEvent("save_user_name", ({ name }) => {
-                const effectiveId = localStorage.getItem(`friends_linked_user_id_${this.deviceId}`) || this.deviceId
-                if (name) {
-                    localStorage.setItem(`friends_user_name_${effectiveId}`, name)
-                } else {
-                    localStorage.removeItem(`friends_user_name_${effectiveId}`)
-                }
+                // Username is managed server-side now, just log it
+                console.log('Username updated:', name)
             })
             
-            // Listen for linked_user_id event from server (when device is linked/unlinked)
-            this.handleEvent("linked_user_id", ({ user_id, is_linked }) => {
-                if (is_linked && user_id) {
-                    // Store the linked user ID
-                    localStorage.setItem(`friends_linked_user_id_${this.deviceId}`, user_id)
-                    console.log(`Device linked to account: ${user_id}`)
-                } else {
-                    // Remove linked user ID (unlinked)
-                    localStorage.removeItem(`friends_linked_user_id_${this.deviceId}`)
-                    console.log('Device unlinked')
-                }
+            // Listen for same_device_detected event (suggest linking)
+            this.handleEvent("same_device_detected", ({ existing_name }) => {
+                console.log('Same device detected with existing account:', existing_name)
+                // UI will show linking option
+            })
+            
+            // Listen for browser_linked event
+            this.handleEvent("browser_linked", ({ master_user_id, user_name }) => {
+                console.log('Browser linked to account:', master_user_id, 'as', user_name)
             })
             
             // Intercept file input to optimize images before upload
@@ -333,18 +345,14 @@ const Hooks = {
     },
     UserPhotosApp: {
         mounted() {
-            // Generate device fingerprint
-            this.deviceId = generateDeviceFingerprint()
-            
-            // Load linked user ID from localStorage
-            const linkedUserId = localStorage.getItem(`friends_linked_user_id_${this.deviceId}`)
-            const effectiveUserId = linkedUserId || this.deviceId
-            const storedName = localStorage.getItem(`friends_user_name_${effectiveUserId}`)
+            // Get browser UUID and device fingerprint
+            this.browserId = getBrowserId()
+            this.deviceFingerprint = generateDeviceFingerprint()
             
             // Send to server
             this.pushEvent("set_user_id", { 
-                user_id: this.deviceId,
-                user_name: storedName
+                browser_id: this.browserId,
+                device_fingerprint: this.deviceFingerprint
             })
             
             // Setup thumbnail generation for uploads

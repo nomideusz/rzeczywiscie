@@ -1,8 +1,10 @@
 defmodule RzeczywiscieWeb.FriendsLive do
   use RzeczywiscieWeb, :live_view
   import RzeczywiscieWeb.Layouts
+  import Ecto.Query
+  alias Rzeczywiscie.Repo
   alias Rzeczywiscie.Friends
-  alias Rzeczywiscie.Friends.Presence
+  alias Rzeczywiscie.Friends.{Presence, DeviceLink}
 
   def mount(%{"room" => room_code}, _session, socket) do
     mount_room(socket, room_code)
@@ -56,7 +58,9 @@ defmodule RzeczywiscieWeb.FriendsLive do
       |> assign(:user_id, user_id)
       |> assign(:user_color, user_color)
       |> assign(:user_name, nil)
+      |> assign(:browser_id, nil)
       |> assign(:device_fingerprint, nil)
+      |> assign(:same_device_detected, false)
       |> assign(:is_linked_device, false)
       |> assign(:session_id, session_id)
       |> assign(:room, room)
@@ -287,6 +291,27 @@ defmodule RzeczywiscieWeb.FriendsLive do
             </div>
           </div>
         </div>
+
+        <!-- Same Device Detected Banner -->
+        <%= if @same_device_detected do %>
+          <div class="bg-warning/10 border-b-2 border-warning">
+            <div class="container mx-auto px-4 py-3">
+              <div class="flex items-center justify-between gap-4 flex-wrap">
+                <div class="flex items-center gap-2">
+                  <span class="text-lg">🔗</span>
+                  <span class="font-bold text-sm">Another browser on this device has an existing account</span>
+                </div>
+                <button
+                  type="button"
+                  phx-click="open-link-modal"
+                  class="px-4 py-2 bg-warning text-warning-content font-bold text-xs uppercase hover:opacity-80 transition-opacity"
+                >
+                  Link to Existing Account
+                </button>
+              </div>
+            </div>
+          </div>
+        <% end %>
 
         <!-- Upload Progress -->
         <%= for entry <- @uploads.photo.entries do %>
@@ -891,9 +916,11 @@ defmodule RzeczywiscieWeb.FriendsLive do
                         name="code"
                         value={@link_code_input}
                         phx-change="update-link-code-input"
-                        placeholder="ABCD12"
-                        maxlength="6"
-                        class="flex-1 px-3 py-2 border-2 border-base-content text-sm bg-base-100 font-mono uppercase tracking-widest text-center"
+                        placeholder="0000"
+                        maxlength="4"
+                        inputmode="numeric"
+                        pattern="[0-9]*"
+                        class="flex-1 px-3 py-2 border-2 border-base-content text-sm bg-base-100 font-mono tracking-widest text-center text-2xl"
                       />
                       <button type="submit" class="px-4 py-2 border-2 border-base-content bg-base-content text-base-100 font-bold text-sm">
                         Link
@@ -1038,54 +1065,82 @@ defmodule RzeczywiscieWeb.FriendsLive do
 
   # --- Events ---
 
-  def handle_event("set_user_id", %{"user_id" => device_fingerprint} = params, socket) do
-    # Client sends device-specific user_id (fingerprint based on hardware)
+  def handle_event("set_user_id", %{"browser_id" => browser_id} = params, socket) do
+    # Client sends browser_id (localStorage UUID) and device_fingerprint (hardware-based)
+    device_fingerprint = params["device_fingerprint"]
     old_user_id = socket.assigns.user_id
     room = socket.assigns.room
-    client_user_name = params["user_name"]
-    client_linked_id = params["linked_user_id"]
 
-    # Get device info from server (includes linked user_id and stored username)
-    {server_user_id, server_user_name} = Friends.get_device_info(device_fingerprint)
-    
-    # Use server link first, then client stored link, then fingerprint
-    {actual_user_id, is_linked} = cond do
-      server_user_id != device_fingerprint -> {server_user_id, true}
-      client_linked_id != nil && client_linked_id != "" -> {client_linked_id, true}
-      true -> {device_fingerprint, false}
+    # Register browser and get/create DeviceLink
+    {status, device_link_result} = case Friends.register_browser(browser_id, device_fingerprint) do
+      {:ok, link, status} -> {status, link}
+      {:error, _} -> {:error, nil}
     end
 
-    # Prefer server-stored username, fall back to client-stored
-    user_name = server_user_name || client_user_name
-    
-    # Check if name is taken by another device (database) or user in room (presence)
-    user_name = make_name_unique(device_fingerprint, room.code, user_name, actual_user_id)
+    socket = if device_link_result do
+      master_user_id = device_link_result.master_user_id
+      user_name = device_link_result.user_name
+      
+      # Check if name is unique in room
+      user_name = make_name_unique(master_user_id, room.code, user_name, master_user_id)
 
-    # Subscribe to username updates for this device
-    Phoenix.PubSub.subscribe(Rzeczywiscie.PubSub, "friends:user:#{device_fingerprint}")
+      # Subscribe to updates for this browser
+      Phoenix.PubSub.subscribe(Rzeczywiscie.PubSub, "friends:browser:#{browser_id}")
 
-    # Generate color based on the actual user_id (consistent across linked devices)
-    new_user_color = generate_user_color(actual_user_id)
+      # Generate color based on master_user_id (consistent across linked browsers)
+      new_user_color = generate_user_color(master_user_id)
 
-    # Only untrack old presence if it was a different user_id (from initial mount)
-    # and if we were already tracked (device_fingerprint was set)
-    if socket.assigns.device_fingerprint != nil && old_user_id != actual_user_id do
-      Presence.untrack(self(), room.code, old_user_id)
+      # Untrack old presence if user_id changed
+      if socket.assigns.browser_id != nil && old_user_id != master_user_id do
+        Presence.untrack(self(), room.code, old_user_id)
+      end
+
+      # Track presence with the real user info
+      Presence.track_user(self(), room.code, master_user_id, new_user_color, user_name)
+
+      socket = socket
+      |> assign(:user_id, master_user_id)
+      |> assign(:user_color, new_user_color)
+      |> assign(:user_name, user_name)
+      |> assign(:browser_id, browser_id)
+      |> assign(:device_fingerprint, device_fingerprint)
+      |> assign(:chat_loading, false)
+      |> assign(:same_device_detected, status == :same_device)
+      |> push_event("save_user_name", %{name: user_name})
+
+      # Notify client if same device was detected (suggest linking)
+      if status == :same_device do
+        # Find the existing account name for this device fingerprint
+        existing = Repo.one(from d in DeviceLink,
+          where: d.device_fingerprint == ^device_fingerprint,
+          where: not is_nil(d.user_name),
+          where: d.browser_id != ^browser_id,
+          limit: 1
+        )
+        if existing do
+          push_event(socket, "same_device_detected", %{existing_name: existing.user_name})
+        else
+          socket
+        end
+      else
+        socket
+      end
+    else
+      socket
+      |> assign(:chat_loading, false)
+      |> put_flash(:error, "Failed to register browser")
     end
 
-    # Track presence with the real user info
-    Presence.track_user(self(), room.code, actual_user_id, new_user_color, user_name)
+    {:noreply, socket}
+  end
 
-    {:noreply,
-     socket
-     |> assign(:user_id, actual_user_id)
-     |> assign(:user_color, new_user_color)
-     |> assign(:user_name, user_name)
-     |> assign(:device_fingerprint, device_fingerprint)
-     |> assign(:is_linked_device, is_linked)
-     |> assign(:chat_loading, false)
-     |> push_event("linked_user_id", %{user_id: actual_user_id, is_linked: is_linked})
-     |> push_event("save_user_name", %{name: user_name})}
+  # Backwards compatibility for old client code
+  def handle_event("set_user_id", %{"user_id" => user_id} = params, socket) do
+    # Convert old format to new format
+    handle_event("set_user_id", %{
+      "browser_id" => user_id,
+      "device_fingerprint" => params["device_fingerprint"] || user_id
+    }, socket)
   end
 
   def handle_event("validate", _params, socket), do: {:noreply, socket}
@@ -1581,33 +1636,41 @@ defmodule RzeczywiscieWeb.FriendsLive do
   def handle_event("save-name", %{"name" => name}, socket) do
     name = String.trim(name)
     name = if name == "", do: nil, else: String.slice(name, 0, 20)
-    device_fingerprint = socket.assigns.device_fingerprint
+    browser_id = socket.assigns.browser_id
+    master_user_id = socket.assigns.user_id
     
     # Check if name is taken - both in database (permanent) and presence (current room)
-    name_taken = name != nil && name_is_taken?(name, device_fingerprint, socket.assigns.room.code, socket.assigns.user_id)
+    name_taken = name != nil && name_is_taken?(name, master_user_id, socket.assigns.room.code, master_user_id)
     
     if name_taken do
       {:noreply, assign(socket, :name_error, "Name already taken")}
     else
-      # Save username to server (linked to device fingerprint)
-      # This also updates all historical content (messages, photos, text cards)
-      if device_fingerprint do
-        Friends.save_username(device_fingerprint, name)
-        # Broadcast to all sessions of this device
-        Phoenix.PubSub.broadcast(
-          Rzeczywiscie.PubSub,
-          "friends:user:#{device_fingerprint}",
-          {:username_changed, name}
-        )
-        # Broadcast to room so all clients update their view of this user's content
-        Friends.broadcast(socket.assigns.room.code, :user_renamed, %{
-          user_id: socket.assigns.user_id,
-          new_name: name
-        })
+      # Save username to server (linked to browser_id)
+      # This also updates all linked browsers and historical content
+      if browser_id do
+        case Friends.save_username(browser_id, name) do
+          {:ok, _, saved_master_id} ->
+            # Broadcast to all linked browsers
+            linked = Friends.get_linked_browsers(saved_master_id)
+            for link <- linked do
+              Phoenix.PubSub.broadcast(
+                Rzeczywiscie.PubSub,
+                "friends:browser:#{link.browser_id}",
+                {:username_changed, name}
+              )
+            end
+            # Broadcast to room so all clients update their view of this user's content
+            Friends.broadcast(socket.assigns.room.code, :user_renamed, %{
+              user_id: master_user_id,
+              new_name: name
+            })
+          {:error, _} ->
+            :ok
+        end
       end
       
       # Update presence with the new name
-      Presence.update_user(self(), socket.assigns.room.code, socket.assigns.user_id, socket.assigns.user_color, name)
+      Presence.update_user(self(), socket.assigns.room.code, master_user_id, socket.assigns.user_color, name)
       
       {:noreply,
        socket
@@ -1635,7 +1698,9 @@ defmodule RzeczywiscieWeb.FriendsLive do
   end
 
   def handle_event("generate-link-code", _params, socket) do
-    case Friends.generate_link_code(socket.assigns.user_id) do
+    browser_id = socket.assigns.browser_id
+    
+    case Friends.generate_link_code(browser_id) do
       {:ok, code} ->
         {:noreply, socket |> assign(:link_code, code) |> assign(:link_error, nil)}
       {:error, _} ->
@@ -1644,48 +1709,47 @@ defmodule RzeczywiscieWeb.FriendsLive do
   end
 
   def handle_event("update-link-code-input", %{"code" => code}, socket) do
-    {:noreply, assign(socket, :link_code_input, String.upcase(code))}
+    {:noreply, assign(socket, :link_code_input, code)}
   end
 
   def handle_event("submit-link-code", %{"code" => code}, socket) do
-    device_fingerprint = socket.assigns.device_fingerprint
+    browser_id = socket.assigns.browser_id
     
-    if device_fingerprint == nil do
-      {:noreply, assign(socket, :link_error, "Device not identified yet")}
+    if browser_id == nil do
+      {:noreply, assign(socket, :link_error, "Browser not identified yet")}
     else
-      case Friends.link_device(code, device_fingerprint) do
-        {:ok, master_user_id} ->
+      case Friends.link_browser_with_code(browser_id, code) do
+        {:ok, updated_link} ->
           old_user_id = socket.assigns.user_id
           room = socket.assigns.room
+          new_master_id = updated_link.master_user_id
+          new_name = updated_link.user_name
           
           # Update presence if user_id changed
-          if old_user_id != master_user_id do
+          if old_user_id != new_master_id do
             Presence.untrack(self(), room.code, old_user_id)
-            new_user_color = generate_user_color(master_user_id)
-            Presence.track_user(self(), room.code, master_user_id, new_user_color, socket.assigns.user_name)
+            new_user_color = generate_user_color(new_master_id)
+            Presence.track_user(self(), room.code, new_master_id, new_user_color, new_name)
             
             {:noreply,
              socket
-             |> assign(:user_id, master_user_id)
+             |> assign(:user_id, new_master_id)
+             |> assign(:user_name, new_name)
              |> assign(:user_color, new_user_color)
-             |> assign(:is_linked_device, true)
              |> assign(:show_link_modal, false)
              |> assign(:link_error, nil)
-             |> push_event("linked_user_id", %{user_id: master_user_id, is_linked: true})
-             |> put_flash(:info, "✅ Device linked successfully!")}
+             |> assign(:same_device_detected, false)
+             |> push_event("browser_linked", %{master_user_id: new_master_id, user_name: new_name})
+             |> put_flash(:info, "✅ Browser linked successfully!")}
           else
             {:noreply,
              socket
-             |> assign(:is_linked_device, true)
              |> assign(:show_link_modal, false)
              |> put_flash(:info, "✅ Already using this account!")}
           end
           
         {:error, :invalid_code} ->
-          {:noreply, assign(socket, :link_error, "Invalid code")}
-          
-        {:error, :expired_code} ->
-          {:noreply, assign(socket, :link_error, "Code expired")}
+          {:noreply, assign(socket, :link_error, "Invalid or expired code")}
           
         {:error, _} ->
           {:noreply, assign(socket, :link_error, "Failed to link")}
@@ -1694,34 +1758,28 @@ defmodule RzeczywiscieWeb.FriendsLive do
   end
 
   def handle_event("unlink-device", _params, socket) do
-    device_fingerprint = socket.assigns.device_fingerprint
+    browser_id = socket.assigns.browser_id
     
-    if device_fingerprint do
-      Friends.unlink_device(device_fingerprint)
+    if browser_id do
+      Friends.unlink_browser(browser_id)
       
-      # Revert to device fingerprint as user_id
+      # Create a new identity for this browser
       old_user_id = socket.assigns.user_id
       room = socket.assigns.room
+      new_master_id = Ecto.UUID.generate()
       
-      if old_user_id != device_fingerprint do
-        Presence.untrack(self(), room.code, old_user_id)
-        new_user_color = generate_user_color(device_fingerprint)
-        Presence.track_user(self(), room.code, device_fingerprint, new_user_color, socket.assigns.user_name)
-        
-        {:noreply,
-         socket
-         |> assign(:user_id, device_fingerprint)
-         |> assign(:user_color, new_user_color)
-         |> assign(:is_linked_device, false)
-         |> assign(:show_link_modal, false)
-         |> push_event("linked_user_id", %{user_id: nil, is_linked: false})
-         |> put_flash(:info, "Device unlinked")}
-      else
-        {:noreply,
-         socket
-         |> assign(:is_linked_device, false)
-         |> assign(:show_link_modal, false)}
-      end
+      Presence.untrack(self(), room.code, old_user_id)
+      new_user_color = generate_user_color(new_master_id)
+      Presence.track_user(self(), room.code, new_master_id, new_user_color, nil)
+      
+      {:noreply,
+       socket
+       |> assign(:user_id, new_master_id)
+       |> assign(:user_name, nil)
+       |> assign(:user_color, new_user_color)
+       |> assign(:is_linked_device, false)
+       |> assign(:show_link_modal, false)
+       |> put_flash(:info, "Browser unlinked - you have a new identity")}
     else
       {:noreply, socket}
     end
@@ -1990,35 +2048,35 @@ defmodule RzeczywiscieWeb.FriendsLive do
   defp generate_session_id, do: :crypto.strong_rand_bytes(16) |> Base.encode16(case: :lower)
   
   # Check if name is taken (globally in database OR in current room presence)
-  defp name_is_taken?(name, device_fingerprint, room_code, user_id) do
-    # Check database for permanent reservations
-    db_taken = Friends.username_taken?(name, device_fingerprint || "")
-    # Check presence for users currently in room (belt and suspenders)
+  defp name_is_taken?(name, master_user_id, room_code, user_id) do
+    # Check database for permanent reservations (by master_user_id)
+    db_taken = Friends.username_taken?(name, master_user_id || "")
+    # Check presence for users currently in room
     presence_taken = Presence.name_taken?(room_code, name, user_id)
     db_taken || presence_taken
   end
   
   # Make username unique by adding suffix if needed
-  defp make_name_unique(_device_fingerprint, _room_code, nil, _user_id), do: nil
-  defp make_name_unique(_device_fingerprint, _room_code, "", _user_id), do: nil
-  defp make_name_unique(device_fingerprint, room_code, name, user_id) do
-    if name_is_taken?(name, device_fingerprint, room_code, user_id) do
+  defp make_name_unique(_master_user_id, _room_code, nil, _user_id), do: nil
+  defp make_name_unique(_master_user_id, _room_code, "", _user_id), do: nil
+  defp make_name_unique(master_user_id, room_code, name, user_id) do
+    if name_is_taken?(name, master_user_id, room_code, user_id) do
       # Name is taken, find a unique variant
-      find_unique_name(device_fingerprint, room_code, name, user_id, 2)
+      find_unique_name(master_user_id, room_code, name, user_id, 2)
     else
       name
     end
   end
   
-  defp find_unique_name(device_fingerprint, room_code, base_name, user_id, counter) when counter < 100 do
+  defp find_unique_name(master_user_id, room_code, base_name, user_id, counter) when counter < 100 do
     candidate = "#{base_name}#{counter}"
-    if name_is_taken?(candidate, device_fingerprint, room_code, user_id) do
-      find_unique_name(device_fingerprint, room_code, base_name, user_id, counter + 1)
+    if name_is_taken?(candidate, master_user_id, room_code, user_id) do
+      find_unique_name(master_user_id, room_code, base_name, user_id, counter + 1)
     else
       candidate
     end
   end
-  defp find_unique_name(_device_fingerprint, _room_code, base_name, _user_id, _counter), do: base_name
+  defp find_unique_name(_master_user_id, _room_code, base_name, _user_id, _counter), do: base_name
 
   # Build combined items list from photos and notes
   defp build_room_items(photos, notes) do

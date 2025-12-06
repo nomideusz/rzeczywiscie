@@ -4,8 +4,11 @@ defmodule Rzeczywiscie.Friends.DeviceLink do
 
   schema "friends_device_links" do
     field :device_fingerprint, :string
-    field :master_user_id, :string
+    field :browser_id, :string           # localStorage UUID - unique per browser
+    field :master_user_id, :string       # Linked identity - same for linked browsers
     field :user_name, :string
+    field :link_code, :string            # Temporary 4-digit code for linking
+    field :link_code_expires_at, :utc_datetime
 
     timestamps()
   end
@@ -13,10 +16,10 @@ defmodule Rzeczywiscie.Friends.DeviceLink do
   @doc false
   def changeset(device_link, attrs) do
     device_link
-    |> cast(attrs, [:device_fingerprint, :master_user_id, :user_name])
-    |> validate_required([:device_fingerprint])
+    |> cast(attrs, [:device_fingerprint, :browser_id, :master_user_id, :user_name])
+    |> validate_required([:browser_id, :master_user_id])
     |> validate_length(:user_name, max: 20)
-    |> unique_constraint(:device_fingerprint)
+    |> unique_constraint(:browser_id)
   end
 
   @doc """
@@ -27,5 +30,20 @@ defmodule Rzeczywiscie.Friends.DeviceLink do
     |> cast(attrs, [:user_name])
     |> validate_length(:user_name, max: 20)
   end
-end
 
+  @doc """
+  Changeset for link code operations.
+  """
+  def link_code_changeset(device_link, attrs) do
+    device_link
+    |> cast(attrs, [:link_code, :link_code_expires_at])
+  end
+
+  @doc """
+  Changeset for linking to another account.
+  """
+  def link_changeset(device_link, attrs) do
+    device_link
+    |> cast(attrs, [:master_user_id, :user_name])
+  end
+end

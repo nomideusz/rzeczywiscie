@@ -551,14 +551,70 @@ defmodule Rzeczywiscie.Friends do
     end
   end
 
-  # --- Username Management ---
+  # --- Username Management (Browser-based Identity) ---
 
   @doc """
-  Get the stored username for a device fingerprint.
+  Register a browser and get/create its DeviceLink.
+  browser_id is a localStorage UUID (unique per browser).
+  device_fingerprint is hardware-based (same across browsers on same device).
+  
+  Returns {:ok, device_link, :new | :existing | :same_device}
+  - :new = brand new browser, no existing account
+  - :existing = returning browser with existing account  
+  - :same_device = new browser but same device fingerprint found (suggest linking)
+  """
+  def register_browser(browser_id, device_fingerprint) when is_binary(browser_id) do
+    require Logger
+    Logger.info("register_browser: browser_id=#{browser_id}, fingerprint=#{device_fingerprint}")
+    
+    case Repo.get_by(DeviceLink, browser_id: browser_id) do
+      nil ->
+        # New browser - check if same device fingerprint exists
+        existing_device = if device_fingerprint do
+          Repo.one(from d in DeviceLink,
+            where: d.device_fingerprint == ^device_fingerprint,
+            where: not is_nil(d.user_name),
+            limit: 1
+          )
+        end
+        
+        # Create new device link
+        master_id = Ecto.UUID.generate()
+        result = %DeviceLink{}
+        |> DeviceLink.changeset(%{
+          browser_id: browser_id,
+          device_fingerprint: device_fingerprint,
+          master_user_id: master_id
+        })
+        |> Repo.insert()
+        
+        case result do
+          {:ok, link} ->
+            if existing_device do
+              Logger.info("register_browser: new browser, same device fingerprint found - suggest linking")
+              {:ok, link, :same_device}
+            else
+              Logger.info("register_browser: created new DeviceLink")
+              {:ok, link, :new}
+            end
+          {:error, changeset} ->
+            Logger.error("register_browser: insert failed: #{inspect(changeset.errors)}")
+            {:error, changeset}
+        end
+
+      existing ->
+        Logger.info("register_browser: returning browser")
+        {:ok, existing, :existing}
+    end
+  end
+  def register_browser(_, _), do: {:error, :invalid_browser_id}
+
+  @doc """
+  Get the stored username for a browser_id.
   Returns nil if no username is stored.
   """
-  def get_username(device_fingerprint) when is_binary(device_fingerprint) do
-    case Repo.get_by(DeviceLink, device_fingerprint: device_fingerprint) do
+  def get_username(browser_id) when is_binary(browser_id) do
+    case Repo.get_by(DeviceLink, browser_id: browser_id) do
       nil -> nil
       link -> link.user_name
     end
@@ -566,58 +622,139 @@ defmodule Rzeczywiscie.Friends do
   def get_username(_), do: nil
 
   @doc """
-  Save/update username for a device fingerprint.
+  Save/update username for a browser_id.
   Creates a DeviceLink record if one doesn't exist.
   Returns {:ok, username} on success.
   """
-  def save_username(device_fingerprint, user_name) when is_binary(device_fingerprint) do
+  def save_username(browser_id, user_name) when is_binary(browser_id) do
     require Logger
     user_name = if user_name, do: String.trim(user_name), else: nil
     user_name = if user_name == "", do: nil, else: user_name
 
-    Logger.info("save_username: fingerprint=#{device_fingerprint}, name=#{inspect(user_name)}")
+    Logger.info("save_username: browser_id=#{browser_id}, name=#{inspect(user_name)}")
 
-    case Repo.get_by(DeviceLink, device_fingerprint: device_fingerprint) do
+    case Repo.get_by(DeviceLink, browser_id: browser_id) do
       nil ->
         # Create new device link with username
-        # Set master_user_id to fingerprint (device is its own master until linked)
+        master_id = Ecto.UUID.generate()
         result = %DeviceLink{}
         |> DeviceLink.changeset(%{
-          device_fingerprint: device_fingerprint,
-          master_user_id: device_fingerprint,
+          browser_id: browser_id,
+          master_user_id: master_id,
           user_name: user_name
         })
         |> Repo.insert()
         
         case result do
-          {:ok, _} -> 
+          {:ok, link} -> 
             Logger.info("save_username: created new DeviceLink")
-            {:ok, user_name}
+            {:ok, user_name, link.master_user_id}
           {:error, changeset} -> 
             Logger.error("save_username: insert failed: #{inspect(changeset.errors)}")
             {:error, changeset}
         end
 
       existing ->
-        # Update existing device link
-        result = existing
-        |> DeviceLink.name_changeset(%{user_name: user_name})
+        # Update existing device link AND all linked browsers
+        master_id = existing.master_user_id
+        
+        # Update all linked browsers with the new name
+        from(d in DeviceLink, where: d.master_user_id == ^master_id)
+        |> Repo.update_all(set: [user_name: user_name])
+        
+        Logger.info("save_username: updated all linked browsers for master_id=#{master_id}")
+        
+        # Update all historical content with new username (retroactive)
+        update_all_content_username(master_id, user_name)
+        
+        {:ok, user_name, master_id}
+    end
+  end
+  def save_username(_, _), do: {:error, :invalid_browser_id}
+
+  @doc """
+  Generate a link code for a browser. Valid for 5 minutes.
+  Returns {:ok, code} or {:error, reason}.
+  """
+  def generate_link_code(browser_id) when is_binary(browser_id) do
+    require Logger
+    
+    case Repo.get_by(DeviceLink, browser_id: browser_id) do
+      nil ->
+        {:error, :not_found}
+      
+      link ->
+        # Generate 4-digit numeric code (easy to type)
+        code = :rand.uniform(9999) |> Integer.to_string() |> String.pad_leading(4, "0")
+        expires_at = DateTime.utc_now() |> DateTime.add(300, :second) |> DateTime.truncate(:second)
+        
+        result = link
+        |> DeviceLink.link_code_changeset(%{link_code: code, link_code_expires_at: expires_at})
         |> Repo.update()
         
         case result do
-          {:ok, _} -> 
-            Logger.info("save_username: updated existing DeviceLink")
-            # Update all historical content with new username (retroactive)
-            user_id = existing.master_user_id || device_fingerprint
-            update_all_content_username(user_id, user_name)
-            {:ok, user_name}
-          {:error, changeset} -> 
-            Logger.error("save_username: update failed: #{inspect(changeset.errors)}")
-            {:error, changeset}
+          {:ok, _} ->
+            Logger.info("generate_link_code: code=#{code} for browser_id=#{browser_id}")
+            {:ok, code}
+          {:error, changeset} ->
+            Logger.error("generate_link_code: failed: #{inspect(changeset.errors)}")
+            {:error, :failed}
         end
     end
   end
-  def save_username(_, _), do: {:error, :invalid_fingerprint}
+  def generate_link_code(_), do: {:error, :invalid_browser_id}
+
+  @doc """
+  Link a browser to an existing account using a link code.
+  Returns {:ok, linked_device_link} or {:error, reason}.
+  """
+  def link_browser_with_code(browser_id, code) when is_binary(browser_id) and is_binary(code) do
+    require Logger
+    now = DateTime.utc_now()
+    
+    # Find the device with this code that hasn't expired
+    target = Repo.one(from d in DeviceLink,
+      where: d.link_code == ^code,
+      where: d.link_code_expires_at > ^now
+    )
+    
+    case target do
+      nil ->
+        Logger.info("link_browser_with_code: invalid or expired code=#{code}")
+        {:error, :invalid_code}
+      
+      target_link ->
+        # Get or create the current browser's device link
+        current = Repo.get_by(DeviceLink, browser_id: browser_id)
+        
+        if current do
+          # Link to target's master_user_id and copy username
+          result = current
+          |> DeviceLink.link_changeset(%{
+            master_user_id: target_link.master_user_id,
+            user_name: target_link.user_name
+          })
+          |> Repo.update()
+          
+          case result do
+            {:ok, updated} ->
+              # Clear the link code (one-time use)
+              target_link
+              |> DeviceLink.link_code_changeset(%{link_code: nil, link_code_expires_at: nil})
+              |> Repo.update()
+              
+              Logger.info("link_browser_with_code: browser=#{browser_id} linked to master=#{target_link.master_user_id}")
+              {:ok, updated}
+            {:error, changeset} ->
+              Logger.error("link_browser_with_code: failed: #{inspect(changeset.errors)}")
+              {:error, :failed}
+          end
+        else
+          {:error, :browser_not_registered}
+        end
+    end
+  end
+  def link_browser_with_code(_, _), do: {:error, :invalid_params}
 
   @doc """
   Update username on all historical content (messages, photos, text cards).
@@ -649,14 +786,14 @@ defmodule Rzeczywiscie.Friends do
   end
 
   @doc """
-  Check if a username is taken by another device (globally reserved).
-  Returns true if the name is taken by a different device.
+  Check if a username is taken by another user (globally reserved).
+  Returns true if the name is taken by a different master_user_id.
   """
-  def username_taken?(name, current_device_fingerprint) when is_binary(name) do
+  def username_taken?(name, current_master_user_id) when is_binary(name) do
     normalized = String.downcase(String.trim(name))
     
     query = from(d in DeviceLink,
-      where: d.device_fingerprint != ^current_device_fingerprint,
+      where: d.master_user_id != ^current_master_user_id,
       where: not is_nil(d.user_name),
       where: fragment("lower(trim(?)) = ?", d.user_name, ^normalized),
       select: count(d.id)
@@ -668,56 +805,72 @@ defmodule Rzeczywiscie.Friends do
   def username_taken?("", _), do: false
 
   @doc """
-  Get device info (user_id and username) for a device fingerprint.
-  Returns {user_id, username} where user_id may be master_user_id if linked.
+  Get device info (user_id and username) for a browser_id.
+  Returns {master_user_id, username, link_status}.
   """
-  def get_device_info(device_fingerprint) when is_binary(device_fingerprint) do
-    result = Repo.get_by(DeviceLink, device_fingerprint: device_fingerprint)
+  def get_device_info(browser_id) when is_binary(browser_id) do
+    require Logger
+    result = Repo.get_by(DeviceLink, browser_id: browser_id)
     
     case result do
       nil -> 
-        # No device link found - this is a new device
-        require Logger
-        Logger.debug("DeviceLink not found for fingerprint: #{device_fingerprint}")
-        {device_fingerprint, nil}
+        Logger.debug("DeviceLink not found for browser_id: #{browser_id}")
+        {nil, nil, :not_registered}
       link -> 
-        user_id = link.master_user_id || device_fingerprint
-        require Logger
-        Logger.debug("DeviceLink found: fingerprint=#{device_fingerprint}, user_name=#{inspect(link.user_name)}")
-        {user_id, link.user_name}
+        Logger.debug("DeviceLink found: browser_id=#{browser_id}, user_name=#{inspect(link.user_name)}")
+        {link.master_user_id, link.user_name, :registered}
     end
   end
-  def get_device_info(_), do: {nil, nil}
+  def get_device_info(_), do: {nil, nil, :invalid}
 
   @doc """
-  Unlink a device (remove the device link).
+  Unlink a browser (remove the device link).
   """
-  def unlink_device(device_fingerprint) do
+  def unlink_browser(browser_id) do
     DeviceLink
-    |> where([d], d.device_fingerprint == ^device_fingerprint)
+    |> where([d], d.browser_id == ^browser_id)
     |> Repo.delete_all()
 
     :ok
   end
 
   @doc """
-  Get all devices linked to a user.
+  Get all browsers linked to a user.
   """
-  def get_linked_devices(master_user_id) do
+  def get_linked_browsers(master_user_id) do
     DeviceLink
     |> where([d], d.master_user_id == ^master_user_id)
     |> Repo.all()
   end
 
   @doc """
-  Clean up expired link codes.
+  Get active link code for a browser (if any).
+  """
+  def get_active_link_code(browser_id) when is_binary(browser_id) do
+    now = DateTime.utc_now()
+    
+    case Repo.get_by(DeviceLink, browser_id: browser_id) do
+      nil -> nil
+      link ->
+        if link.link_code && link.link_code_expires_at && DateTime.compare(link.link_code_expires_at, now) == :gt do
+          link.link_code
+        else
+          nil
+        end
+    end
+  end
+  def get_active_link_code(_), do: nil
+
+  @doc """
+  Clean up expired link codes from DeviceLinks.
   """
   def cleanup_expired_codes do
     now = DateTime.utc_now()
 
-    LinkCode
-    |> where([c], c.expires_at < ^now)
-    |> Repo.delete_all()
+    from(d in DeviceLink,
+      where: d.link_code_expires_at < ^now
+    )
+    |> Repo.update_all(set: [link_code: nil, link_code_expires_at: nil])
   end
 
   # --- Text Cards ---

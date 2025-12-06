@@ -9,6 +9,7 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
       |> assign(:user_id, nil)
       |> assign(:user_name, nil)
       |> assign(:user_color, nil)
+      |> assign(:browser_id, nil)
       |> assign(:device_fingerprint, nil)
       |> assign(:items, [])
       |> assign(:item_count, 0)
@@ -488,29 +489,44 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
   end
 
   # Handle device fingerprint from JS hook
-  def handle_event("set_user_id", %{"user_id" => device_fingerprint, "user_name" => client_user_name}, socket) do
-    # Get device info from server (includes linked user_id and stored username)
-    {user_id, server_user_name} = Friends.get_device_info(device_fingerprint)
-    user_color = generate_user_color(user_id)
+  def handle_event("set_user_id", %{"browser_id" => browser_id} = params, socket) do
+    device_fingerprint = params["device_fingerprint"]
     
-    # Prefer server-stored username over client-stored
-    user_name = server_user_name || client_user_name
-    
-    items = Friends.list_user_items(user_id)
-    
-    # Subscribe to username updates for this device
-    Phoenix.PubSub.subscribe(Rzeczywiscie.PubSub, "friends:user:#{device_fingerprint}")
-    
-    {:noreply,
-     socket
-     |> assign(:user_id, user_id)
-     |> assign(:user_name, user_name)
-     |> assign(:device_fingerprint, device_fingerprint)
-     |> assign(:user_color, user_color)
-     |> assign(:items, items)
-     |> assign(:item_count, length(items))
-     |> assign(:loading, false)
-     |> push_event("save_user_name", %{name: user_name})}
+    # Register browser and get/create DeviceLink
+    case Friends.register_browser(browser_id, device_fingerprint) do
+      {:ok, device_link, _status} ->
+        user_id = device_link.master_user_id
+        user_name = device_link.user_name
+        user_color = generate_user_color(user_id)
+        
+        items = Friends.list_user_items(user_id)
+        
+        # Subscribe to username updates for this browser
+        Phoenix.PubSub.subscribe(Rzeczywiscie.PubSub, "friends:browser:#{browser_id}")
+        
+        {:noreply,
+         socket
+         |> assign(:user_id, user_id)
+         |> assign(:user_name, user_name)
+         |> assign(:browser_id, browser_id)
+         |> assign(:device_fingerprint, device_fingerprint)
+         |> assign(:user_color, user_color)
+         |> assign(:items, items)
+         |> assign(:item_count, length(items))
+         |> assign(:loading, false)
+         |> push_event("save_user_name", %{name: user_name})}
+      
+      {:error, _} ->
+        {:noreply, assign(socket, :loading, false)}
+    end
+  end
+
+  # Backwards compatibility
+  def handle_event("set_user_id", %{"user_id" => user_id} = params, socket) do
+    handle_event("set_user_id", %{
+      "browser_id" => user_id,
+      "device_fingerprint" => params["device_fingerprint"] || user_id
+    }, socket)
   end
 
   def handle_event("validate-upload", _params, socket), do: {:noreply, socket}
