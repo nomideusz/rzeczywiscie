@@ -101,7 +101,6 @@ defmodule RzeczywiscieWeb.FriendsLive do
       |> assign(:new_place_lng, nil)
       |> assign(:new_place_name, "")
       |> assign(:new_place_description, "")
-      |> assign(:new_place_emoji, "📍")
       |> stream(:items, items)
       |> stream(:messages, messages)
       |> allow_upload(:photo,
@@ -989,23 +988,6 @@ defmodule RzeczywiscieWeb.FriendsLive do
               </div>
               
               <form phx-submit="save-place" phx-change="update-place-form" id="place-form">
-                <!-- Emoji Selector -->
-                <div class="mb-4">
-                  <label class="text-xs font-bold uppercase opacity-60 mb-2 block">Icon</label>
-                  <div class="flex flex-wrap gap-2">
-                    <%= for emoji <- ["📍", "🍕", "🍺", "☕", "🏠", "🏢", "🎯", "⭐", "❤️", "🎉"] do %>
-                      <button
-                        type="button"
-                        phx-click="update-place-form"
-                        phx-value-emoji={emoji}
-                        phx-value-name={@new_place_name}
-                        phx-value-description={@new_place_description}
-                        class={["w-10 h-10 text-xl border-2 cursor-pointer transition-colors", if(@new_place_emoji == emoji, do: "border-primary bg-primary/20", else: "border-base-content/30 hover:border-base-content")]}
-                      >{emoji}</button>
-                    <% end %>
-                  </div>
-                </div>
-                
                 <!-- Name -->
                 <div class="mb-4">
                   <label class="text-xs font-bold uppercase opacity-60 mb-2 block">Place Name</label>
@@ -1034,8 +1016,8 @@ defmodule RzeczywiscieWeb.FriendsLive do
                 </div>
                 
                 <!-- Location Info -->
-                <div class="mb-4 p-3 bg-base-200 border-2 border-base-content/20 text-xs font-mono">
-                  📍 {Float.round(@new_place_lat || 0, 5)}, {Float.round(@new_place_lng || 0, 5)}
+                <div class="mb-4 p-3 bg-base-200 border-2 border-base-content/20 text-xs font-mono opacity-60">
+                  {Float.round(@new_place_lat || 0, 5)}, {Float.round(@new_place_lng || 0, 5)}
                 </div>
                 
                 <button
@@ -1425,16 +1407,14 @@ defmodule RzeczywiscieWeb.FriendsLive do
      |> assign(:new_place_lat, nil)
      |> assign(:new_place_lng, nil)
      |> assign(:new_place_name, "")
-     |> assign(:new_place_description, "")
-     |> assign(:new_place_emoji, "📍")}
+     |> assign(:new_place_description, "")}
   end
 
   def handle_event("update-place-form", params, socket) do
     {:noreply,
      socket
      |> assign(:new_place_name, params["name"] || "")
-     |> assign(:new_place_description, params["description"] || "")
-     |> assign(:new_place_emoji, params["emoji"] || "📍")}
+     |> assign(:new_place_description, params["description"] || "")}
   end
 
   def handle_event("save-place", _params, socket) do
@@ -1446,7 +1426,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
       user_color: socket.assigns.user_color,
       name: String.trim(socket.assigns.new_place_name),
       description: String.trim(socket.assigns.new_place_description),
-      emoji: socket.assigns.new_place_emoji,
+      emoji: "📍",
       lat: socket.assigns.new_place_lat,
       lng: socket.assigns.new_place_lng
     }
@@ -1461,7 +1441,6 @@ defmodule RzeczywiscieWeb.FriendsLive do
          |> assign(:new_place_lng, nil)
          |> assign(:new_place_name, "")
          |> assign(:new_place_description, "")
-         |> assign(:new_place_emoji, "📍")
          |> push_event("add_place_marker", place)}
       {:error, _} ->
         {:noreply, put_flash(socket, :error, "Failed to save place")}
@@ -1949,10 +1928,17 @@ defmodule RzeczywiscieWeb.FriendsLive do
 
   # Handle new place added by another user
   def handle_info({:new_place, place}, socket) do
-    {:noreply,
-     socket
-     |> assign(:places, [place | socket.assigns.places])
-     |> push_event("add_place_marker", place)}
+    # Only add if not already in the list (prevents duplicate when you created it)
+    already_exists = Enum.any?(socket.assigns.places, &(&1.id == place.id))
+    
+    if already_exists do
+      {:noreply, socket}
+    else
+      {:noreply,
+       socket
+       |> assign(:places, [place | socket.assigns.places])
+       |> push_event("add_place_marker", place)}
+    end
   end
 
   # Handle place deleted by another user
