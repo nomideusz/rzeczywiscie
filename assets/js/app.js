@@ -748,21 +748,17 @@ window.addEventListener("phx:request_location", () => {
     if ("geolocation" in navigator) {
         navigator.geolocation.getCurrentPosition(
             (position) => {
-                // Find the LiveView and push the location
-                const lv = document.querySelector('[data-phx-main]')
-                if (lv && lv._liveViewSelf) {
-                    lv._liveViewSelf.pushEvent('location_update', {
+                // Use liveSocket to push event to the LiveView
+                liveSocket.execJS(document.body, JSON.stringify([
+                    ["push", { event: "location_update", data: {
                         lat: position.coords.latitude,
                         lng: position.coords.longitude
-                    })
-                }
+                    }}]
+                ]))
             },
             (error) => {
                 console.error('Location error:', error)
-                const lv = document.querySelector('[data-phx-main]')
-                if (lv && lv._liveViewSelf) {
-                    lv._liveViewSelf.pushEvent('location_error', { error: error.message })
-                }
+                alert('Unable to get your location. Please check your browser permissions.')
             },
             { enableHighAccuracy: true, timeout: 10000 }
         )

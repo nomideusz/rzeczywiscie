@@ -1113,7 +1113,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
                socket
                |> assign(:item_count, max(0, socket.assigns.item_count - 1))
                |> assign(:items_map, Map.delete(socket.assigns.items_map, key))
-               |> stream_delete(:items, %{id: "photo-#{photo_id}"})
+               |> stream_delete(:items, %{id: photo_id})
                |> put_flash(:info, "Deleted")}
             {:error, _} ->
               {:noreply, put_flash(socket, :error, "Failed")}
@@ -1232,7 +1232,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
       {:ok, _} ->
         {:noreply,
          socket
-         |> stream_delete(:items, %{id: "items-#{key}"})
+         |> stream_delete(:items, %{id: photo_id})
          |> assign(:items_map, Map.delete(socket.assigns.items_map, key))
          |> assign(:item_count, max(0, socket.assigns.item_count - 1))
          |> assign(:show_photo_edit_modal, false)
@@ -1298,7 +1298,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
       {:ok, _} ->
         {:noreply,
          socket
-         |> stream_delete(:items, %{id: "items-#{key}"})
+         |> stream_delete(:items, %{id: note_id})
          |> assign(:items_map, Map.delete(socket.assigns.items_map, key))
          |> assign(:item_count, max(0, socket.assigns.item_count - 1))
          |> assign(:show_note_edit_modal, false)
@@ -1856,7 +1856,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
        socket
        |> assign(:item_count, max(0, socket.assigns.item_count - 1))
        |> assign(:items_map, Map.delete(socket.assigns.items_map, key))
-       |> stream_delete(:items, %{id: key})}
+       |> stream_delete(:items, %{id: id})}
     else
       {:noreply, socket}
     end
