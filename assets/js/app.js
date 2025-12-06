@@ -212,11 +212,21 @@ const Hooks = {
             // Get device fingerprint (same across browsers on same device)
             this.deviceFingerprint = generateDeviceFingerprint()
             
-            // Send both IDs to server for registration
+            // Check if we need to restore modal state after reconnect
+            const savedModal = sessionStorage.getItem('friends_open_modal')
+            const savedInput = sessionStorage.getItem('friends_modal_input')
+            
+            // Send both IDs to server for registration, plus any saved modal state
             this.pushEvent("set_user_id", { 
                 browser_id: this.browserId,
-                device_fingerprint: this.deviceFingerprint
+                device_fingerprint: this.deviceFingerprint,
+                restore_modal: savedModal,
+                restore_input: savedInput
             })
+            
+            // Clear saved modal state after sending
+            sessionStorage.removeItem('friends_open_modal')
+            sessionStorage.removeItem('friends_modal_input')
             
             // Listen for save_user_name event from server
             this.handleEvent("save_user_name", ({ name }) => {
@@ -233,6 +243,17 @@ const Hooks = {
             // Listen for browser_linked event
             this.handleEvent("browser_linked", ({ master_user_id, user_name }) => {
                 console.log('Browser linked to account:', master_user_id, 'as', user_name)
+            })
+            
+            // Listen for modal state changes to save them
+            this.handleEvent("modal_opened", ({ modal, input }) => {
+                sessionStorage.setItem('friends_open_modal', modal)
+                if (input) sessionStorage.setItem('friends_modal_input', input)
+            })
+            
+            this.handleEvent("modal_closed", () => {
+                sessionStorage.removeItem('friends_open_modal')
+                sessionStorage.removeItem('friends_modal_input')
             })
             
             // Intercept file input to optimize images before upload
@@ -752,7 +773,17 @@ const Hooks = {
 }
 
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
-let liveSocket = new LiveSocket("/live", Socket, {hooks: Hooks, params: {_csrf_token: csrfToken}})
+let liveSocket = new LiveSocket("/live", Socket, {
+    hooks: Hooks, 
+    params: {_csrf_token: csrfToken},
+    // More tolerant reconnection for mobile
+    reconnectAfterMs: (tries) => {
+        // Reconnect quickly: 100ms, 200ms, 500ms, 1s, 2s, then every 5s
+        return [100, 200, 500, 1000, 2000, 5000][tries - 1] || 5000
+    },
+    // Fall back to long polling if WebSocket fails
+    longPollFallbackMs: 2500
+})
 
 // Handle location sharing request
 window.addEventListener("phx:request_location", () => {
@@ -812,6 +843,16 @@ window.addEventListener("phx:download_csv", (e) => {
 
 // connect if there are any LiveViews on the page
 liveSocket.connect()
+
+// Handle page visibility changes - prevent aggressive reconnects on mobile
+document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+        // Page became visible again - ensure socket is connected
+        if (!liveSocket.isConnected()) {
+            liveSocket.connect()
+        }
+    }
+})
 
 // expose liveSocket on window for web console debug logs and latency simulation:
 // >> liveSocket.enableDebug()

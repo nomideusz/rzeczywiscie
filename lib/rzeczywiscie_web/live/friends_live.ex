@@ -1131,6 +1131,20 @@ defmodule RzeczywiscieWeb.FriendsLive do
       |> put_flash(:error, "Failed to register browser")
     end
 
+    # Restore modal state if reconnecting
+    socket = case params["restore_modal"] do
+      "name" -> 
+        socket
+        |> assign(:show_name_modal, true)
+        |> assign(:name_input, params["restore_input"] || "")
+      "link" -> 
+        assign(socket, :show_link_modal, true)
+      "room" -> 
+        assign(socket, :show_room_modal, true)
+      _ -> 
+        socket
+    end
+
     {:noreply, socket}
   end
 
@@ -1139,7 +1153,9 @@ defmodule RzeczywiscieWeb.FriendsLive do
     # Convert old format to new format
     handle_event("set_user_id", %{
       "browser_id" => user_id,
-      "device_fingerprint" => params["device_fingerprint"] || user_id
+      "device_fingerprint" => params["device_fingerprint"] || user_id,
+      "restore_modal" => params["restore_modal"],
+      "restore_input" => params["restore_input"]
     }, socket)
   end
 
@@ -1622,11 +1638,19 @@ defmodule RzeczywiscieWeb.FriendsLive do
   # --- Name Events ---
 
   def handle_event("open-name-modal", _params, socket) do
-    {:noreply, socket |> assign(:show_name_modal, true) |> assign(:name_input, socket.assigns.user_name || "") |> assign(:name_error, nil)}
+    {:noreply, 
+     socket 
+     |> assign(:show_name_modal, true) 
+     |> assign(:name_input, socket.assigns.user_name || "") 
+     |> assign(:name_error, nil)
+     |> push_event("modal_opened", %{modal: "name", input: socket.assigns.user_name || ""})}
   end
 
   def handle_event("close-name-modal", _params, socket) do
-    {:noreply, assign(socket, :show_name_modal, false)}
+    {:noreply, 
+     socket
+     |> assign(:show_name_modal, false)
+     |> push_event("modal_closed", %{})}
   end
 
   def handle_event("update-name-input", %{"name" => name}, socket) do
@@ -1677,7 +1701,8 @@ defmodule RzeczywiscieWeb.FriendsLive do
        |> assign(:user_name, name)
        |> assign(:name_error, nil)
        |> assign(:show_name_modal, false)
-       |> push_event("save_user_name", %{name: name})}
+       |> push_event("save_user_name", %{name: name})
+       |> push_event("modal_closed", %{})}
     end
   end
 
@@ -1690,11 +1715,15 @@ defmodule RzeczywiscieWeb.FriendsLive do
      |> assign(:show_link_modal, true)
      |> assign(:link_code, nil)
      |> assign(:link_code_input, "")
-     |> assign(:link_error, nil)}
+     |> assign(:link_error, nil)
+     |> push_event("modal_opened", %{modal: "link"})}
   end
 
   def handle_event("close-link-modal", _params, socket) do
-    {:noreply, assign(socket, :show_link_modal, false)}
+    {:noreply, 
+     socket
+     |> assign(:show_link_modal, false)
+     |> push_event("modal_closed", %{})}
   end
 
   def handle_event("generate-link-code", _params, socket) do
