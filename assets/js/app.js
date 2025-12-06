@@ -558,11 +558,185 @@ const Hooks = {
             // Save the new order
             saveOrder()
         }
+    },
+    
+    // Map for Friends app - location sharing
+    FriendsMap: {
+        mounted() {
+            this.loadLeaflet().then(() => this.initMap())
+        },
+        
+        async loadLeaflet() {
+            // Load Leaflet CSS
+            if (!document.querySelector('link[href*="leaflet"]')) {
+                const link = document.createElement('link')
+                link.rel = 'stylesheet'
+                link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
+                document.head.appendChild(link)
+            }
+            
+            // Load Leaflet JS
+            if (!window.L) {
+                await new Promise((resolve) => {
+                    const script = document.createElement('script')
+                    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
+                    script.onload = resolve
+                    document.head.appendChild(script)
+                })
+            }
+        },
+        
+        initMap() {
+            const container = this.el.querySelector('.map-container')
+            if (!container || !window.L) return
+            
+            // Default to Warsaw if no location
+            const defaultLat = parseFloat(this.el.dataset.lat) || 52.2297
+            const defaultLng = parseFloat(this.el.dataset.lng) || 21.0122
+            const defaultZoom = parseInt(this.el.dataset.zoom) || 13
+            
+            this.map = L.map(container).setView([defaultLat, defaultLng], defaultZoom)
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap'
+            }).addTo(this.map)
+            
+            this.markers = {}
+            this.liveMarkers = {}
+            
+            // Load existing places
+            const places = JSON.parse(this.el.dataset.places || '[]')
+            places.forEach(place => this.addPlaceMarker(place))
+            
+            // Load live locations
+            const liveLocations = JSON.parse(this.el.dataset.liveLocations || '[]')
+            liveLocations.forEach(loc => this.addLiveMarker(loc))
+            
+            // Click to add place
+            this.map.on('click', (e) => {
+                if (this.el.dataset.addingPlace === 'true') {
+                    this.pushEvent('map_clicked', { lat: e.latlng.lat, lng: e.latlng.lng })
+                }
+            })
+            
+            // Handle events from LiveView
+            this.handleEvent('add_place_marker', (place) => this.addPlaceMarker(place))
+            this.handleEvent('remove_place_marker', ({id}) => this.removePlaceMarker(id))
+            this.handleEvent('update_live_locations', (data) => this.updateLiveLocations(data.locations))
+            this.handleEvent('fit_bounds', (data) => this.fitBounds(data.bounds))
+            this.handleEvent('center_map', (data) => this.map.setView([data.lat, data.lng], data.zoom || 15))
+        },
+        
+        addPlaceMarker(place) {
+            if (this.markers[place.id]) {
+                this.markers[place.id].remove()
+            }
+            
+            const icon = L.divIcon({
+                className: 'custom-place-marker',
+                html: `<div class="place-marker" style="background: ${place.user_color || '#3b82f6'}">${place.emoji || '📍'}</div>`,
+                iconSize: [36, 36],
+                iconAnchor: [18, 36]
+            })
+            
+            const marker = L.marker([place.lat, place.lng], { icon })
+                .addTo(this.map)
+                .bindPopup(`
+                    <div class="place-popup">
+                        <strong>${place.name}</strong>
+                        ${place.description ? `<p class="text-sm opacity-70">${place.description}</p>` : ''}
+                        <p class="text-xs opacity-50">by ${place.user_name || 'Anonymous'}</p>
+                    </div>
+                `)
+            
+            this.markers[place.id] = marker
+        },
+        
+        removePlaceMarker(id) {
+            if (this.markers[id]) {
+                this.markers[id].remove()
+                delete this.markers[id]
+            }
+        },
+        
+        addLiveMarker(loc) {
+            if (this.liveMarkers[loc.user_id]) {
+                this.liveMarkers[loc.user_id].setLatLng([loc.lat, loc.lng])
+                return
+            }
+            
+            const icon = L.divIcon({
+                className: 'custom-live-marker',
+                html: `<div class="live-marker" style="background: ${loc.user_color || '#ef4444'}"><span class="pulse-ring"></span>${loc.user_name ? loc.user_name.charAt(0).toUpperCase() : '?'}</div>`,
+                iconSize: [40, 40],
+                iconAnchor: [20, 20]
+            })
+            
+            const marker = L.marker([loc.lat, loc.lng], { icon })
+                .addTo(this.map)
+                .bindPopup(`<strong>${loc.user_name || 'Anonymous'}</strong><br><span class="text-xs">Live location</span>`)
+            
+            this.liveMarkers[loc.user_id] = marker
+        },
+        
+        updateLiveLocations(locations) {
+            // Remove old markers for users no longer sharing
+            const currentIds = locations.map(l => l.user_id)
+            Object.keys(this.liveMarkers).forEach(id => {
+                if (!currentIds.includes(id)) {
+                    this.liveMarkers[id].remove()
+                    delete this.liveMarkers[id]
+                }
+            })
+            
+            // Add/update markers
+            locations.forEach(loc => this.addLiveMarker(loc))
+        },
+        
+        fitBounds(bounds) {
+            if (bounds && bounds.length >= 2) {
+                this.map.fitBounds(bounds, { padding: [50, 50] })
+            }
+        },
+        
+        destroyed() {
+            if (this.map) {
+                this.map.remove()
+            }
+        }
     }
 }
 
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 let liveSocket = new LiveSocket("/live", Socket, {hooks: Hooks, params: {_csrf_token: csrfToken}})
+
+// Handle location sharing request
+window.addEventListener("phx:request_location", () => {
+    if ("geolocation" in navigator) {
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                // Find the LiveView and push the location
+                const lv = document.querySelector('[data-phx-main]')
+                if (lv && lv._liveViewSelf) {
+                    lv._liveViewSelf.pushEvent('location_update', {
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude
+                    })
+                }
+            },
+            (error) => {
+                console.error('Location error:', error)
+                const lv = document.querySelector('[data-phx-main]')
+                if (lv && lv._liveViewSelf) {
+                    lv._liveViewSelf.pushEvent('location_error', { error: error.message })
+                }
+            },
+            { enableHighAccuracy: true, timeout: 10000 }
+        )
+    } else {
+        alert('Geolocation is not supported by your browser')
+    }
+})
 
 // Show progress bar on live navigation and form submits - but not on initial connect
 topbar.config({barColors: {0: "#29d"}, shadowColor: "rgba(0, 0, 0, .3)"})

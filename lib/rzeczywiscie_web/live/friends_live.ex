@@ -89,6 +89,19 @@ defmodule RzeczywiscieWeb.FriendsLive do
       |> assign(:show_note_edit_modal, false)
       |> assign(:editing_note, nil)
       |> assign(:note_edit_input, "")
+      # Map/location assigns
+      |> assign(:view_mode, "feed")  # "feed" or "map"
+      |> assign(:places, [])
+      |> assign(:live_locations, [])
+      |> assign(:sharing_location, false)
+      |> assign(:location_expires_at, nil)
+      |> assign(:show_place_modal, false)
+      |> assign(:adding_place, false)
+      |> assign(:new_place_lat, nil)
+      |> assign(:new_place_lng, nil)
+      |> assign(:new_place_name, "")
+      |> assign(:new_place_description, "")
+      |> assign(:new_place_emoji, "📍")
       |> stream(:items, items)
       |> stream(:messages, messages)
       |> allow_upload(:photo,
@@ -209,30 +222,72 @@ defmodule RzeczywiscieWeb.FriendsLive do
               </div>
 
               <div class="flex items-center gap-2">
-                <!-- Add Note Button -->
-                <button
-                  type="button"
-                  phx-click="open-note-modal"
-                  class="h-10 px-3 border-2 border-base-content font-bold uppercase text-sm bg-base-100 hover:bg-base-content hover:text-base-100 transition-colors flex items-center gap-2 cursor-pointer"
-                >
-                  <span>📝</span>
-                  <span class="hidden sm:inline">Note</span>
-                </button>
-
-                <!-- Upload Button -->
-                <form id="upload-form" phx-submit="save" phx-change="validate">
-                  <label
-                    for={@uploads.photo.ref}
-                    class={[
-                      "h-10 px-3 border-2 border-base-content font-bold uppercase text-sm transition-colors flex items-center gap-2 cursor-pointer",
-                      if(@uploading, do: "bg-base-content text-base-100 opacity-70", else: "bg-primary text-primary-content hover:opacity-80")
-                    ]}
+                <!-- View Mode Tabs -->
+                <div class="flex border-2 border-base-content">
+                  <button
+                    type="button"
+                    phx-click="switch-view"
+                    phx-value-mode="feed"
+                    class={["h-10 px-3 font-bold text-sm cursor-pointer transition-colors", if(@view_mode == "feed", do: "bg-base-content text-base-100", else: "hover:bg-base-200")]}
+                  >📷</button>
+                  <button
+                    type="button"
+                    phx-click="switch-view"
+                    phx-value-mode="map"
+                    class={["h-10 px-3 font-bold text-sm cursor-pointer transition-colors border-l-2 border-base-content", if(@view_mode == "map", do: "bg-base-content text-base-100", else: "hover:bg-base-200")]}
+                  >🗺️</button>
+                </div>
+                
+                <%= if @view_mode == "feed" do %>
+                  <!-- Add Note Button -->
+                  <button
+                    type="button"
+                    phx-click="open-note-modal"
+                    class="h-10 px-3 border-2 border-base-content font-bold uppercase text-sm bg-base-100 hover:bg-base-content hover:text-base-100 transition-colors flex items-center gap-2 cursor-pointer"
                   >
-                    <span>📷</span>
-                    <span class="hidden sm:inline"><%= if @uploading, do: "...", else: "Photo" %></span>
-                  </label>
-                  <.live_file_input upload={@uploads.photo} class="sr-only" />
-                </form>
+                    <span>📝</span>
+                    <span class="hidden sm:inline">Note</span>
+                  </button>
+
+                  <!-- Upload Button -->
+                  <form id="upload-form" phx-submit="save" phx-change="validate">
+                <% else %>
+                  <!-- Add Place Button -->
+                  <button
+                    type="button"
+                    phx-click="toggle-add-place"
+                    class={["h-10 px-3 border-2 border-base-content font-bold uppercase text-sm transition-colors flex items-center gap-2 cursor-pointer", if(@adding_place, do: "bg-primary text-primary-content border-primary", else: "bg-base-100 hover:bg-base-content hover:text-base-100")]}
+                  >
+                    <span>📍</span>
+                    <span class="hidden sm:inline">{if @adding_place, do: "Click Map", else: "Add Place"}</span>
+                  </button>
+                  
+                  <!-- Share Location Button -->
+                  <button
+                    type="button"
+                    phx-click="toggle-location-sharing"
+                    class={["h-10 px-3 border-2 font-bold uppercase text-sm transition-colors flex items-center gap-2 cursor-pointer", if(@sharing_location, do: "bg-success text-success-content border-success animate-pulse", else: "border-base-content bg-base-100 hover:bg-base-content hover:text-base-100")]}
+                  >
+                    <span>{if @sharing_location, do: "🔴", else: "📡"}</span>
+                    <span class="hidden sm:inline">{if @sharing_location, do: "Sharing", else: "Share Location"}</span>
+                  </button>
+                <% end %>
+
+                <%= if @view_mode == "feed" do %>
+                <!-- Note: Upload form continues here -->
+                    <label
+                      for={@uploads.photo.ref}
+                      class={[
+                        "h-10 px-3 border-2 border-base-content font-bold uppercase text-sm transition-colors flex items-center gap-2 cursor-pointer",
+                        if(@uploading, do: "bg-base-content text-base-100 opacity-70", else: "bg-primary text-primary-content hover:opacity-80")
+                      ]}
+                    >
+                      <span>📷</span>
+                      <span class="hidden sm:inline"><%= if @uploading, do: "...", else: "Photo" %></span>
+                    </label>
+                    <.live_file_input upload={@uploads.photo} class="sr-only" />
+                  </form>
+                <% end %>
               </div>
             </div>
           </div>
@@ -253,11 +308,61 @@ defmodule RzeczywiscieWeb.FriendsLive do
           </div>
         <% end %>
 
-        <!-- Main Content: Photos + Chat -->
+        <!-- Main Content: Photos/Map + Chat -->
         <div class="container mx-auto px-4 py-6">
           <div class="grid lg:grid-cols-3 gap-6">
-            <!-- Content Grid (2/3) - Masonry Layout with Photos and Notes -->
+            <!-- Content Grid (2/3) -->
             <div class="lg:col-span-2">
+              <%= if @view_mode == "map" do %>
+                <!-- Map View -->
+                <div 
+                  id="friends-map" 
+                  phx-hook="FriendsMap"
+                  phx-update="ignore"
+                  data-places={Jason.encode!(@places)}
+                  data-live-locations={Jason.encode!(@live_locations)}
+                  data-adding-place={to_string(@adding_place)}
+                  class="border-4 border-base-content bg-base-100 overflow-hidden"
+                >
+                  <div class="map-container" style="height: 500px;"></div>
+                </div>
+                
+                <!-- Places List -->
+                <%= if @places != [] do %>
+                  <div class="mt-4 border-4 border-base-content bg-base-100">
+                    <div class="p-3 border-b-2 border-base-content bg-base-200">
+                      <h3 class="font-black uppercase text-sm">📍 Saved Places ({length(@places)})</h3>
+                    </div>
+                    <div class="divide-y-2 divide-base-content/20 max-h-60 overflow-y-auto">
+                      <%= for place <- @places do %>
+                        <div class="p-3 flex items-start gap-3 group hover:bg-base-200 transition-colors">
+                          <div class="text-xl">{place.emoji}</div>
+                          <div class="flex-1 min-w-0">
+                            <div class="font-bold text-sm truncate">{place.name}</div>
+                            <%= if place.description do %>
+                              <div class="text-xs opacity-60 truncate">{place.description}</div>
+                            <% end %>
+                            <div class="text-[10px] opacity-40 flex items-center gap-1 mt-1">
+                              <div class="w-2 h-2 rounded-full" style={"background: #{place.user_color}"}></div>
+                              {place.user_name || "Anonymous"}
+                            </div>
+                          </div>
+                          <%= if place.user_id == @user_id do %>
+                            <button
+                              type="button"
+                              phx-click="delete-place"
+                              phx-value-id={place.id}
+                              data-confirm="Delete this place?"
+                              class="opacity-0 group-hover:opacity-100 text-error text-xs cursor-pointer"
+                            >✕</button>
+                          <% end %>
+                        </div>
+                      <% end %>
+                    </div>
+                  </div>
+                <% end %>
+              <% else %>
+              <!-- Feed View (Photos + Notes) -->
               <%= cond do %>
                 <% @loading -> %>
                   <%!-- Loading skeleton grid --%>
@@ -372,6 +477,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
                     <% end %>
                   <% end %>
                 </div>
+              <% end %>
               <% end %>
             </div>
 
@@ -876,6 +982,77 @@ defmodule RzeczywiscieWeb.FriendsLive do
             </div>
           </div>
         <% end %>
+
+        <!-- Add Place Modal -->
+        <%= if @show_place_modal do %>
+          <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 overflow-y-auto" phx-hook="ModalScrollLock" id="place-modal-backdrop">
+            <div class="bg-base-100 border-4 border-base-content p-6 max-w-md w-full shadow-2xl my-8" phx-click-away="close-place-modal">
+              <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-black uppercase">📍 Add Place</h2>
+                <button type="button" phx-click="close-place-modal" class="text-2xl leading-none hover:opacity-60 cursor-pointer">×</button>
+              </div>
+              
+              <form phx-submit="save-place" phx-change="update-place-form" id="place-form">
+                <!-- Emoji Selector -->
+                <div class="mb-4">
+                  <label class="text-xs font-bold uppercase opacity-60 mb-2 block">Icon</label>
+                  <div class="flex flex-wrap gap-2">
+                    <%= for emoji <- ["📍", "🍕", "🍺", "☕", "🏠", "🏢", "🎯", "⭐", "❤️", "🎉"] do %>
+                      <button
+                        type="button"
+                        phx-click="update-place-form"
+                        phx-value-emoji={emoji}
+                        phx-value-name={@new_place_name}
+                        phx-value-description={@new_place_description}
+                        class={["w-10 h-10 text-xl border-2 cursor-pointer transition-colors", if(@new_place_emoji == emoji, do: "border-primary bg-primary/20", else: "border-base-content/30 hover:border-base-content")]}
+                      >{emoji}</button>
+                    <% end %>
+                  </div>
+                </div>
+                
+                <!-- Name -->
+                <div class="mb-4">
+                  <label class="text-xs font-bold uppercase opacity-60 mb-2 block">Place Name</label>
+                  <input
+                    type="text"
+                    name="name"
+                    value={@new_place_name}
+                    placeholder="e.g., Best Pizza in Town"
+                    maxlength="100"
+                    class="w-full px-4 py-3 border-2 border-base-content text-base bg-base-100 focus:outline-none focus:ring-2 focus:ring-primary"
+                    autofocus
+                  />
+                </div>
+                
+                <!-- Description -->
+                <div class="mb-4">
+                  <label class="text-xs font-bold uppercase opacity-60 mb-2 block">Description (optional)</label>
+                  <textarea
+                    name="description"
+                    value={@new_place_description}
+                    placeholder="Add a note about this place..."
+                    maxlength="500"
+                    rows="3"
+                    class="w-full px-4 py-3 border-2 border-base-content text-base bg-base-100 resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                  >{@new_place_description}</textarea>
+                </div>
+                
+                <!-- Location Info -->
+                <div class="mb-4 p-3 bg-base-200 border-2 border-base-content/20 text-xs font-mono">
+                  📍 {Float.round(@new_place_lat || 0, 5)}, {Float.round(@new_place_lng || 0, 5)}
+                </div>
+                
+                <button
+                  type="submit"
+                  disabled={String.trim(@new_place_name) == ""}
+                  class="w-full px-4 py-3 border-2 border-base-content bg-base-content text-base-100 font-bold uppercase disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  Save Place
+                </button>
+              </form>
+            </div>
+          </div>
+        <% end %>
       </div>
     </.app>
     """
@@ -1207,6 +1384,142 @@ defmodule RzeczywiscieWeb.FriendsLive do
     else
       {:noreply, socket}
     end
+  end
+
+  # --- Map/Location Events ---
+  
+  def handle_event("switch-view", %{"mode" => mode}, socket) do
+    socket = assign(socket, :view_mode, mode)
+    
+    # Load places and live locations when switching to map
+    socket = if mode == "map" do
+      places = Friends.list_places(socket.assigns.room.id)
+      live_locs = Presence.list_live_locations(socket.assigns.room.code)
+      socket
+      |> assign(:places, places)
+      |> assign(:live_locations, live_locs)
+    else
+      socket
+    end
+    
+    {:noreply, socket}
+  end
+
+  def handle_event("toggle-add-place", _params, socket) do
+    {:noreply, assign(socket, :adding_place, !socket.assigns.adding_place)}
+  end
+
+  def handle_event("map_clicked", %{"lat" => lat, "lng" => lng}, socket) do
+    if socket.assigns.adding_place do
+      {:noreply,
+       socket
+       |> assign(:new_place_lat, lat)
+       |> assign(:new_place_lng, lng)
+       |> assign(:show_place_modal, true)
+       |> assign(:adding_place, false)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("close-place-modal", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:show_place_modal, false)
+     |> assign(:new_place_lat, nil)
+     |> assign(:new_place_lng, nil)
+     |> assign(:new_place_name, "")
+     |> assign(:new_place_description, "")
+     |> assign(:new_place_emoji, "📍")}
+  end
+
+  def handle_event("update-place-form", params, socket) do
+    {:noreply,
+     socket
+     |> assign(:new_place_name, params["name"] || "")
+     |> assign(:new_place_description, params["description"] || "")
+     |> assign(:new_place_emoji, params["emoji"] || "📍")}
+  end
+
+  def handle_event("save-place", _params, socket) do
+    room = socket.assigns.room
+    
+    attrs = %{
+      user_id: socket.assigns.user_id,
+      user_name: socket.assigns.user_name,
+      user_color: socket.assigns.user_color,
+      name: String.trim(socket.assigns.new_place_name),
+      description: String.trim(socket.assigns.new_place_description),
+      emoji: socket.assigns.new_place_emoji,
+      lat: socket.assigns.new_place_lat,
+      lng: socket.assigns.new_place_lng
+    }
+    
+    case Friends.create_place(attrs, room.code) do
+      {:ok, place} ->
+        {:noreply,
+         socket
+         |> assign(:places, [place | socket.assigns.places])
+         |> assign(:show_place_modal, false)
+         |> assign(:new_place_lat, nil)
+         |> assign(:new_place_lng, nil)
+         |> assign(:new_place_name, "")
+         |> assign(:new_place_description, "")
+         |> assign(:new_place_emoji, "📍")
+         |> push_event("add_place_marker", place)}
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Failed to save place")}
+    end
+  end
+
+  def handle_event("delete-place", %{"id" => id}, socket) do
+    place_id = String.to_integer(id)
+    
+    case Friends.delete_place(place_id, socket.assigns.user_id, socket.assigns.room.code) do
+      {:ok, _} ->
+        {:noreply,
+         socket
+         |> assign(:places, Enum.reject(socket.assigns.places, &(&1.id == place_id)))
+         |> push_event("remove_place_marker", %{id: place_id})}
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Cannot delete")}
+    end
+  end
+
+  def handle_event("toggle-location-sharing", _params, socket) do
+    room = socket.assigns.room
+    user_id = socket.assigns.user_id
+    
+    if socket.assigns.sharing_location do
+      # Stop sharing
+      Presence.stop_sharing_location(self(), room.code, user_id)
+      {:noreply,
+       socket
+       |> assign(:sharing_location, false)
+       |> assign(:location_expires_at, nil)}
+    else
+      # Start sharing - request location from browser
+      {:noreply, push_event(socket, "request_location", %{})}
+    end
+  end
+
+  def handle_event("location_update", %{"lat" => lat, "lng" => lng}, socket) do
+    room = socket.assigns.room
+    user_id = socket.assigns.user_id
+    
+    # Set expiration to 2 hours from now
+    expires_at = System.system_time(:second) + (2 * 60 * 60)
+    
+    Presence.update_location(self(), room.code, user_id, lat, lng, expires_at)
+    
+    {:noreply,
+     socket
+     |> assign(:sharing_location, true)
+     |> assign(:location_expires_at, expires_at)}
+  end
+
+  def handle_event("location_error", _params, socket) do
+    {:noreply, put_flash(socket, :error, "Could not get your location")}
   end
 
   # --- Message Events ---
@@ -1626,7 +1939,32 @@ defmodule RzeczywiscieWeb.FriendsLive do
 
   def handle_info(%{event: "presence_diff", payload: _}, socket) do
     viewers = Presence.list_users(socket.assigns.room.code)
+    # Also update live locations if we're on the map view
+    socket = if socket.assigns.view_mode == "map" do
+      live_locs = Presence.list_live_locations(socket.assigns.room.code)
+      socket
+      |> assign(:live_locations, live_locs)
+      |> push_event("update_live_locations", %{locations: live_locs})
+    else
+      socket
+    end
     {:noreply, assign(socket, :viewers, viewers)}
+  end
+
+  # Handle new place added by another user
+  def handle_info({:new_place, place}, socket) do
+    {:noreply,
+     socket
+     |> assign(:places, [place | socket.assigns.places])
+     |> push_event("add_place_marker", place)}
+  end
+
+  # Handle place deleted by another user
+  def handle_info({:place_deleted, %{id: place_id}}, socket) do
+    {:noreply,
+     socket
+     |> assign(:places, Enum.reject(socket.assigns.places, &(&1.id == place_id)))
+     |> push_event("remove_place_marker", %{id: place_id})}
   end
 
   # Handle username changes from other sessions of the same device

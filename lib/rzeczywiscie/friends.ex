@@ -5,7 +5,7 @@ defmodule Rzeczywiscie.Friends do
 
   import Ecto.Query, warn: false
   alias Rzeczywiscie.Repo
-  alias Rzeczywiscie.Friends.{Photo, Room, Message, DeviceLink, LinkCode, TextCard}
+  alias Rzeczywiscie.Friends.{Photo, Room, Message, DeviceLink, LinkCode, TextCard, Place}
 
   @max_photos 100
   @max_messages 50
@@ -639,7 +639,11 @@ defmodule Rzeczywiscie.Friends do
     {card_count, _} = from(t in TextCard, where: t.user_id == ^user_id)
     |> Repo.update_all(set: [user_name: new_name])
     
-    Logger.info("Updated #{msg_count} messages, #{photo_count} photos, #{card_count} text cards")
+    # Update places
+    {place_count, _} = from(p in Place, where: p.user_id == ^user_id)
+    |> Repo.update_all(set: [user_name: new_name])
+    
+    Logger.info("Updated #{msg_count} messages, #{photo_count} photos, #{card_count} text cards, #{place_count} places")
     
     :ok
   end
@@ -891,6 +895,100 @@ defmodule Rzeczywiscie.Friends do
       room_code: room && room.code,
       room_name: room && (room.name || room.code),
       room_emoji: room && room.emoji
+    }
+  end
+
+  # ============================================================================
+  # Places (Map Pins)
+  # ============================================================================
+
+  @doc """
+  List all places in a room.
+  """
+  def list_places(room_id) do
+    Place
+    |> where([p], p.room_id == ^room_id)
+    |> order_by([p], desc: p.inserted_at)
+    |> Repo.all()
+    |> Enum.map(&place_to_map/1)
+  end
+
+  @doc """
+  Create a new place pin.
+  """
+  def create_place(attrs, room_code \\ nil) do
+    room_id = if room_code do
+      case get_or_create_room(room_code) do
+        {:ok, room} -> room.id
+        _ -> nil
+      end
+    else
+      nil
+    end
+
+    result = %Place{}
+    |> Place.changeset(Map.put(attrs, :room_id, room_id))
+    |> Repo.insert()
+
+    case result do
+      {:ok, place} ->
+        place_map = place_to_map(place)
+        if room_code do
+          broadcast(room_code, :new_place, place_map)
+        end
+        {:ok, place_map}
+      error ->
+        error
+    end
+  end
+
+  @doc """
+  Delete a place pin.
+  """
+  def delete_place(place_id, user_id, room_code \\ nil) do
+    case Repo.get(Place, place_id) do
+      nil ->
+        {:error, :not_found}
+      place ->
+        if place.user_id == user_id do
+          case Repo.delete(place) do
+            {:ok, _} ->
+              if room_code do
+                broadcast(room_code, :place_deleted, %{id: place_id})
+              end
+              {:ok, place_id}
+            error ->
+              error
+          end
+        else
+          {:error, :unauthorized}
+        end
+    end
+  end
+
+  @doc """
+  Get a single place by ID.
+  """
+  def get_place(place_id) do
+    case Repo.get(Place, place_id) do
+      nil -> nil
+      place -> place_to_map(place)
+    end
+  end
+
+  defp place_to_map(place) do
+    %{
+      id: place.id,
+      user_id: place.user_id,
+      user_name: place.user_name,
+      user_color: place.user_color,
+      name: place.name,
+      description: place.description,
+      lat: place.lat,
+      lng: place.lng,
+      emoji: place.emoji || "📍",
+      room_id: place.room_id,
+      created_at: place.inserted_at
     }
   end
 
