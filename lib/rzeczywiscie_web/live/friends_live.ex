@@ -1369,15 +1369,25 @@ defmodule RzeczywiscieWeb.FriendsLive do
   def handle_event("switch-view", %{"mode" => mode}, socket) do
     socket = assign(socket, :view_mode, mode)
     
-    # Load places and live locations when switching to map
     socket = if mode == "map" do
+      # Load places and live locations when switching to map
       places = Friends.list_places(socket.assigns.room.id)
       live_locs = Presence.list_live_locations(socket.assigns.room.code)
       socket
       |> assign(:places, places)
       |> assign(:live_locations, live_locs)
     else
-      socket
+      # Reset stream when switching back to feed to ensure items render
+      items = Map.values(socket.assigns.items_map)
+      |> Enum.sort_by(fn item ->
+        timestamp = Map.get(item, :uploaded_at) || Map.get(item, :created_at)
+        case timestamp do
+          %DateTime{} -> DateTime.to_unix(timestamp)
+          %NaiveDateTime{} -> NaiveDateTime.diff(timestamp, ~N[1970-01-01 00:00:00])
+          _ -> 0
+        end
+      end, :desc)
+      stream(socket, :items, items, reset: true)
     end
     
     {:noreply, socket}
