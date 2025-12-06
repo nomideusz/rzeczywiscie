@@ -607,6 +607,9 @@ defmodule Rzeczywiscie.Friends do
         case result do
           {:ok, _} -> 
             Logger.info("save_username: updated existing DeviceLink")
+            # Update all historical content with new username (retroactive)
+            user_id = existing.master_user_id || device_fingerprint
+            update_all_content_username(user_id, user_name)
             {:ok, user_name}
           {:error, changeset} -> 
             Logger.error("save_username: update failed: #{inspect(changeset.errors)}")
@@ -615,6 +618,31 @@ defmodule Rzeczywiscie.Friends do
     end
   end
   def save_username(_, _), do: {:error, :invalid_fingerprint}
+
+  @doc """
+  Update username on all historical content (messages, photos, text cards).
+  Called when a user changes their display name.
+  """
+  def update_all_content_username(user_id, new_name) do
+    require Logger
+    Logger.info("Updating all content for user_id=#{user_id} to name=#{inspect(new_name)}")
+    
+    # Update messages
+    {msg_count, _} = from(m in Message, where: m.user_id == ^user_id)
+    |> Repo.update_all(set: [user_name: new_name])
+    
+    # Update photos
+    {photo_count, _} = from(p in Photo, where: p.user_id == ^user_id)
+    |> Repo.update_all(set: [user_name: new_name])
+    
+    # Update text cards
+    {card_count, _} = from(t in TextCard, where: t.user_id == ^user_id)
+    |> Repo.update_all(set: [user_name: new_name])
+    
+    Logger.info("Updated #{msg_count} messages, #{photo_count} photos, #{card_count} text cards")
+    
+    :ok
+  end
 
   @doc """
   Check if a username is taken by another device (globally reserved).

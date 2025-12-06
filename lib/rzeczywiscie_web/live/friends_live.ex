@@ -1292,6 +1292,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
       {:noreply, assign(socket, :name_error, "Name already taken")}
     else
       # Save username to server (linked to device fingerprint)
+      # This also updates all historical content (messages, photos, text cards)
       if device_fingerprint do
         Friends.save_username(device_fingerprint, name)
         # Broadcast to all sessions of this device
@@ -1300,6 +1301,11 @@ defmodule RzeczywiscieWeb.FriendsLive do
           "friends:user:#{device_fingerprint}",
           {:username_changed, name}
         )
+        # Broadcast to room so all clients update their view of this user's content
+        Friends.broadcast(socket.assigns.room.code, :user_renamed, %{
+          user_id: socket.assigns.user_id,
+          new_name: name
+        })
       end
       
       # Update presence with the new name
@@ -1569,6 +1575,28 @@ defmodule RzeczywiscieWeb.FriendsLive do
   end
 
   def handle_info({:photo_deleted, _}, socket), do: {:noreply, socket}
+
+  # Handle user rename - update all their content in our local view
+  def handle_info({:user_renamed, %{user_id: user_id, new_name: new_name}}, socket) do
+    # Reload items and messages from database (they've been updated server-side)
+    room = socket.assigns.room
+    photos = Friends.list_photos(room.id, 50)
+    notes = Friends.list_room_text_cards(room.id)
+    messages = Friends.list_messages(room.id, 100)
+    
+    # Rebuild items
+    items = build_room_items(photos, notes)
+    items_map = Map.new(items, fn item ->
+      key = if item.type == :photo, do: "photo-#{item.id}", else: "note-#{item.id}"
+      {key, Map.put(item, :id, key)}
+    end)
+    
+    {:noreply,
+     socket
+     |> assign(:items_map, items_map)
+     |> stream(:items, Map.values(items_map), reset: true)
+     |> stream(:messages, messages, reset: true)}
+  end
 
   def handle_info({:new_message_from_session, message, from_session_id}, socket) do
     if from_session_id != socket.assigns.session_id do
