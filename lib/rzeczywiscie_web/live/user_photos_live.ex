@@ -409,13 +409,23 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
         class={["w-full aspect-square overflow-hidden bg-base-200 block relative", if(@reordering, do: "pointer-events-none", else: "")]}
         disabled={@reordering}
       >
-        <img
-          src={@photo.thumbnail_url || @photo.data_url}
-          alt={@photo.description || ""}
-          class="w-full h-full object-cover"
-          loading="lazy"
-          draggable="false"
-        />
+        <%= if @photo.thumbnail_url do %>
+          <img
+            src={@photo.thumbnail_url}
+            alt={@photo.description || ""}
+            class="w-full h-full object-cover"
+            loading="lazy"
+            draggable="false"
+          />
+        <% else %>
+          <%!-- Placeholder for photos without thumbnail --%>
+          <div class="w-full h-full flex items-center justify-center bg-base-300">
+            <div class="text-center opacity-50">
+              <div class="text-3xl mb-1">📷</div>
+              <div class="text-[10px]">Click to view</div>
+            </div>
+          </div>
+        <% end %>
         <%= if @photo.description do %>
           <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2 pt-6">
             <p class="text-white text-[10px] leading-tight line-clamp-2">{@photo.description}</p>

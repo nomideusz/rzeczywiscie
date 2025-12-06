@@ -306,8 +306,18 @@ defmodule RzeczywiscieWeb.FriendsLive do
                           phx-value-type="photo"
                           class="overflow-hidden bg-base-200 w-full cursor-zoom-in block relative"
                         >
-                          <div class="photo-skeleton absolute inset-0 bg-base-300"></div>
-                          <img src={item.thumbnail_url || item.data_url} alt="" class="photo-image w-full h-auto relative" loading="lazy" decoding="async" />
+                          <%= if item.thumbnail_url do %>
+                            <div class="photo-skeleton absolute inset-0 bg-base-300"></div>
+                            <img src={item.thumbnail_url} alt="" class="photo-image w-full h-auto relative" loading="lazy" decoding="async" />
+                          <% else %>
+                            <%!-- Placeholder for photos without thumbnail --%>
+                            <div class="aspect-square bg-base-300 flex items-center justify-center">
+                              <div class="text-center opacity-50">
+                                <div class="text-3xl mb-1">📷</div>
+                                <div class="text-[10px]">Click to view</div>
+                              </div>
+                            </div>
+                          <% end %>
                           <%= if item.description do %>
                             <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2 pt-4">
                               <p class="text-white text-[10px] leading-tight line-clamp-2">{item.description}</p>
