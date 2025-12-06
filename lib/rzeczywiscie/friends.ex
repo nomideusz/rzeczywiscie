@@ -846,4 +846,57 @@ defmodule Rzeczywiscie.Friends do
       room_emoji: room && room.emoji
     }
   end
+
+  # ============================================================================
+  # Admin Functions
+  # ============================================================================
+
+  def admin_list_photos(offset, limit, filter \\ "all") do
+    query = from(p in Photo,
+      order_by: [desc: p.inserted_at],
+      offset: ^offset,
+      limit: ^limit,
+      select: %{
+        id: p.id,
+        user_id: p.user_id,
+        user_name: p.user_name,
+        file_size: p.file_size,
+        inserted_at: p.inserted_at,
+        has_thumbnail: not is_nil(p.thumbnail_data)
+      }
+    )
+
+    query = case filter do
+      "no_thumbnail" -> where(query, [p], is_nil(p.thumbnail_data))
+      _ -> query
+    end
+
+    Repo.all(query)
+  end
+
+  def admin_get_photo_stats do
+    total = Repo.aggregate(Photo, :count, :id) || 0
+    with_thumbnails = Repo.one(from p in Photo, where: not is_nil(p.thumbnail_data), select: count(p.id)) || 0
+    without_thumbnails = total - with_thumbnails
+    total_size = Repo.one(from p in Photo, select: sum(p.file_size)) || 0
+
+    %{
+      total_photos: total,
+      with_thumbnails: with_thumbnails,
+      without_thumbnails: without_thumbnails,
+      total_size: total_size
+    }
+  end
+
+  def admin_delete_photo(photo_id) do
+    case Repo.get(Photo, photo_id) do
+      nil -> {:error, :not_found}
+      photo -> Repo.delete(photo)
+    end
+  end
+
+  def admin_delete_photos_without_thumbnails do
+    {count, _} = Repo.delete_all(from p in Photo, where: is_nil(p.thumbnail_data))
+    count
+  end
 end
