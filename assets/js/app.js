@@ -560,49 +560,68 @@ const Hooks = {
         }
     },
     
-    // Map for Friends app - location sharing
+    // Map for Friends app - location sharing (Google Maps)
     FriendsMap: {
         mounted() {
-            this.loadLeaflet().then(() => this.initMap())
+            this.apiKey = document.querySelector('meta[name="google-maps-api-key"]')?.content
+            if (!this.apiKey) {
+                console.warn('Google Maps API key not found')
+                return
+            }
+            this.loadGoogleMaps().then(() => this.initMap())
         },
         
-        async loadLeaflet() {
-            // Load Leaflet CSS
-            if (!document.querySelector('link[href*="leaflet"]')) {
-                const link = document.createElement('link')
-                link.rel = 'stylesheet'
-                link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
-                document.head.appendChild(link)
-            }
+        async loadGoogleMaps() {
+            if (window.google?.maps) return
             
-            // Load Leaflet JS
-            if (!window.L) {
-                await new Promise((resolve) => {
-                    const script = document.createElement('script')
-                    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
-                    script.onload = resolve
-                    document.head.appendChild(script)
-                })
-            }
+            await new Promise((resolve) => {
+                const script = document.createElement('script')
+                script.src = `https://maps.googleapis.com/maps/api/js?key=${this.apiKey}&callback=__gmapsCallback`
+                script.async = true
+                window.__gmapsCallback = () => {
+                    delete window.__gmapsCallback
+                    resolve()
+                }
+                document.head.appendChild(script)
+            })
         },
         
         initMap() {
             const container = this.el.querySelector('.map-container')
-            if (!container || !window.L) return
+            if (!container || !window.google?.maps) return
             
             // Default to Warsaw if no location
             const defaultLat = parseFloat(this.el.dataset.lat) || 52.2297
             const defaultLng = parseFloat(this.el.dataset.lng) || 21.0122
             const defaultZoom = parseInt(this.el.dataset.zoom) || 13
             
-            this.map = L.map(container).setView([defaultLat, defaultLng], defaultZoom)
-            
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap'
-            }).addTo(this.map)
+            this.map = new google.maps.Map(container, {
+                zoom: defaultZoom,
+                center: { lat: defaultLat, lng: defaultLng },
+                styles: [
+                    { elementType: "geometry", stylers: [{ color: "#1a1a2e" }] },
+                    { elementType: "labels.text.stroke", stylers: [{ color: "#0f0f1e" }] },
+                    { elementType: "labels.text.fill", stylers: [{ color: "#8b92ab" }] },
+                    { featureType: "administrative", elementType: "geometry.stroke", stylers: [{ color: "#2d3561" }] },
+                    { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#c4c7d9" }] },
+                    { featureType: "poi", elementType: "labels.text", stylers: [{ visibility: "off" }] },
+                    { featureType: "poi", elementType: "geometry", stylers: [{ color: "#232844" }] },
+                    { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#1f3a3a" }] },
+                    { featureType: "road", elementType: "geometry", stylers: [{ color: "#2a2f4d" }] },
+                    { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#1f2339" }] },
+                    { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#3a3f5c" }] },
+                    { featureType: "transit", stylers: [{ visibility: "off" }] },
+                    { featureType: "water", elementType: "geometry", stylers: [{ color: "#0f1929" }] },
+                    { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#4a6d8c" }] }
+                ],
+                mapTypeControl: false,
+                streetViewControl: false,
+                fullscreenControl: true
+            })
             
             this.markers = {}
             this.liveMarkers = {}
+            this.infoWindow = new google.maps.InfoWindow()
             
             // Load existing places
             const places = JSON.parse(this.el.dataset.places || '[]')
@@ -613,9 +632,9 @@ const Hooks = {
             liveLocations.forEach(loc => this.addLiveMarker(loc))
             
             // Click to add place
-            this.map.on('click', (e) => {
+            this.map.addListener('click', (e) => {
                 if (this.el.dataset.addingPlace === 'true') {
-                    this.pushEvent('map_clicked', { lat: e.latlng.lat, lng: e.latlng.lng })
+                    this.pushEvent('map_clicked', { lat: e.latLng.lat(), lng: e.latLng.lng() })
                 }
             })
             
@@ -623,58 +642,78 @@ const Hooks = {
             this.handleEvent('add_place_marker', (place) => this.addPlaceMarker(place))
             this.handleEvent('remove_place_marker', ({id}) => this.removePlaceMarker(id))
             this.handleEvent('update_live_locations', (data) => this.updateLiveLocations(data.locations))
-            this.handleEvent('fit_bounds', (data) => this.fitBounds(data.bounds))
-            this.handleEvent('center_map', (data) => this.map.setView([data.lat, data.lng], data.zoom || 15))
+            this.handleEvent('center_map', (data) => {
+                this.map.setCenter({ lat: data.lat, lng: data.lng })
+                this.map.setZoom(data.zoom || 15)
+            })
         },
         
         addPlaceMarker(place) {
             if (this.markers[place.id]) {
-                this.markers[place.id].remove()
+                this.markers[place.id].setMap(null)
             }
             
-            const icon = L.divIcon({
-                className: 'custom-place-marker',
-                html: `<div class="place-marker" style="background: ${place.user_color || '#3b82f6'}">${place.emoji || '📍'}</div>`,
-                iconSize: [36, 36],
-                iconAnchor: [18, 36]
+            const marker = new google.maps.Marker({
+                position: { lat: place.lat, lng: place.lng },
+                map: this.map,
+                label: { text: place.emoji || '📍', fontSize: '20px' },
+                title: place.name
             })
             
-            const marker = L.marker([place.lat, place.lng], { icon })
-                .addTo(this.map)
-                .bindPopup(`
-                    <div class="place-popup">
-                        <strong>${place.name}</strong>
-                        ${place.description ? `<p class="text-sm opacity-70">${place.description}</p>` : ''}
-                        <p class="text-xs opacity-50">by ${place.user_name || 'Anonymous'}</p>
+            marker.addListener('click', () => {
+                this.infoWindow.setContent(`
+                    <div style="padding: 8px; min-width: 150px;">
+                        <strong style="font-size: 14px;">${place.name}</strong>
+                        ${place.description ? `<p style="margin: 8px 0 0; font-size: 12px; opacity: 0.7;">${place.description}</p>` : ''}
+                        <p style="margin: 8px 0 0; font-size: 11px; opacity: 0.5; display: flex; align-items: center; gap: 4px;">
+                            <span style="width: 8px; height: 8px; background: ${place.user_color}; display: inline-block;"></span>
+                            ${place.user_name || 'Anonymous'}
+                        </p>
                     </div>
                 `)
+                this.infoWindow.open(this.map, marker)
+            })
             
             this.markers[place.id] = marker
         },
         
         removePlaceMarker(id) {
             if (this.markers[id]) {
-                this.markers[id].remove()
+                this.markers[id].setMap(null)
                 delete this.markers[id]
             }
         },
         
         addLiveMarker(loc) {
             if (this.liveMarkers[loc.user_id]) {
-                this.liveMarkers[loc.user_id].setLatLng([loc.lat, loc.lng])
+                this.liveMarkers[loc.user_id].setPosition({ lat: loc.lat, lng: loc.lng })
                 return
             }
             
-            const icon = L.divIcon({
-                className: 'custom-live-marker',
-                html: `<div class="live-marker" style="background: ${loc.user_color || '#ef4444'}"><span class="pulse-ring"></span>${loc.user_name ? loc.user_name.charAt(0).toUpperCase() : '?'}</div>`,
-                iconSize: [40, 40],
-                iconAnchor: [20, 20]
+            const marker = new google.maps.Marker({
+                position: { lat: loc.lat, lng: loc.lng },
+                map: this.map,
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 12,
+                    fillColor: loc.user_color || '#ef4444',
+                    fillOpacity: 1,
+                    strokeColor: '#fff',
+                    strokeWeight: 3
+                },
+                title: loc.user_name || 'Anonymous',
+                zIndex: 1000
             })
             
-            const marker = L.marker([loc.lat, loc.lng], { icon })
-                .addTo(this.map)
-                .bindPopup(`<strong>${loc.user_name || 'Anonymous'}</strong><br><span class="text-xs">Live location</span>`)
+            marker.addListener('click', () => {
+                this.infoWindow.setContent(`
+                    <div style="padding: 8px;">
+                        <strong>${loc.user_name || 'Anonymous'}</strong>
+                        <p style="margin: 4px 0 0; font-size: 11px; color: #10B981;">🔴 Live location</p>
+                    </div>
+                `)
+                this.infoWindow.open(this.map, marker)
+            })
             
             this.liveMarkers[loc.user_id] = marker
         },
@@ -684,7 +723,7 @@ const Hooks = {
             const currentIds = locations.map(l => l.user_id)
             Object.keys(this.liveMarkers).forEach(id => {
                 if (!currentIds.includes(id)) {
-                    this.liveMarkers[id].remove()
+                    this.liveMarkers[id].setMap(null)
                     delete this.liveMarkers[id]
                 }
             })
@@ -693,16 +732,10 @@ const Hooks = {
             locations.forEach(loc => this.addLiveMarker(loc))
         },
         
-        fitBounds(bounds) {
-            if (bounds && bounds.length >= 2) {
-                this.map.fitBounds(bounds, { padding: [50, 50] })
-            }
-        },
-        
         destroyed() {
-            if (this.map) {
-                this.map.remove()
-            }
+            // Clean up markers
+            Object.values(this.markers).forEach(m => m.setMap(null))
+            Object.values(this.liveMarkers).forEach(m => m.setMap(null))
         }
     }
 }

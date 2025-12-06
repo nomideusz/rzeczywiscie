@@ -23,7 +23,6 @@ defmodule RzeczywiscieWeb.Router do
       live "/draw", DrawingBoardLive
       live "/kanban", KanbanBoardLive
       live "/counter", PersistentCounterLive
-      live "/world", LiveWorldLive
       live "/pixels", PixelCanvasLive
       live "/friends", FriendsLive
       live "/friends/admin", FriendsAdminLive
