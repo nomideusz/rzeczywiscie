@@ -30,6 +30,7 @@ defmodule RzeczywiscieWeb.Router do
       live "/friends/:room", FriendsLive
       live "/real-estate", RealEstateLive
       live "/favorites", FavoritesLive
+      live "/admin", AdminLive
       live "/stats", StatsLive
       live "/hot-deals", HotDealsLive
       live "/llm-results", LLMResultsLive
