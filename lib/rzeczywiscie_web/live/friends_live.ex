@@ -902,6 +902,9 @@ defmodule RzeczywiscieWeb.FriendsLive do
 
     # Prefer server-stored username, fall back to client-stored
     user_name = server_user_name || client_user_name
+    
+    # Check if name is taken by another user in the room and make it unique
+    user_name = make_name_unique(room.code, user_name, actual_user_id)
 
     # Subscribe to username updates for this device
     Phoenix.PubSub.subscribe(Rzeczywiscie.PubSub, "friends:user:#{device_fingerprint}")
@@ -1633,6 +1636,28 @@ defmodule RzeczywiscieWeb.FriendsLive do
   end
 
   defp generate_session_id, do: :crypto.strong_rand_bytes(16) |> Base.encode16(case: :lower)
+  
+  # Make username unique in room by adding suffix if needed
+  defp make_name_unique(_room_code, nil, _user_id), do: nil
+  defp make_name_unique(_room_code, "", _user_id), do: nil
+  defp make_name_unique(room_code, name, user_id) do
+    if Presence.name_taken?(room_code, name, user_id) do
+      # Name is taken, find a unique variant
+      find_unique_name(room_code, name, user_id, 2)
+    else
+      name
+    end
+  end
+  
+  defp find_unique_name(room_code, base_name, user_id, counter) when counter < 100 do
+    candidate = "#{base_name}#{counter}"
+    if Presence.name_taken?(room_code, candidate, user_id) do
+      find_unique_name(room_code, base_name, user_id, counter + 1)
+    else
+      candidate
+    end
+  end
+  defp find_unique_name(_room_code, base_name, _user_id, _counter), do: base_name
 
   # Build combined items list from photos and notes
   defp build_room_items(photos, notes) do
