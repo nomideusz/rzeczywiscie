@@ -107,10 +107,23 @@ defmodule Rzeczywiscie.Friends do
   List photos in a room.
   """
   def list_photos(room_id, limit \\ @max_photos) do
+    # IMPORTANT: Do NOT load image_data - it's huge (megabytes per photo)
+    # Only load thumbnail_data which is small
     Photo
     |> where([p], p.room_id == ^room_id)
     |> order_by([p], desc: p.inserted_at)
     |> limit(^limit)
+    |> select([p], %{
+      id: p.id,
+      user_id: p.user_id,
+      user_color: p.user_color,
+      user_name: p.user_name,
+      thumbnail_data: p.thumbnail_data,
+      content_type: p.content_type,
+      file_size: p.file_size,
+      description: p.description,
+      inserted_at: p.inserted_at
+    })
     |> Repo.all()
     |> Enum.map(&photo_to_map_light/1)
   end
@@ -121,9 +134,8 @@ defmodule Rzeczywiscie.Friends do
       user_id: photo.user_id,
       user_color: photo.user_color,
       user_name: photo.user_name,
-      # Use thumbnail, fallback to full image if no thumbnail yet
-      thumbnail_url: photo.thumbnail_data || photo.image_data,
-      # Don't send full data_url initially - fetch on demand
+      # Only thumbnail - no fallback to image_data (we didn't load it)
+      thumbnail_url: photo.thumbnail_data,
       data_url: nil,
       content_type: photo.content_type,
       file_size: photo.file_size,
@@ -201,32 +213,48 @@ defmodule Rzeczywiscie.Friends do
   List all photos by a user across all rooms, ordered by position then date.
   """
   def list_user_photos(user_id) do
-    Photo
-    |> where([p], p.user_id == ^user_id)
-    |> order_by([p], [asc_nulls_last: p.position, desc: p.inserted_at])
-    |> preload(:room)
+    # IMPORTANT: Do NOT load image_data - it's huge (megabytes per photo)
+    # We need room info, so we'll do a join instead of preload
+    from(p in Photo,
+      where: p.user_id == ^user_id,
+      left_join: r in assoc(p, :room),
+      order_by: [asc_nulls_last: p.position, desc: p.inserted_at],
+      select: %{
+        id: p.id,
+        user_id: p.user_id,
+        user_color: p.user_color,
+        user_name: p.user_name,
+        thumbnail_data: p.thumbnail_data,
+        content_type: p.content_type,
+        file_size: p.file_size,
+        position: p.position,
+        description: p.description,
+        inserted_at: p.inserted_at,
+        room_code: r.code,
+        room_name: r.name,
+        room_emoji: r.emoji
+      }
+    )
     |> Repo.all()
     |> Enum.map(&photo_to_map_with_room_light/1)
   end
 
   defp photo_to_map_with_room_light(photo) do
-    room = photo.room
     %{
       id: photo.id,
       user_id: photo.user_id,
       user_color: photo.user_color,
       user_name: photo.user_name,
       data_url: nil,
-      # Use thumbnail, fallback to full image if no thumbnail
-      thumbnail_url: photo.thumbnail_data || photo.image_data,
+      thumbnail_url: photo.thumbnail_data,
       content_type: photo.content_type,
       file_size: photo.file_size,
       position: photo.position,
       description: photo.description,
       uploaded_at: photo.inserted_at,
-      room_code: room && room.code,
-      room_name: room && (room.name || room.code),
-      room_emoji: room && room.emoji
+      room_code: photo.room_code,
+      room_name: photo.room_name || photo.room_code,
+      room_emoji: photo.room_emoji
     }
   end
 
