@@ -251,6 +251,18 @@ defmodule RzeczywiscieWeb.FriendsLive do
 
                   <!-- Upload Button -->
                   <form id="upload-form" phx-submit="save" phx-change="validate">
+                    <label
+                      for={@uploads.photo.ref}
+                      class={[
+                        "h-10 px-3 border-2 border-base-content font-bold uppercase text-sm transition-colors flex items-center gap-2 cursor-pointer",
+                        if(@uploading, do: "bg-base-content text-base-100 opacity-70", else: "bg-primary text-primary-content hover:opacity-80")
+                      ]}
+                    >
+                      <span>📷</span>
+                      <span class="hidden sm:inline"><%= if @uploading, do: "...", else: "Photo" %></span>
+                    </label>
+                    <.live_file_input upload={@uploads.photo} class="sr-only" />
+                  </form>
                 <% else %>
                   <!-- Add Place Button -->
                   <button
@@ -271,22 +283,6 @@ defmodule RzeczywiscieWeb.FriendsLive do
                     <span>{if @sharing_location, do: "🔴", else: "📡"}</span>
                     <span class="hidden sm:inline">{if @sharing_location, do: "Sharing", else: "Share Location"}</span>
                   </button>
-                <% end %>
-
-                <%= if @view_mode == "feed" do %>
-                <!-- Note: Upload form continues here -->
-                    <label
-                      for={@uploads.photo.ref}
-                      class={[
-                        "h-10 px-3 border-2 border-base-content font-bold uppercase text-sm transition-colors flex items-center gap-2 cursor-pointer",
-                        if(@uploading, do: "bg-base-content text-base-100 opacity-70", else: "bg-primary text-primary-content hover:opacity-80")
-                      ]}
-                    >
-                      <span>📷</span>
-                      <span class="hidden sm:inline"><%= if @uploading, do: "...", else: "Photo" %></span>
-                    </label>
-                    <.live_file_input upload={@uploads.photo} class="sr-only" />
-                  </form>
                 <% end %>
               </div>
             </div>
