@@ -947,15 +947,30 @@ defmodule RzeczywiscieWeb.FriendsLive do
 
   def handle_event("open-lightbox", %{"id" => id, "type" => type}, socket) do
     key = "#{type}-#{id}"
+    # Get basic item info from map
     item = Map.get(socket.assigns.items_map, key)
-    {:noreply, socket |> assign(:show_lightbox, true) |> assign(:lightbox_item, item)}
+    
+    # If it's a photo, we need to fetch the full data (image_data)
+    full_item = if type == "photo" && item do
+      case Friends.get_photo(item.id) do
+        nil -> item
+        photo -> 
+          # Merge full photo data into the item map
+          Map.merge(item, %{
+            data_url: photo.image_data,
+            thumbnail_url: photo.thumbnail_data || photo.image_data
+          })
+      end
+    else
+      item
+    end
+
+    {:noreply, socket |> assign(:show_lightbox, true) |> assign(:lightbox_item, full_item)}
   end
 
   def handle_event("open-lightbox", %{"id" => id}, socket) do
     # Fallback for photo-only calls
-    key = "photo-#{id}"
-    item = Map.get(socket.assigns.items_map, key)
-    {:noreply, socket |> assign(:show_lightbox, true) |> assign(:lightbox_item, item)}
+    handle_event("open-lightbox", %{"id" => id, "type" => "photo"}, socket)
   end
 
   def handle_event("close-lightbox", _params, socket) do

@@ -523,6 +523,27 @@ defmodule RzeczywiscieWeb.UserPhotosLive do
 
   def handle_event("open-lightbox", %{"id" => id, "type" => "photo"}, socket) do
     item = Enum.find(socket.assigns.items, &(&1.type == :photo && &1.id == String.to_integer(id)))
+    
+    # Fetch full photo data (image_data) when opening lightbox
+    full_item = if item do
+      case Friends.get_photo(item.id) do
+        nil -> item
+        photo ->
+          # Merge full photo data
+          Map.merge(item, %{
+            data_url: photo.image_data,
+            thumbnail_url: photo.thumbnail_data || photo.image_data
+          })
+      end
+    else
+      item
+    end
+
+    {:noreply, socket |> assign(:show_lightbox, true) |> assign(:lightbox_item, full_item)}
+  end
+
+  def handle_event("open-lightbox", %{"id" => id, "type" => "note"}, socket) do
+    item = Enum.find(socket.assigns.items, &(&1.type == :note && &1.id == String.to_integer(id)))
     {:noreply, socket |> assign(:show_lightbox, true) |> assign(:lightbox_item, item)}
   end
 
