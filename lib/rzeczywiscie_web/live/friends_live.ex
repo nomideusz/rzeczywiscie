@@ -33,16 +33,16 @@ defmodule RzeczywiscieWeb.FriendsLive do
 
     # Only subscribe when connected - presence tracking happens in set_user_id
     # when we have the real device fingerprint
-    {messages, viewers} = if is_connected do
+    {messages, viewers, message_count} = if is_connected do
       Friends.subscribe(room.code)
       Phoenix.PubSub.subscribe(Rzeczywiscie.PubSub, "friends:presence:#{room.code}")
       # Don't track presence here - wait for set_user_id with real fingerprint
       
       msgs = Friends.list_messages(room.id, 50)
       v = Presence.list_users(room.code)
-      {msgs, v}
+      {msgs, v, length(msgs)}
     else
-      {[], []}
+      {[], [], 0}
     end
 
     # Build items map for quick lookup (only IDs and essential data)
@@ -63,6 +63,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
       |> assign(:page_title, "#{room.emoji} #{room.name || room.code}")
       |> assign(:items_map, items_map)
       |> assign(:item_count, item_count)
+      |> assign(:message_count, message_count)
       |> assign(:loading, false)
       |> assign(:chat_loading, not is_connected)
       |> assign(:message_input, "")
@@ -133,6 +134,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
        |> assign(:page_title, "#{room.emoji} #{room.name || room.code}")
        |> assign(:items_map, items_map)
        |> assign(:item_count, length(items))
+       |> assign(:message_count, length(messages))
        |> assign(:viewers, viewers)
        |> stream(:items, items, reset: true)
        |> stream(:messages, messages, reset: true)}
@@ -371,46 +373,55 @@ defmodule RzeczywiscieWeb.FriendsLive do
                   <h3 class="font-black uppercase text-sm">💬 Chat</h3>
                 </div>
 
-                <!-- Messages -->
-                <div class="flex-1 overflow-y-auto p-3 space-y-3" id="messages-container" phx-update="stream" phx-hook="ScrollToBottom">
-                  <%= if @chat_loading do %>
-                    <%!-- Loading skeleton for messages --%>
-                    <%= for i <- 1..3 do %>
-                      <div class="flex gap-2 animate-pulse">
-                        <div class="w-6 h-6 rounded-full bg-base-300 flex-shrink-0"></div>
-                        <div class="flex-1">
-                          <div class="h-2 bg-base-300 rounded w-20 mb-2"></div>
-                          <div class={"h-4 bg-base-300 rounded #{if rem(i, 2) == 0, do: "w-32", else: "w-48"}"}></div>
-                        </div>
+                <!-- Messages Wrapper -->
+                <div class="flex-1 overflow-y-auto p-3 space-y-3 relative" id="messages-wrapper" phx-hook="ScrollToBottom">
+                  
+                  <!-- Empty State (absolute positioned) -->
+                  <%= if !@chat_loading && @message_count == 0 do %>
+                    <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div class="text-center text-sm opacity-40">
+                        No messages yet.<br/>Say hi! 👋
                       </div>
-                    <% end %>
-                  <% else %>
-                    <%= for {dom_id, message} <- @streams.messages do %>
-                      <div id={dom_id} class="group flex gap-2">
-                        <div class="w-6 h-6 rounded-full border border-base-content flex-shrink-0" style={"background-color: #{message.user_color}"}></div>
-                        <div class="flex-1 min-w-0">
-                          <div class="text-[10px] font-bold opacity-40 mb-0.5 flex items-center gap-2">
-                            <span>{message.user_name || String.slice(message.user_id, 0, 6)}</span>
-                            <span>·</span>
-                            <span>{format_time(message.sent_at)}</span>
-                            <%= if message.user_id == @user_id do %>
-                              <button
-                                type="button"
-                                phx-click="delete-message"
-                                phx-value-id={message.id}
-                                class="opacity-0 group-hover:opacity-100 text-error hover:text-error/80 transition-opacity"
-                              >✕</button>
-                            <% end %>
-                          </div>
-                          <div class="text-sm break-words">{message.content}</div>
-                        </div>
-                      </div>
-                    <% end %>
-                    <%!-- Empty state shown via CSS :only-child when no messages --%>
-                    <div class="hidden only:block text-center text-sm opacity-40 py-8">
-                      No messages yet.<br/>Say hi! 👋
                     </div>
                   <% end %>
+
+                  <!-- Messages Stream -->
+                  <div id="messages-container" phx-update="stream" class="space-y-3">
+                    <%= if @chat_loading do %>
+                      <%!-- Loading skeleton for messages --%>
+                      <%= for i <- 1..3 do %>
+                        <div class="flex gap-2 animate-pulse">
+                          <div class="w-6 h-6 rounded-full bg-base-300 flex-shrink-0"></div>
+                          <div class="flex-1">
+                            <div class="h-2 bg-base-300 rounded w-20 mb-2"></div>
+                            <div class={"h-4 bg-base-300 rounded #{if rem(i, 2) == 0, do: "w-32", else: "w-48"}"}></div>
+                          </div>
+                        </div>
+                      <% end %>
+                    <% else %>
+                      <%= for {dom_id, message} <- @streams.messages do %>
+                        <div id={dom_id} class="group flex gap-2">
+                          <div class="w-6 h-6 rounded-full border border-base-content flex-shrink-0" style={"background-color: #{message.user_color}"}></div>
+                          <div class="flex-1 min-w-0">
+                            <div class="text-[10px] font-bold opacity-40 mb-0.5 flex items-center gap-2">
+                              <span>{message.user_name || String.slice(message.user_id, 0, 6)}</span>
+                              <span>·</span>
+                              <span>{format_time(message.sent_at)}</span>
+                              <%= if message.user_id == @user_id do %>
+                                <button
+                                  type="button"
+                                  phx-click="delete-message"
+                                  phx-value-id={message.id}
+                                  class="opacity-0 group-hover:opacity-100 text-error hover:text-error/80 transition-opacity"
+                                >✕</button>
+                              <% end %>
+                            </div>
+                            <div class="text-sm break-words">{message.content}</div>
+                          </div>
+                        </div>
+                      <% end %>
+                    <% end %>
+                  </div>
                 </div>
 
                 <!-- Message Input -->
@@ -1198,7 +1209,10 @@ defmodule RzeczywiscieWeb.FriendsLive do
           case Friends.delete_message(message_id, room.code) do
             {:ok, _} ->
               Friends.broadcast(room.code, :message_deleted_from_session, %{id: message_id}, socket.assigns.session_id)
-              {:noreply, stream_delete(socket, :messages, %{id: message_id})}
+              {:noreply,
+               socket
+               |> assign(:message_count, max(0, socket.assigns.message_count - 1))
+               |> stream_delete(:messages, %{id: message_id})}
             {:error, _} ->
               {:noreply, put_flash(socket, :error, "Failed")}
           end
@@ -1229,6 +1243,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
           {:noreply,
            socket
            |> assign(:message_input, "")
+           |> assign(:message_count, socket.assigns.message_count + 1)
            |> stream_insert(:messages, message)}
         {:error, _} ->
           {:noreply, put_flash(socket, :error, "Failed to send")}
@@ -1550,7 +1565,10 @@ defmodule RzeczywiscieWeb.FriendsLive do
 
   def handle_info({:new_message_from_session, message, from_session_id}, socket) do
     if from_session_id != socket.assigns.session_id do
-      {:noreply, stream_insert(socket, :messages, message)}
+      {:noreply,
+       socket
+       |> assign(:message_count, socket.assigns.message_count + 1)
+       |> stream_insert(:messages, message)}
     else
       {:noreply, socket}
     end
@@ -1560,7 +1578,10 @@ defmodule RzeczywiscieWeb.FriendsLive do
 
   def handle_info({:message_deleted_from_session, %{id: id}, from_session_id}, socket) do
     if from_session_id != socket.assigns.session_id do
-      {:noreply, stream_delete(socket, :messages, %{id: id})}
+      {:noreply,
+       socket
+       |> assign(:message_count, max(0, socket.assigns.message_count - 1))
+       |> stream_delete(:messages, %{id: id})}
     else
       {:noreply, socket}
     end
