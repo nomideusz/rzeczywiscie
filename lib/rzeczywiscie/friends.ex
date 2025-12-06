@@ -918,9 +918,9 @@ defmodule Rzeczywiscie.Friends do
   """
   def create_place(attrs, room_code \\ nil) do
     room_id = if room_code do
-      case get_or_create_room(room_code) do
-        {:ok, room} -> room.id
-        _ -> nil
+      case get_room_by_code(room_code) do
+        nil -> nil
+        room -> room.id
       end
     else
       nil
