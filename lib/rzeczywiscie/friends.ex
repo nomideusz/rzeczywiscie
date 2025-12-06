@@ -571,11 +571,13 @@ defmodule Rzeczywiscie.Friends do
       nil ->
         # New browser - check if same device fingerprint exists
         existing_device = if device_fingerprint do
-          Repo.one(from d in DeviceLink,
+          result = Repo.one(from d in DeviceLink,
             where: d.device_fingerprint == ^device_fingerprint,
             where: not is_nil(d.user_name),
             limit: 1
           )
+          Logger.info("register_browser: checking for existing device with fingerprint=#{device_fingerprint}, found=#{inspect(result != nil)}")
+          result
         end
         
         # Create new device link
@@ -603,6 +605,14 @@ defmodule Rzeczywiscie.Friends do
         end
 
       existing ->
+        # Update device_fingerprint if it changed (fingerprint algorithm may have been updated)
+        if device_fingerprint && existing.device_fingerprint != device_fingerprint do
+          Logger.info("register_browser: updating fingerprint for existing browser")
+          existing
+          |> Ecto.Changeset.change(%{device_fingerprint: device_fingerprint})
+          |> Repo.update()
+        end
+        
         Logger.info("register_browser: returning browser")
         {:ok, existing, :existing}
     end
