@@ -617,6 +617,25 @@ defmodule Rzeczywiscie.Friends do
   def save_username(_, _), do: {:error, :invalid_fingerprint}
 
   @doc """
+  Check if a username is taken by another device (globally reserved).
+  Returns true if the name is taken by a different device.
+  """
+  def username_taken?(name, current_device_fingerprint) when is_binary(name) do
+    normalized = String.downcase(String.trim(name))
+    
+    query = from(d in DeviceLink,
+      where: d.device_fingerprint != ^current_device_fingerprint,
+      where: not is_nil(d.user_name),
+      where: fragment("lower(trim(?)) = ?", d.user_name, ^normalized),
+      select: count(d.id)
+    )
+    
+    Repo.one(query) > 0
+  end
+  def username_taken?(nil, _), do: false
+  def username_taken?("", _), do: false
+
+  @doc """
   Get device info (user_id and username) for a device fingerprint.
   Returns {user_id, username} where user_id may be master_user_id if linked.
   """

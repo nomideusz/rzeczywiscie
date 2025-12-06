@@ -698,7 +698,7 @@ defmodule RzeczywiscieWeb.FriendsLive do
                 <%= if @name_error do %>
                   <p class="text-xs text-error mt-2">{@name_error}</p>
                 <% else %>
-                  <p class="text-xs opacity-40 mt-2">Your name is stored locally and shown with your messages and photos.</p>
+                  <p class="text-xs opacity-40 mt-2">Your name is linked to this device and reserved for you.</p>
                 <% end %>
               </form>
 
@@ -903,8 +903,8 @@ defmodule RzeczywiscieWeb.FriendsLive do
     # Prefer server-stored username, fall back to client-stored
     user_name = server_user_name || client_user_name
     
-    # Check if name is taken by another user in the room and make it unique
-    user_name = make_name_unique(room.code, user_name, actual_user_id)
+    # Check if name is taken by another device (database) or user in room (presence)
+    user_name = make_name_unique(device_fingerprint, room.code, user_name, actual_user_id)
 
     # Subscribe to username updates for this device
     Phoenix.PubSub.subscribe(Rzeczywiscie.PubSub, "friends:user:#{device_fingerprint}")
@@ -1285,17 +1285,11 @@ defmodule RzeczywiscieWeb.FriendsLive do
     name = if name == "", do: nil, else: String.slice(name, 0, 20)
     device_fingerprint = socket.assigns.device_fingerprint
     
-    # Check if name is taken by another user in the room
-    # Check both presence system and local viewers list for robustness
-    name_taken_in_presence = name != nil && Presence.name_taken?(socket.assigns.room.code, name, socket.assigns.user_id)
-    name_taken_in_viewers = name != nil && Enum.any?(socket.assigns.viewers, fn v ->
-      v.user_id != socket.assigns.user_id &&
-        v.user_name != nil &&
-        String.downcase(String.trim(v.user_name)) == String.downcase(name)
-    end)
+    # Check if name is taken - both in database (permanent) and presence (current room)
+    name_taken = name != nil && name_is_taken?(name, device_fingerprint, socket.assigns.room.code, socket.assigns.user_id)
     
-    if name_taken_in_presence || name_taken_in_viewers do
-      {:noreply, assign(socket, :name_error, "Name already taken in this room")}
+    if name_taken do
+      {:noreply, assign(socket, :name_error, "Name already taken")}
     else
       # Save username to server (linked to device fingerprint)
       if device_fingerprint do
@@ -1637,27 +1631,36 @@ defmodule RzeczywiscieWeb.FriendsLive do
 
   defp generate_session_id, do: :crypto.strong_rand_bytes(16) |> Base.encode16(case: :lower)
   
-  # Make username unique in room by adding suffix if needed
-  defp make_name_unique(_room_code, nil, _user_id), do: nil
-  defp make_name_unique(_room_code, "", _user_id), do: nil
-  defp make_name_unique(room_code, name, user_id) do
-    if Presence.name_taken?(room_code, name, user_id) do
+  # Check if name is taken (globally in database OR in current room presence)
+  defp name_is_taken?(name, device_fingerprint, room_code, user_id) do
+    # Check database for permanent reservations
+    db_taken = Friends.username_taken?(name, device_fingerprint || "")
+    # Check presence for users currently in room (belt and suspenders)
+    presence_taken = Presence.name_taken?(room_code, name, user_id)
+    db_taken || presence_taken
+  end
+  
+  # Make username unique by adding suffix if needed
+  defp make_name_unique(_device_fingerprint, _room_code, nil, _user_id), do: nil
+  defp make_name_unique(_device_fingerprint, _room_code, "", _user_id), do: nil
+  defp make_name_unique(device_fingerprint, room_code, name, user_id) do
+    if name_is_taken?(name, device_fingerprint, room_code, user_id) do
       # Name is taken, find a unique variant
-      find_unique_name(room_code, name, user_id, 2)
+      find_unique_name(device_fingerprint, room_code, name, user_id, 2)
     else
       name
     end
   end
   
-  defp find_unique_name(room_code, base_name, user_id, counter) when counter < 100 do
+  defp find_unique_name(device_fingerprint, room_code, base_name, user_id, counter) when counter < 100 do
     candidate = "#{base_name}#{counter}"
-    if Presence.name_taken?(room_code, candidate, user_id) do
-      find_unique_name(room_code, base_name, user_id, counter + 1)
+    if name_is_taken?(candidate, device_fingerprint, room_code, user_id) do
+      find_unique_name(device_fingerprint, room_code, base_name, user_id, counter + 1)
     else
       candidate
     end
   end
-  defp find_unique_name(_room_code, base_name, _user_id, _counter), do: base_name
+  defp find_unique_name(_device_fingerprint, _room_code, base_name, _user_id, _counter), do: base_name
 
   # Build combined items list from photos and notes
   defp build_room_items(photos, notes) do
