@@ -26,13 +26,16 @@ import * as Components from "../svelte/**/*.svelte"
 
 // Generate device fingerprint based on stable hardware characteristics
 // This creates the same ID across different browsers on the same physical device
+// ONLY uses values that are guaranteed to be identical across all browsers
 function generateDeviceFingerprint() {
+    // These values come from the OS, not the browser:
     const components = [
-        screen.width + 'x' + screen.height,          // Screen resolution - same across browsers
-        screen.colorDepth,                           // Screen color depth - same across browsers
-        navigator.hardwareConcurrency || 'unknown',  // CPU cores - same across browsers
-        new Date().getTimezoneOffset(),              // Timezone - same across browsers
-        navigator.maxTouchPoints || 0                // Touch capability - same across browsers
+        screen.width,                    // Physical screen width (OS-level)
+        screen.height,                   // Physical screen height (OS-level)
+        screen.colorDepth,               // Color depth (OS-level)
+        new Date().getTimezoneOffset(),  // Timezone offset (OS-level)
+        screen.availWidth,               // Available width minus taskbar (OS-level)
+        screen.availHeight               // Available height minus taskbar (OS-level)
     ]
     
     const fingerprint = components.join('|')
