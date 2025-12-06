@@ -39,7 +39,7 @@
       <.property_page_header current_path={@current_path} title="System Status" subtitle="Automated monitoring & maintenance">
         <:actions>
           <button phx-click="refresh" class="px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors cursor-pointer">
-            ­čöä Refresh
+            🔄 Refresh
           </button>
         </:actions>
       </.property_page_header>
@@ -80,7 +80,7 @@
         <!-- Automation Status -->
         <div class="bg-base-100 border-2 border-base-content mb-6">
           <div class="px-4 py-3 border-b-2 border-base-content bg-gradient-to-r from-success/20 to-transparent">
-            <h2 class="text-sm font-bold uppercase tracking-wide">ÔÜí Automated Tasks</h2>
+            <h2 class="text-sm font-bold uppercase tracking-wide">⚡ Automated Tasks</h2>
             <p class="text-[10px] opacity-60">All tasks run automatically on schedule</p>
           </div>
           
@@ -88,12 +88,12 @@
             <!-- Scraping -->
             <div class="border border-base-content/20 p-4">
               <div class="flex items-center justify-between mb-2">
-                <h3 class="font-bold text-sm">­čîÉ Scraping</h3>
+                <h3 class="font-bold text-sm">🌐 Scraping</h3>
                 <span class="px-2 py-1 text-[10px] font-bold bg-success/20 text-success">AUTO</span>
               </div>
               <div class="text-xs space-y-1 opacity-70">
-                <p>ÔÇó OLX: every 6h (regular) + every 8h (enriched)</p>
-                <p>ÔÇó Otodom: every 6h with enrichment</p>
+                <p>• OLX: every 6h (regular) + every 8h (enriched)</p>
+                <p>• Otodom: every 6h with enrichment</p>
               </div>
               <%= if @job_status.last_scrape do %>
                 <div class="mt-2 text-[10px] opacity-50">Last: <%= format_time_ago(@job_status.last_scrape) %></div>
@@ -103,12 +103,12 @@
             <!-- Geocoding -->
             <div class="border border-base-content/20 p-4">
               <div class="flex items-center justify-between mb-2">
-                <h3 class="font-bold text-sm">­čôŹ Geocoding</h3>
+                <h3 class="font-bold text-sm">📍 Geocoding</h3>
                 <span class="px-2 py-1 text-[10px] font-bold bg-success/20 text-success">AUTO</span>
               </div>
               <div class="text-xs space-y-1 opacity-70">
-                <p>ÔÇó Runs every hour</p>
-                <p>ÔÇó <%= @stats.pending_geocode %> pending</p>
+                <p>• Runs every hour</p>
+                <p>• <%= @stats.pending_geocode %> pending</p>
               </div>
               <%= if @job_status.last_geocode do %>
                 <div class="mt-2 text-[10px] opacity-50">Last: <%= format_time_ago(@job_status.last_geocode) %></div>
@@ -118,12 +118,12 @@
             <!-- LLM Analysis -->
             <div class="border border-base-content/20 p-4">
               <div class="flex items-center justify-between mb-2">
-                <h3 class="font-bold text-sm">­čĄľ LLM Analysis</h3>
+                <h3 class="font-bold text-sm">🤖 LLM Analysis</h3>
                 <span class="px-2 py-1 text-[10px] font-bold bg-success/20 text-success">AUTO</span>
               </div>
               <div class="text-xs space-y-1 opacity-70">
-                <p>ÔÇó Runs every 6h (30 properties)</p>
-                <p>ÔÇó <%= @stats.pending_llm %> with descriptions pending</p>
+                <p>• Runs every 6h (30 properties)</p>
+                <p>• <%= @stats.pending_llm %> with descriptions pending</p>
               </div>
               <%= if @job_status.last_llm do %>
                 <div class="mt-2 text-[10px] opacity-50">Last: <%= format_time_ago(@job_status.last_llm) %></div>
@@ -133,36 +133,36 @@
             <!-- Price Tracking -->
             <div class="border border-base-content/20 p-4">
               <div class="flex items-center justify-between mb-2">
-                <h3 class="font-bold text-sm">­čôë Price Tracking</h3>
+                <h3 class="font-bold text-sm">📉 Price Tracking</h3>
                 <span class="px-2 py-1 text-[10px] font-bold bg-success/20 text-success">AUTO</span>
               </div>
               <div class="text-xs space-y-1 opacity-70">
-                <p>ÔÇó Runs every 2 hours</p>
-                <p>ÔÇó <%= @stats.price_drops_7d %> drops in last 7 days</p>
+                <p>• Runs every 2 hours</p>
+                <p>• <%= @stats.price_drops_7d %> drops in last 7 days</p>
               </div>
             </div>
             
             <!-- Data Maintenance -->
             <div class="border border-base-content/20 p-4">
               <div class="flex items-center justify-between mb-2">
-                <h3 class="font-bold text-sm">­čž╣ Maintenance</h3>
+                <h3 class="font-bold text-sm">🧹 Maintenance</h3>
                 <span class="px-2 py-1 text-[10px] font-bold bg-success/20 text-success">AUTO</span>
               </div>
               <div class="text-xs space-y-1 opacity-70">
-                <p>ÔÇó Daily at 4 AM</p>
-                <p>ÔÇó Dedup, fix types, backfill data</p>
+                <p>• Daily at 4 AM</p>
+                <p>• Dedup, fix types, backfill data</p>
               </div>
             </div>
             
             <!-- Cleanup -->
             <div class="border border-base-content/20 p-4">
               <div class="flex items-center justify-between mb-2">
-                <h3 class="font-bold text-sm">­čŚĹ´ŞĆ Stale Cleanup</h3>
+                <h3 class="font-bold text-sm">🗑️ Stale Cleanup</h3>
                 <span class="px-2 py-1 text-[10px] font-bold bg-success/20 text-success">AUTO</span>
               </div>
               <div class="text-xs space-y-1 opacity-70">
-                <p>ÔÇó Daily at 5 AM</p>
-                <p>ÔÇó Deactivates properties not seen in 4+ days</p>
+                <p>• Daily at 5 AM</p>
+                <p>• Deactivates properties not seen in 4+ days</p>
               </div>
             </div>
           </div>
@@ -175,17 +175,17 @@
             class="w-full px-4 py-3 flex items-center justify-between hover:bg-base-200 transition-colors cursor-pointer"
           >
             <div>
-              <h2 class="text-sm font-bold uppercase tracking-wide">­čöž Manual Actions</h2>
+              <h2 class="text-sm font-bold uppercase tracking-wide">🔧 Manual Actions</h2>
               <p class="text-[10px] opacity-60">Run tasks manually if needed</p>
             </div>
-            <span class={"transition-transform #{if @show_manual, do: "rotate-180"}}"}>Ôľ╝</span>
+            <span class={"transition-transform #{if @show_manual, do: "rotate-180"}"}>▼</span>
           </button>
           
           <%= if @show_manual do %>
             <div class="border-t border-base-content/20 p-4">
               <%= if @task_result do %>
                 <div class="mb-4 px-3 py-2 text-xs font-bold bg-success/20 text-success border border-success">
-                  Ôťô <%= @task_result %>
+                  ✔ <%= @task_result %>
                 </div>
               <% end %>
               
@@ -196,7 +196,7 @@
                   disabled={@running_task != nil}
                   class={"px-4 py-3 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @running_task != nil, do: "opacity-50 border-base-content/30", else: "border-primary text-primary hover:bg-primary hover:text-primary-content"}"}
                 >
-                  <%= if @running_task == "scrape_olx", do: "ÔĆ│ Running...", else: "­čîÉ Scrape OLX" %>
+                  <%= if @running_task == "scrape_olx", do: "⏳ Running...", else: "🌐 Scrape OLX" %>
                 </button>
                 
                 <button 
@@ -205,7 +205,7 @@
                   disabled={@running_task != nil}
                   class={"px-4 py-3 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @running_task != nil, do: "opacity-50 border-base-content/30", else: "border-secondary text-secondary hover:bg-secondary hover:text-secondary-content"}"}
                 >
-                  <%= if @running_task == "scrape_otodom", do: "ÔĆ│ Running...", else: "­čîÉ Scrape Otodom" %>
+                  <%= if @running_task == "scrape_otodom", do: "⏳ Running...", else: "🌐 Scrape Otodom" %>
                 </button>
                 
                 <button 
@@ -214,7 +214,7 @@
                   disabled={@running_task != nil}
                   class={"px-4 py-3 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @running_task != nil, do: "opacity-50 border-base-content/30", else: "border-info text-info hover:bg-info hover:text-info-content"}"}
                 >
-                  <%= if @running_task == "geocode", do: "ÔĆ│ Running...", else: "­čôŹ Geocode (50)" %>
+                  <%= if @running_task == "geocode", do: "⏳ Running...", else: "📍 Geocode (50)" %>
                 </button>
                 
                 <button 
@@ -223,7 +223,7 @@
                   disabled={@running_task != nil}
                   class={"px-4 py-3 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @running_task != nil, do: "opacity-50 border-base-content/30", else: "border-accent text-accent hover:bg-accent hover:text-accent-content"}"}
                 >
-                  <%= if @running_task == "llm", do: "ÔĆ│ Running...", else: "­čĄľ LLM Analysis" %>
+                  <%= if @running_task == "llm", do: "⏳ Running...", else: "🤖 LLM Analysis" %>
                 </button>
                 
                 <button 
@@ -232,7 +232,7 @@
                   disabled={@running_task != nil}
                   class={"px-4 py-3 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @running_task != nil, do: "opacity-50 border-base-content/30", else: "border-warning text-warning hover:bg-warning hover:text-warning-content"}"}
                 >
-                  <%= if @running_task == "maintenance", do: "ÔĆ│ Running...", else: "­čž╣ Maintenance" %>
+                  <%= if @running_task == "maintenance", do: "⏳ Running...", else: "🧹 Maintenance" %>
                 </button>
                 
                 <button 
@@ -241,7 +241,7 @@
                   disabled={@running_task != nil}
                   class={"px-4 py-3 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @running_task != nil, do: "opacity-50 border-base-content/30", else: "border-error text-error hover:bg-error hover:text-error-content"}"}
                 >
-                  <%= if @running_task == "cleanup", do: "ÔĆ│ Running...", else: "­čŚĹ´ŞĆ Mark Stale" %>
+                  <%= if @running_task == "cleanup", do: "⏳ Running...", else: "🗑️ Mark Stale" %>
                 </button>
               </div>
               
@@ -256,7 +256,7 @@
         <%= if @stats.llm_analyzed > 0 do %>
           <div class="bg-base-100 border-2 border-base-content mb-6">
             <div class="px-4 py-3 border-b-2 border-base-content bg-info/10">
-              <h2 class="text-sm font-bold uppercase tracking-wide">­čĄľ LLM Analysis Overview</h2>
+              <h2 class="text-sm font-bold uppercase tracking-wide">🤖 LLM Analysis Overview</h2>
             </div>
             <div class="p-4">
               <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -278,7 +278,7 @@
                 </div>
                 <div class="text-center">
                   <a href="/llm-results" class="inline-block px-4 py-2 text-xs font-bold uppercase border-2 border-info text-info hover:bg-info hover:text-info-content transition-colors">
-                    View Results Ôćĺ
+                    View Results →
                   </a>
                 </div>
               </div>
@@ -289,14 +289,14 @@
         <!-- Quick Links -->
         <div class="bg-base-100 border-2 border-base-content">
           <div class="px-4 py-3 border-b-2 border-base-content bg-base-200">
-            <h2 class="text-sm font-bold uppercase tracking-wide">­čöŚ Quick Links</h2>
+            <h2 class="text-sm font-bold uppercase tracking-wide">🔗 Quick Links</h2>
           </div>
           <div class="p-4 flex flex-wrap gap-3">
-            <a href="/real-estate" class="px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">­čôő Properties</a>
-            <a href="/hot-deals" class="px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 border-warning text-warning hover:bg-warning hover:text-warning-content transition-colors">­čöą Hot Deals</a>
-            <a href="/llm-results" class="px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 border-info text-info hover:bg-info hover:text-info-content transition-colors">­čĄľ LLM Results</a>
-            <a href="/stats" class="px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">­čôŐ Statistics</a>
-            <a href="/dev/dashboard" target="_blank" class="px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">ÔÜÖ´ŞĆ Phoenix Dashboard</a>
+            <a href="/real-estate" class="px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">📋 Properties</a>
+            <a href="/hot-deals" class="px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 border-warning text-warning hover:bg-warning hover:text-warning-content transition-colors">🔥 Hot Deals</a>
+            <a href="/llm-results" class="px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 border-info text-info hover:bg-info hover:text-info-content transition-colors">🤖 LLM Results</a>
+            <a href="/stats" class="px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">📊 Statistics</a>
+            <a href="/dev/dashboard" target="_blank" class="px-4 py-2 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors">⚙️ Phoenix Dashboard</a>
           </div>
         </div>
       </div>
@@ -489,7 +489,7 @@
     }
   end
 
-  defp format_time_ago(nil), do: "ÔÇö"
+  defp format_time_ago(nil), do: "—"
   defp format_time_ago(datetime) do
     diff_seconds = DateTime.diff(DateTime.utc_now(), datetime)
     
