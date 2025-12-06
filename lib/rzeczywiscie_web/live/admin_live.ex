@@ -1,4 +1,4 @@
-﻿defmodule RzeczywiscieWeb.AdminLive do
+defmodule RzeczywiscieWeb.AdminLive do
   @moduledoc """
   Simplified Admin dashboard showing automation status and manual triggers.
   Most tasks are now automated - this page shows status and allows manual runs if needed.
