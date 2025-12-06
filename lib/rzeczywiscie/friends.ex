@@ -504,28 +504,41 @@ defmodule Rzeczywiscie.Friends do
   Returns {:ok, username} on success.
   """
   def save_username(device_fingerprint, user_name) when is_binary(device_fingerprint) do
+    require Logger
     user_name = if user_name, do: String.trim(user_name), else: nil
     user_name = if user_name == "", do: nil, else: user_name
+
+    Logger.info("save_username: fingerprint=#{device_fingerprint}, name=#{inspect(user_name)}")
 
     case Repo.get_by(DeviceLink, device_fingerprint: device_fingerprint) do
       nil ->
         # Create new device link with username
-        %DeviceLink{}
+        result = %DeviceLink{}
         |> DeviceLink.changeset(%{device_fingerprint: device_fingerprint, user_name: user_name})
         |> Repo.insert()
-        |> case do
-          {:ok, _} -> {:ok, user_name}
-          {:error, changeset} -> {:error, changeset}
+        
+        case result do
+          {:ok, _} -> 
+            Logger.info("save_username: created new DeviceLink")
+            {:ok, user_name}
+          {:error, changeset} -> 
+            Logger.error("save_username: insert failed: #{inspect(changeset.errors)}")
+            {:error, changeset}
         end
 
       existing ->
         # Update existing device link
-        existing
+        result = existing
         |> DeviceLink.name_changeset(%{user_name: user_name})
         |> Repo.update()
-        |> case do
-          {:ok, _} -> {:ok, user_name}
-          {:error, changeset} -> {:error, changeset}
+        
+        case result do
+          {:ok, _} -> 
+            Logger.info("save_username: updated existing DeviceLink")
+            {:ok, user_name}
+          {:error, changeset} -> 
+            Logger.error("save_username: update failed: #{inspect(changeset.errors)}")
+            {:error, changeset}
         end
     end
   end
@@ -541,9 +554,13 @@ defmodule Rzeczywiscie.Friends do
     case result do
       nil -> 
         # No device link found - this is a new device
+        require Logger
+        Logger.debug("DeviceLink not found for fingerprint: #{device_fingerprint}")
         {device_fingerprint, nil}
       link -> 
         user_id = link.master_user_id || device_fingerprint
+        require Logger
+        Logger.debug("DeviceLink found: fingerprint=#{device_fingerprint}, user_name=#{inspect(link.user_name)}")
         {user_id, link.user_name}
     end
   end

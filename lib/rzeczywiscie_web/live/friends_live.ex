@@ -31,11 +31,12 @@ defmodule RzeczywiscieWeb.FriendsLive do
     items = build_room_items(photos, notes)
     item_count = length(items)
 
-    # Only subscribe and track presence when connected
+    # Only subscribe when connected - presence tracking happens in set_user_id
+    # when we have the real device fingerprint
     {messages, viewers} = if is_connected do
       Friends.subscribe(room.code)
       Phoenix.PubSub.subscribe(Rzeczywiscie.PubSub, "friends:presence:#{room.code}")
-      Presence.track_user(self(), room.code, user_id, user_color, nil)
+      # Don't track presence here - wait for set_user_id with real fingerprint
       
       msgs = Friends.list_messages(room.id, 50)
       v = Presence.list_users(room.code)
@@ -884,40 +885,28 @@ defmodule RzeczywiscieWeb.FriendsLive do
     # Subscribe to username updates for this device
     Phoenix.PubSub.subscribe(Rzeczywiscie.PubSub, "friends:user:#{device_fingerprint}")
 
-    if old_user_id != actual_user_id do
-      # Update presence with the resolved user_id
+    # Generate color based on the actual user_id (consistent across linked devices)
+    new_user_color = generate_user_color(actual_user_id)
+
+    # Only untrack old presence if it was a different user_id (from initial mount)
+    # and if we were already tracked (device_fingerprint was set)
+    if socket.assigns.device_fingerprint != nil && old_user_id != actual_user_id do
       Presence.untrack(self(), room.code, old_user_id)
-
-      # Generate color based on the actual user_id (consistent across linked devices)
-      new_user_color = generate_user_color(actual_user_id)
-
-      # Track with resolved user_id and name
-      Presence.track_user(self(), room.code, actual_user_id, new_user_color, user_name)
-
-      {:noreply,
-       socket
-       |> assign(:user_id, actual_user_id)
-       |> assign(:user_color, new_user_color)
-       |> assign(:user_name, user_name)
-       |> assign(:device_fingerprint, device_fingerprint)
-       |> assign(:is_linked_device, is_linked)
-       |> assign(:chat_loading, false)
-       |> push_event("linked_user_id", %{user_id: actual_user_id, is_linked: is_linked})
-       |> push_event("save_user_name", %{name: user_name})}
-    else
-      # Update presence with correct name if it changed
-      if user_name != socket.assigns.user_name do
-        Presence.update_user(self(), room.code, actual_user_id, socket.assigns.user_color, user_name)
-      end
-
-      {:noreply,
-       socket
-       |> assign(:user_name, user_name)
-       |> assign(:device_fingerprint, device_fingerprint)
-       |> assign(:is_linked_device, is_linked)
-       |> assign(:chat_loading, false)
-       |> push_event("save_user_name", %{name: user_name})}
     end
+
+    # Track presence with the real user info
+    Presence.track_user(self(), room.code, actual_user_id, new_user_color, user_name)
+
+    {:noreply,
+     socket
+     |> assign(:user_id, actual_user_id)
+     |> assign(:user_color, new_user_color)
+     |> assign(:user_name, user_name)
+     |> assign(:device_fingerprint, device_fingerprint)
+     |> assign(:is_linked_device, is_linked)
+     |> assign(:chat_loading, false)
+     |> push_event("linked_user_id", %{user_id: actual_user_id, is_linked: is_linked})
+     |> push_event("save_user_name", %{name: user_name})}
   end
 
   def handle_event("validate", _params, socket), do: {:noreply, socket}
