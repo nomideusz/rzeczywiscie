@@ -5,12 +5,53 @@ defmodule Rzeczywiscie.Release do
   """
   @app :rzeczywiscie
 
+  # The production schema_migrations ledger predates consistent tracking:
+  # the schema is fully built but many old versions were never recorded, so
+  # the migrator tries to replay them ("relation counters already exists").
+  # Migrations before this cutoff are stamped as applied when the schema
+  # already exists; only migrations from 2026-07 onward actually run.
+  @baseline_cutoff 20260101000000
+
   def migrate do
     load_app()
 
     for repo <- repos() do
-      {:ok, _, _} = Ecto.Migrator.with_repo(repo, &Ecto.Migrator.run(&1, :up, all: true))
+      {:ok, _, _} =
+        Ecto.Migrator.with_repo(repo, fn r ->
+          ensure_baseline(r)
+          Ecto.Migrator.run(r, :up, all: true)
+        end)
     end
+  end
+
+  defp ensure_baseline(repo) do
+    schema_built? =
+      repo.query!("SELECT to_regclass('public.counters') IS NOT NULL").rows == [[true]]
+
+    if schema_built? do
+      repo.query!(
+        "CREATE TABLE IF NOT EXISTS schema_migrations (version bigint PRIMARY KEY, inserted_at timestamp(0))"
+      )
+
+      for version <- baseline_versions() do
+        repo.query!(
+          "INSERT INTO schema_migrations (version, inserted_at) VALUES ($1, NOW()) ON CONFLICT DO NOTHING",
+          [version]
+        )
+      end
+    end
+  end
+
+  defp baseline_versions do
+    :code.priv_dir(@app)
+    |> Path.join("repo/migrations")
+    |> File.ls!()
+    |> Enum.flat_map(fn filename ->
+      case Integer.parse(filename) do
+        {version, _} when version < @baseline_cutoff -> [version]
+        _ -> []
+      end
+    end)
   end
 
   def rollback(repo, version) do
