@@ -19,6 +19,9 @@ defmodule RzeczywiscieWeb.StatsLive do
       socket
       |> assign(:stats, calculate_stats())
       |> assign(:market, calculate_market_stats())
+      |> assign(:city_property_type, "mieszkanie")
+      |> assign(:city_transaction_type, "sprzedaż")
+      |> assign(:city_medians, calculate_city_medians("mieszkanie", "sprzedaż"))
       |> assign(:refreshing, false)
       |> assign(:last_updated, DateTime.utc_now())
       |> assign(:property_types, property_types)
@@ -221,28 +224,70 @@ defmodule RzeczywiscieWeb.StatsLive do
         </div>
 
         <!-- City medians over full archive -->
-        <div class="bg-base-100 border-2 border-base-content mb-6">
+        <div class="viz-root bg-base-100 border-2 border-base-content mb-6">
           <div class="px-4 py-2 border-b-2 border-base-content bg-primary/20">
-            <h2 class="text-sm font-bold uppercase tracking-wide">&#127961;&#65039; Sale Price / m&sup2; by City &mdash; Full Archive</h2>
-            <p class="text-[10px] opacity-60">Median over all tracked mieszkania listings (min. 10 per city)</p>
+            <h2 class="text-sm font-bold uppercase tracking-wide">&#127961;&#65039; Price by City &mdash; Full Archive</h2>
+            <p class="text-[10px] opacity-60">
+              Medians over all tracked listings with price &amp; area &bull; min. 10 per city &bull;
+              <%= @city_medians |> Enum.map(& &1.count) |> Enum.sum() %> listings in <%= length(@city_medians) %> cities
+            </p>
           </div>
-          <%= if @market.city_medians != [] do %>
-            <div class="overflow-x-auto">
+
+          <div class="px-4 py-3 border-b border-base-content/20 bg-base-200/50 flex flex-wrap gap-4 items-center">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-bold uppercase tracking-wide opacity-60">Property:</span>
+              <div class="flex flex-wrap gap-1">
+                <%= for type <- ["mieszkanie", "dom", "działka", "lokal użytkowy", "pokój", "garaż"] do %>
+                  <button
+                    phx-click="city_property_type"
+                    phx-value-type={type}
+                    class={"px-2 py-1 text-xs font-bold border transition-colors cursor-pointer #{if @city_property_type == type, do: "bg-primary text-primary-content border-primary", else: "border-base-content/30 hover:bg-base-200"}"}
+                  >
+                    <%= type %>
+                  </button>
+                <% end %>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-bold uppercase tracking-wide opacity-60">Transaction:</span>
+              <div class="flex gap-1">
+                <button
+                  phx-click="city_transaction_type"
+                  phx-value-type="sprzedaż"
+                  class={"px-2 py-1 text-xs font-bold border transition-colors cursor-pointer #{if @city_transaction_type == "sprzedaż", do: "bg-info text-info-content border-info", else: "border-base-content/30 hover:bg-base-200"}"}
+                >
+                  Sprzedaż
+                </button>
+                <button
+                  phx-click="city_transaction_type"
+                  phx-value-type="wynajem"
+                  class={"px-2 py-1 text-xs font-bold border transition-colors cursor-pointer #{if @city_transaction_type == "wynajem", do: "bg-warning text-warning-content border-warning", else: "border-base-content/30 hover:bg-base-200"}"}
+                >
+                  Wynajem
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <%= if @city_medians != [] do %>
+            <div class="overflow-x-auto max-h-[32rem] overflow-y-auto">
               <table class="w-full text-sm">
-                <thead class="bg-base-200 border-b border-base-content/30">
+                <thead class="bg-base-200 border-b border-base-content/30 sticky top-0">
                   <tr class="text-left text-[10px] font-bold uppercase tracking-wide">
                     <th class="px-3 py-2">City</th>
                     <th class="px-3 py-2 text-right">Median z&#322;/m&sup2;</th>
+                    <th class="px-3 py-2 text-right">Median price</th>
                     <th class="px-3 py-2 text-right">Listings</th>
                     <th class="px-3 py-2 w-1/3"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  <% max_median = @market.city_medians |> Enum.map(& &1.median_sqm) |> Enum.max() %>
-                  <%= for c <- Enum.sort_by(@market.city_medians, & &1.median_sqm, :desc) do %>
+                  <% max_median = @city_medians |> Enum.map(& &1.median_sqm) |> Enum.max() %>
+                  <%= for c <- @city_medians do %>
                     <tr class="border-t border-base-content/10 hover:bg-base-200/50">
                       <td class="px-3 py-1.5 font-bold"><%= c.city %></td>
                       <td class="px-3 py-1.5 text-right font-black"><%= axis_number(c.median_sqm) %></td>
+                      <td class="px-3 py-1.5 text-right"><%= axis_number(c.median_price) %> z&#322;</td>
                       <td class="px-3 py-1.5 text-right opacity-60"><%= c.count %></td>
                       <td class="px-3 py-1.5">
                         <div class="h-3 rounded-sm" style={"width: #{round(c.median_sqm / max_median * 100)}%; background: var(--viz-1)"}></div>
@@ -253,7 +298,7 @@ defmodule RzeczywiscieWeb.StatsLive do
               </table>
             </div>
           <% else %>
-            <div class="p-8 text-center text-xs opacity-50">Not enough data per city yet</div>
+            <div class="p-8 text-center text-xs opacity-50">No cities with 10+ qualifying listings for this filter</div>
           <% end %>
         </div>
 
@@ -1043,12 +1088,30 @@ defmodule RzeczywiscieWeb.StatsLive do
   defp truncate_title(title, max_length), do: String.slice(title, 0, max_length) <> "…"
 
   @impl true
+  def handle_event("city_property_type", %{"type" => type}, socket) do
+    {:noreply,
+     socket
+     |> assign(:city_property_type, type)
+     |> assign(:city_medians, calculate_city_medians(type, socket.assigns.city_transaction_type))}
+  end
+
+  def handle_event("city_transaction_type", %{"type" => type}, socket) do
+    {:noreply,
+     socket
+     |> assign(:city_transaction_type, type)
+     |> assign(:city_medians, calculate_city_medians(socket.assigns.city_property_type, type))}
+  end
+
   def handle_event("refresh_stats", _params, socket) do
     socket =
       socket
       |> assign(:refreshing, true)
       |> assign(:stats, calculate_stats())
       |> assign(:market, calculate_market_stats())
+      |> assign(:city_medians, calculate_city_medians(
+          socket.assigns.city_property_type,
+          socket.assigns.city_transaction_type
+        ))
       |> assign(:filtered_district_prices, calculate_filtered_district_prices(
           socket.assigns.selected_property_type,
           socket.assigns.selected_transaction_type
@@ -1209,6 +1272,39 @@ defmodule RzeczywiscieWeb.StatsLive do
 
   # Market analytics over ALL properties (including delisted ones) - the
   # historical archive is what makes trends and velocity computable
+  defp calculate_city_medians(property_type, transaction_type) do
+    {pmin, pmax} = price_range(transaction_type)
+
+    Repo.all(
+      from p in Property,
+        where:
+          p.transaction_type == ^transaction_type and p.property_type == ^property_type and
+            not is_nil(p.price) and p.price >= ^pmin and p.price <= ^pmax and
+            not is_nil(p.area_sqm) and p.area_sqm > 0 and not is_nil(p.city),
+        group_by: fragment("SPLIT_PART(?, ',', 1)", p.city),
+        having: count(p.id) >= 10,
+        order_by: [
+          desc:
+            fragment(
+              "percentile_cont(0.5) WITHIN GROUP (ORDER BY ?::float / ?::float)",
+              p.price,
+              p.area_sqm
+            )
+        ],
+        select: %{
+          city: fragment("SPLIT_PART(?, ',', 1)", p.city),
+          median_sqm:
+            fragment(
+              "percentile_cont(0.5) WITHIN GROUP (ORDER BY ?::float / ?::float)",
+              p.price,
+              p.area_sqm
+            ),
+          median_price: fragment("percentile_cont(0.5) WITHIN GROUP (ORDER BY ?::float)", p.price),
+          count: count(p.id)
+        }
+    )
+  end
+
   defp calculate_market_stats do
     {sale_min, sale_max} = price_range("sprzedaż")
     {rent_min, rent_max} = price_range("wynajem")
@@ -1313,36 +1409,12 @@ defmodule RzeczywiscieWeb.StatsLive do
           }
       )
 
-    city_medians =
-      Repo.all(
-        from p in Property,
-          where:
-            p.transaction_type == "sprzedaż" and p.property_type == "mieszkanie" and
-              not is_nil(p.price) and p.price >= ^sale_min and p.price <= ^sale_max and
-              not is_nil(p.area_sqm) and p.area_sqm > 0 and not is_nil(p.city),
-          group_by: fragment("SPLIT_PART(?, ',', 1)", p.city),
-          having: count(p.id) >= 10,
-          order_by: [desc: count(p.id)],
-          limit: 12,
-          select: %{
-            city: fragment("SPLIT_PART(?, ',', 1)", p.city),
-            median_sqm:
-              fragment(
-                "percentile_cont(0.5) WITHIN GROUP (ORDER BY ?::float / ?::float)",
-                p.price,
-                p.area_sqm
-              ),
-            count: count(p.id)
-          }
-      )
-
     %{
       monthly_sale: monthly_sale,
       monthly_rent: monthly_rent,
       monthly_volume: monthly_volume,
       velocity: Map.new(velocity, &{&1.key, &1}),
       velocity_by_type: velocity_by_type,
-      city_medians: city_medians,
       tracked_since: Repo.one(from p in Property, select: min(p.inserted_at)),
       delisted_count:
         Repo.aggregate(from(p in Property, where: p.active == false), :count, :id)
