@@ -10,8 +10,8 @@ defmodule Rzeczywiscie.PixelCanvas do
   alias Rzeczywiscie.Repo
   alias Rzeczywiscie.PixelCanvas.Pixel
 
-  @canvas_width 200
-  @canvas_height 200
+  @canvas_width 300
+  @canvas_height 300
   @cooldown_seconds 15
 
   def canvas_size, do: {@canvas_width, @canvas_height}

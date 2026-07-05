@@ -24,7 +24,7 @@ defmodule Rzeczywiscie.PixelCanvasTest do
 
   test "rejects out of bounds and bad colors" do
     assert {:error, :out_of_bounds} = PixelCanvas.place_pixel(-1, 0, @color, "u")
-    assert {:error, :out_of_bounds} = PixelCanvas.place_pixel(0, 200, @color, "u")
+    assert {:error, :out_of_bounds} = PixelCanvas.place_pixel(0, 300, @color, "u")
     assert {:error, %Ecto.Changeset{}} = PixelCanvas.place_pixel(0, 0, "#ffffff", "u")
   end
 end
