@@ -373,7 +373,7 @@ defmodule RzeczywiscieWeb.StatsLive do
         <div class="bg-base-100 border-2 border-base-content mb-6">
           <div class="px-4 py-3 border-b-2 border-base-content bg-gradient-to-r from-primary/20 to-secondary/20">
             <h2 class="text-sm font-bold uppercase tracking-wide">🔍 Price Explorer by District</h2>
-            <p class="text-[10px] opacity-60">Filter by property type and transaction type • Outliers excluded (Sale: 30k-50M zł, Rent: 300-100k zł)</p>
+            <p class="text-[10px] opacity-60">Full archive incl. delisted listings • Filter by property type and transaction type • Outliers excluded (Sale: 30k-50M zł, Rent: 300-100k zł)</p>
           </div>
           
           <!-- Filters -->
@@ -1048,6 +1048,9 @@ defmodule RzeczywiscieWeb.StatsLive do
                     >
                       <%= truncate_title(prop.title, 50) %>
                     </a>
+                    <%= if prop[:active] == false do %>
+                      <span class="text-[9px] font-bold uppercase px-1 border border-base-content/30 opacity-50">delisted</span>
+                    <% end %>
                   </td>
                   <td class={"px-2 py-2 text-center #{if prop.transaction_type == "sprzedaż", do: "text-info", else: "text-warning"}"}>
                     <%= if prop.transaction_type == "sprzedaż", do: "Sale", else: "Rent" %>
@@ -1695,7 +1698,7 @@ defmodule RzeczywiscieWeb.StatsLive do
   defp get_property_types do
     Repo.all(
       from p in Property,
-        where: p.active == true and not is_nil(p.property_type),
+        where: not is_nil(p.property_type),
         group_by: p.property_type,
         select: {p.property_type, count(p.id)},
         order_by: [desc: count(p.id)]
@@ -1713,10 +1716,9 @@ defmodule RzeczywiscieWeb.StatsLive do
     filters = %{min_area: min_area, max_area: max_area, min_rooms: min_rooms, max_rooms: max_rooms}
     
     # Get districts with this property type (with price sanity filter)
-    # Uses ALL active data - prices don't change quickly in real estate
+    # Uses the FULL archive including delisted listings
     base_query = from p in Property,
-      where: p.active == true and 
-             p.property_type == ^property_type and
+      where: p.property_type == ^property_type and
              not is_nil(p.district) and 
              p.district != "" and
              not is_nil(p.price)
@@ -1793,8 +1795,7 @@ defmodule RzeczywiscieWeb.StatsLive do
   defp get_district_stats(property_type, district, transaction_type, filters \\ %{}) do
     {min_valid, max_valid} = price_range(transaction_type)
     base_query = from(p in Property,
-      where: p.active == true and 
-             p.property_type == ^property_type and
+      where: p.property_type == ^property_type and
              p.district == ^district and
              p.transaction_type == ^transaction_type and
              not is_nil(p.price) and
@@ -1834,8 +1835,7 @@ defmodule RzeczywiscieWeb.StatsLive do
 
     # For avg_per_sqm, also apply the same filters
     sqm_query = from(p in Property,
-      where: p.active == true and 
-             p.property_type == ^property_type and
+      where: p.property_type == ^property_type and
              p.district == ^district and
              p.transaction_type == ^transaction_type and
              not is_nil(p.price) and 
@@ -1882,14 +1882,14 @@ defmodule RzeczywiscieWeb.StatsLive do
   defp fetch_district_properties(district, property_type, transaction_type, min_area, max_area, min_rooms, max_rooms) do
     # Build base query
     base_query = from p in Property,
-      where: p.active == true and 
-             p.property_type == ^property_type and
+      where: p.property_type == ^property_type and
              p.district == ^district and
              not is_nil(p.price),
-      order_by: [desc: p.inserted_at],
+      order_by: [desc: p.active, desc: p.inserted_at],
       limit: 20,
       select: %{
         id: p.id,
+        active: p.active,
         title: p.title,
         price: p.price,
         area_sqm: p.area_sqm,
