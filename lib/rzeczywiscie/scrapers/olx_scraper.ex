@@ -5,10 +5,41 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
 
   require Logger
   alias Rzeczywiscie.RealEstate
-  alias Rzeczywiscie.Scrapers.ExtractionHelpers
 
   @base_url "https://www.olx.pl"
-  @malopolskie_url "#{@base_url}/nieruchomosci/malopolskie/"
+  # OLX search pages are client-side rendered now (no listing HTML to scrape),
+  # so we use the same JSON API the site itself calls.
+  @api_url "#{@base_url}/api/v1/offers/"
+  @category_nieruchomosci 3
+  @region_malopolskie 4
+  @page_size 50
+  @user_agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+  # OLX category id => {property_type, transaction_type}
+  # nil means "not determined by category" (e.g. zamiana), fall back to text heuristics
+  @category_map %{
+    14 => {"mieszkanie", "sprzedaż"},
+    15 => {"mieszkanie", "wynajem"},
+    16 => {"mieszkanie", nil},
+    18 => {"dom", "sprzedaż"},
+    20 => {"dom", "wynajem"},
+    22 => {"dom", nil},
+    24 => {"działka", "sprzedaż"},
+    25 => {"działka", "wynajem"},
+    1311 => {"działka", nil},
+    125 => {"lokal użytkowy", "sprzedaż"},
+    127 => {"lokal użytkowy", "wynajem"},
+    1405 => {"lokal użytkowy", nil},
+    1329 => {"lokal użytkowy", "sprzedaż"},
+    1331 => {"lokal użytkowy", "wynajem"},
+    1315 => {"garaż", "sprzedaż"},
+    1313 => {"garaż", "wynajem"},
+    1317 => {"garaż", nil},
+    11 => {"pokój", "wynajem"},
+    1323 => {nil, "sprzedaż"},
+    1325 => {nil, "wynajem"},
+    1327 => {nil, nil}
+  }
 
   @doc """
   Scrape properties from OLX for Malopolskie region.
@@ -28,11 +59,9 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
     results =
       1..pages
       |> Enum.flat_map(fn page ->
-        url = if page == 1, do: @malopolskie_url, else: "#{@malopolskie_url}?page=#{page}"
-
-        case fetch_page(url) do
-          {:ok, html} ->
-            properties = parse_listings(html)
+        case fetch_page(page) do
+          {:ok, ads} ->
+            properties = ads |> Enum.map(&parse_ad/1) |> Enum.reject(&is_nil/1)
             Logger.info("Scraped page #{page}: found #{length(properties)} properties")
 
             # Add delay between requests to be respectful
@@ -180,464 +209,104 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
     {:ok, %{total: length(results), saved: successful}}
   end
 
-  defp fetch_page(url) do
-    Logger.info("Fetching: #{url}")
+  defp fetch_page(page) do
+    offset = (page - 1) * @page_size
+    Logger.info("Fetching OLX API page #{page} (offset #{offset})")
 
-    case Req.get(url,
-           headers: [
-             {"user-agent",
-              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
-             {"accept",
-              "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"},
-             {"accept-language", "pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7"},
-             {"accept-encoding", "gzip, deflate, br"},
-             {"cache-control", "max-age=0"},
-             {"sec-fetch-dest", "document"},
-             {"sec-fetch-mode", "navigate"},
-             {"sec-fetch-site", "none"},
-             {"upgrade-insecure-requests", "1"}
+    case Req.get(@api_url,
+           params: [
+             category_id: @category_nieruchomosci,
+             region_id: @region_malopolskie,
+             limit: @page_size,
+             offset: offset
            ],
-           max_redirects: 5,
+           headers: [{"user-agent", @user_agent}, {"accept", "application/json"}],
            receive_timeout: 30_000
          ) do
-      {:ok, %{status: 200, body: body}} ->
-        Logger.info("Successfully fetched #{String.length(body)} bytes")
+      {:ok, %{status: 200, body: %{"data" => ads}}} when is_list(ads) ->
+        {:ok, ads}
 
-        # Save HTML for debugging if it's a short response (might be error/captcha)
-        if String.length(body) < 50_000 do
-          Logger.warning("Response seems short (#{String.length(body)} bytes) - might be blocked")
-          save_debug_html(body, url)
-        end
-
-        {:ok, body}
-
-      {:ok, %{status: status, body: body}} ->
-        Logger.error("HTTP #{status} from #{url}")
-        Logger.info("Response preview: #{String.slice(body, 0, 200)}")
+      {:ok, %{status: status}} ->
         {:error, "HTTP #{status}"}
 
       {:error, reason} ->
-        Logger.error("Request failed for #{url}: #{inspect(reason)}")
         {:error, reason}
     end
   end
 
-  defp save_debug_html(html, url) do
-    # Save to tmp for inspection
-    filename = "/tmp/olx_debug_#{:os.system_time(:second)}.html"
+  defp parse_ad(%{"id" => id, "url" => url, "title" => title} = ad) do
+    params = Map.new(ad["params"] || [], fn %{"key" => k, "value" => v} -> {k, v} end)
+    price = parse_decimal(get_in(params, ["price", "value"]))
 
-    case File.write(filename, html) do
-      :ok ->
-        Logger.info("Saved debug HTML to #{filename} for URL: #{url}")
-        Logger.info("Preview: #{String.slice(html, 0, 500)}")
+    {ptype, ttype} = @category_map[get_in(ad, ["category", "id"])] || {nil, nil}
+    search_text = "#{title} #{url}"
 
-      {:error, reason} ->
-        Logger.warning("Could not save debug HTML: #{inspect(reason)}")
-    end
-  end
+    location = ad["location"] || %{}
+    {lat, lon} = extract_coords(ad["map"])
 
-  defp parse_listings(html) do
-    case Floki.parse_document(html) do
-      {:ok, document} ->
-        # Debug: Check what we received
-        Logger.info("HTML length: #{String.length(html)}")
-
-        # Check if we got blocked/captcha
-        if String.contains?(html, ["captcha", "robot", "blocked"]) do
-          Logger.warning("Possible bot detection - page contains captcha/robot keywords")
-        end
-
-        # Try multiple selector strategies (OLX changes their HTML frequently)
-        cards = try_find_listings(document)
-
-        Logger.info("Found #{length(cards)} listing cards")
-
-        cards
-        |> Enum.map(&parse_listing/1)
-        |> Enum.reject(&is_nil/1)
-
-      {:error, reason} ->
-        Logger.error("Failed to parse HTML: #{inspect(reason)}")
-        []
-    end
-  end
-
-  defp try_find_listings(document) do
-    # Try different selectors in order of likelihood
-    selectors = [
-      "[data-cy='l-card']",           # Original selector
-      "div[data-cy='l-card']",        # More specific
-      "[data-testid='l-card']",       # Alternative attribute
-      "div.css-1sw7q4x",              # CSS class (may change)
-      "article",                       # Semantic HTML
-      "[data-cy='listing-card']",     # Alternative naming
-      "div[data-cy] a[href*='/d/']"   # Links to detail pages
-    ]
-
-    result =
-      Enum.reduce_while(selectors, [], fn selector, _acc ->
-        cards = Floki.find(document, selector)
-
-        if length(cards) > 0 do
-          Logger.info("✓ Found #{length(cards)} cards using selector: #{selector}")
-          {:halt, cards}
-        else
-          Logger.info("✗ Selector '#{selector}' found 0 cards")
-          {:cont, []}
-        end
-      end)
-
-    # If still nothing found, do some debugging
-    if result == [] do
-      debug_document_structure(document)
-    end
-
-    result
-  end
-
-  defp debug_document_structure(document) do
-    # Find all elements with data-cy attribute
-    data_cy_elements = Floki.find(document, "[data-cy]")
-    data_cy_values =
-      data_cy_elements
-      |> Enum.map(fn {_tag, attrs, _children} ->
-        Enum.find_value(attrs, fn
-          {"data-cy", value} -> value
-          _ -> nil
-        end)
-      end)
-      |> Enum.reject(&is_nil/1)
-      |> Enum.uniq()
-      |> Enum.take(20)
-
-    Logger.warning("⚠️  No listings found! Available data-cy values: #{inspect(data_cy_values)}")
-
-    # Check for common containers
-    containers = [
-      "main",
-      "#__next",
-      "[role='main']",
-      ".listing-grid",
-      "[data-testid='listing-grid']"
-    ]
-
-    Enum.each(containers, fn selector ->
-      found = Floki.find(document, selector)
-      if length(found) > 0 do
-        Logger.info("Found container: #{selector} (#{length(found)} elements)")
-      end
-    end)
-  end
-
-  defp parse_listing(card) do
-    # Extract data from listing card - try multiple strategies
-    with {:ok, url} <- extract_url(card),
-         {:ok, title} <- extract_title(card) do
-      # Use URL as external_id if no id attribute (more reliable)
-      external_id = extract_id_from_url(url)
-
-      if is_nil(external_id) do
-        Logger.warning("Could not extract ID from URL: #{url}")
-      end
-
-      full_url = ensure_absolute_url(url)
-
-      # Description is fetched manually from Admin page only
-      description = nil
-
-      search_text = "#{title} #{full_url}"
-
-      # Try to extract price from card, if fails try title as fallback
-      price = extract_price(card, title)
-
-      # Extract initial transaction type from text
-      initial_transaction_type = extract_transaction_type(search_text)
-      # Validate/correct based on price
-      validated_transaction_type = validate_transaction_type(initial_transaction_type, price)
-
-      # Extract district first, then use it to infer city if needed
-      district = extract_district(card)
-      raw_city = extract_city(card)
-      city = ExtractionHelpers.infer_city(raw_city, district)
-
-      %{
-        source: "olx",
-        external_id: external_id || generate_id_from_url(url),
-        title: String.trim(title),
-        url: full_url,
-        price: price,
-        currency: "PLN",
-        area_sqm: extract_area(card, title),
-        rooms: extract_rooms(card, title),
-        transaction_type: validated_transaction_type,
-        property_type: extract_property_type(search_text),
-        city: city,
-        district: district,
-        voivodeship: "małopolskie",
-        image_url: extract_image(card),
-        description: description,
-        raw_data: %{
-          scraped_at: DateTime.utc_now() |> DateTime.to_iso8601()
-        }
+    %{
+      source: "olx",
+      external_id: to_string(id),
+      title: String.trim(title),
+      url: url,
+      price: price,
+      currency: get_in(params, ["price", "currency"]) || "PLN",
+      area_sqm: parse_decimal(get_in(params, ["m", "key"]) || get_in(params, ["area", "key"])),
+      rooms: parse_rooms(get_in(params, ["rooms", "key"])),
+      floor: parse_floor(get_in(params, ["floor_select", "key"])),
+      transaction_type:
+        ttype || validate_transaction_type(extract_transaction_type(search_text), price),
+      property_type: ptype || extract_property_type(search_text),
+      city: get_in(location, ["city", "name"]),
+      district: get_in(location, ["district", "name"]),
+      voivodeship: "małopolskie",
+      latitude: lat,
+      longitude: lon,
+      image_url: extract_image(ad["photos"]),
+      description: ad["description"],
+      raw_data: %{
+        scraped_at: DateTime.utc_now() |> DateTime.to_iso8601()
       }
-    else
-      {:error, reason} ->
-        Logger.info("Skipping listing: #{inspect(reason)}")
-        nil
-    end
-  end
-
-  defp extract_id_from_url(url) do
-    # OLX URLs have multiple formats, try them all:
-    # Format 1: /d/ogloszenie/TITLE-ID12345678.html
-    # Format 2: /oferta/TITLE-ID12345678
-    # Format 3: Just use the last segment with ID prefix
-    cond do
-      String.contains?(url, "-ID") ->
-        case Regex.run(~r/-ID([A-Za-z0-9]+)/, url) do
-          [_, id] -> id
-          _ -> nil
-        end
-
-      String.contains?(url, "/d/") ->
-        # Extract the last part of the URL path
-        url
-        |> String.split("/")
-        |> List.last()
-        |> String.replace(".html", "")
-        |> String.split("-")
-        |> List.last()
-
-      true ->
-        nil
-    end
-  end
-
-  defp generate_id_from_url(url) do
-    # Generate a stable ID from the URL itself
-    url
-    |> String.split("/")
-    |> List.last()
-    |> String.replace(~r/[^a-zA-Z0-9]/, "")
-    |> String.slice(0, 50)
-    |> case do
-      "" ->
-        # Ultimate fallback: hash the entire URL
-        :crypto.hash(:md5, url)
-        |> Base.encode16()
-        |> String.slice(0, 16)
-
-      id ->
-        id
-    end
-  end
-
-  defp extract_url(card) do
-    # Try multiple selectors for finding the URL
-    selectors = [
-      "a[data-cy='listing-ad-title']",
-      "a[data-cy='ad-card']",
-      "a[href*='/d/']",
-      "a[href*='/oferta/']",
-      "a"
-    ]
-
-    result =
-      Enum.reduce_while(selectors, nil, fn selector, _acc ->
-        case Floki.find(card, selector) do
-          [{_tag, attrs, _} | _] ->
-            case List.keyfind(attrs, "href", 0) do
-              {"href", url} when is_binary(url) and url != "" ->
-                {:halt, {:ok, url}}
-
-              _ ->
-                {:cont, nil}
-            end
-
-          _ ->
-            {:cont, nil}
-        end
-      end)
-
-    result || {:error, :no_url}
-  end
-
-  defp extract_title(card) do
-    # Try multiple selectors for title
-    selectors = ["h6", "h4", "h3", "[data-cy='ad-card-title']", "a[data-cy='listing-ad-title']"]
-
-    result =
-      Enum.reduce_while(selectors, nil, fn selector, _acc ->
-        raw_title = Floki.find(card, selector) |> Floki.text() |> String.trim()
-        # Clean CSS garbage from extracted text
-        title = ExtractionHelpers.clean_css_from_text(raw_title)
-        
-        if title != "" and not ExtractionHelpers.is_css_content?(title) do
-          {:halt, {:ok, title}}
-        else
-          {:cont, nil}
-        end
-      end)
-
-    result || {:error, :no_title}
-  end
-
-  defp extract_price(card, title) do
-    # Try multiple selectors for price
-    selectors = [
-      "p[data-testid='ad-price']",
-      "[data-testid='ad-price']",
-      "p[class*='price']",
-      "span[class*='price']",
-      "div[class*='price']",
-      "[class*='Price']",  # Capital P variant
-      "p",  # Generic paragraph - might contain price
-      "span"  # Generic span - might contain price
-    ]
-
-    result =
-      Enum.reduce_while(selectors, nil, fn selector, _acc ->
-        text = Floki.find(card, selector) |> Floki.text()
-
-        case parse_price(text) do
-          nil -> {:cont, nil}
-          price -> {:halt, price}
-        end
-      end)
-
-    # Fallback 1: Try extracting from entire card text
-    result = result || extract_price_from_card_text(card)
-    
-    # Fallback 2: Try extracting from title
-    result = result || (title && parse_price(title))
-    
-    result
-  end
-
-  defp extract_price_from_card_text(card) do
-    full_text = Floki.text(card)
-    ExtractionHelpers.extract_price_from_full_text(full_text)
-  end
-
-  defp parse_price(text), do: ExtractionHelpers.parse_price(text)
-
-  defp extract_area(card, title) do
-    card_text = Floki.text(card)
-    # Combine card text with title for better extraction
-    full_text = if title, do: "#{title} #{card_text}", else: card_text
-    ExtractionHelpers.extract_area_from_text(full_text)
-  end
-
-  defp extract_rooms(card, title) do
-    card_text = Floki.text(card)
-    
-    # Combine card text with title for better extraction
-    full_text = if title, do: "#{title} #{card_text}", else: card_text
-
-    # Try multiple patterns for room count
-    result = ExtractionHelpers.extract_number_with_unit(full_text, "pokoje")
-    |> case do
-      nil ->
-        # Try alternative patterns
-        ExtractionHelpers.extract_number_with_unit(full_text, "pokoi") ||
-          ExtractionHelpers.extract_number_with_unit(full_text, "pok\\.") ||
-          ExtractionHelpers.extract_number_with_unit(full_text, "pok") ||
-          ExtractionHelpers.extract_rooms_from_text(full_text)
-
-      decimal ->
-        Decimal.to_integer(decimal)
-    end
-    |> case do
-      nil -> nil
-      num when is_integer(num) -> num
-      decimal -> Decimal.to_integer(decimal)
-    end
-    
-    result
-  end
-
-
-  defp extract_city(card) do
-    # Try multiple selectors for location
-    selectors = [
-      "p[data-testid='location-date']",
-      "[data-testid='location-date']",
-      "p[class*='location']",
-      "span[class*='location']"
-    ]
-
-    result =
-      Enum.reduce_while(selectors, nil, fn selector, _acc ->
-        text = Floki.find(card, selector) |> Floki.text()
-
-        case String.split(text, "-") |> List.first() |> String.trim() do
-          "" -> {:cont, nil}
-          city -> {:halt, city}
-        end
-      end)
-
-    result
-  end
-
-  defp extract_district(card) do
-    # Try multiple selectors for location
-    selectors = [
-      "p[data-testid='location-date']",
-      "[data-testid='location-date']",
-      "p[class*='location']",
-      "span[class*='location']"
-    ]
-
-    result =
-      Enum.reduce_while(selectors, nil, fn selector, _acc ->
-        text = Floki.find(card, selector) |> Floki.text()
-
-        # Location format can be: "Kraków, Krowodrza - date" or "Kraków, Krowodrza, Azory - date"
-        # Split by " - " first to remove date part
-        location_part = text |> String.split(" - ") |> List.first() |> String.trim()
-        
-        # Split by comma and get district (second part)
-        case String.split(location_part, ",") |> Enum.map(&String.trim/1) do
-          [_city, district | _rest] when district != "" ->
-            # Clean the district name (remove additional location details after dash)
-            cleaned = district |> String.split("-") |> List.first() |> String.trim()
-            
-            case cleaned do
-              "" -> {:cont, nil}
-              d -> {:halt, normalize_district_name(d)}
-            end
-            
-          _ ->
-            {:cont, nil}
-        end
-      end)
-
-    result
-  end
-  
-  # Normalize district name to consistent format
-  defp normalize_district_name(district) do
-    # Map common variations to standard names
-    district_map = %{
-      "pradnik bialy" => "Prądnik Biały",
-      "pradnik czerwony" => "Prądnik Czerwony",
-      "stare miasto" => "Stare Miasto",
-      "nowa huta" => "Nowa Huta",
-      "podgorze duchackie" => "Podgórze Duchackie",
-      "wzgorza krzeslawickie" => "Wzgórza Krzesławickie",
-      "borek falecki" => "Borek Fałęcki"
     }
-    
-    normalized = String.downcase(district) |> String.trim()
-    Map.get(district_map, normalized, district)
   end
 
-  defp extract_image(card) do
-    card
-    |> Floki.find("img")
-    |> Floki.attribute("src")
-    |> List.first()
+  defp parse_ad(ad) do
+    Logger.info("Skipping ad without id/url/title: #{inspect(Map.keys(ad))}")
+    nil
   end
+
+  defp parse_decimal(nil), do: nil
+  defp parse_decimal(value) when is_number(value), do: Decimal.new(to_string(value))
+
+  defp parse_decimal(value) when is_binary(value) do
+    case Decimal.parse(String.replace(value, ",", ".")) do
+      {decimal, _rest} -> decimal
+      :error -> nil
+    end
+  end
+
+  @rooms_map %{"one" => 1, "two" => 2, "three" => 3, "four" => 4, "five" => 5,
+               "six" => 6, "seven" => 7, "eight" => 8, "nine" => 9, "ten" => 10}
+  defp parse_rooms(key), do: @rooms_map[key]
+
+  defp parse_floor("floor_" <> num) do
+    case Integer.parse(num) do
+      {n, ""} -> n
+      _ -> nil
+    end
+  end
+
+  defp parse_floor(_), do: nil
+
+  # radius > 0 means OLX only exposes approximate coordinates - skip those,
+  # the app geocodes properties separately and wrong pins are worse than none
+  defp extract_coords(%{"radius" => 0, "lat" => lat, "lon" => lon}), do: {lat, lon}
+  defp extract_coords(_), do: {nil, nil}
+
+  defp extract_image([%{"link" => link} | _]),
+    do: String.replace(link, "{width}x{height}", "800x600")
+
+  defp extract_image(_), do: nil
 
   defp extract_transaction_type(text) do
     text_lower = String.downcase(text)
@@ -999,14 +668,6 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
       true -> 
         Logger.debug("OLX: Could not determine property_type, defaulting to mieszkanie")
         "mieszkanie"
-    end
-  end
-
-  defp ensure_absolute_url(url) do
-    if String.starts_with?(url, "http") do
-      url
-    else
-      @base_url <> url
     end
   end
 end
