@@ -18,6 +18,7 @@ defmodule RzeczywiscieWeb.StatsLive do
     socket =
       socket
       |> assign(:stats, calculate_stats())
+      |> assign(:market, calculate_market_stats())
       |> assign(:refreshing, false)
       |> assign(:last_updated, DateTime.utc_now())
       |> assign(:property_types, property_types)
@@ -111,6 +112,151 @@ defmodule RzeczywiscieWeb.StatsLive do
       <% end %>
 
       <div class="container mx-auto px-4 py-6">
+        <style>
+          .viz-root { --viz-1: #2a78d6; --viz-2: #1baf7a; --viz-3: #eda100; }
+        </style>
+
+        <!-- Market Trends: computed over the FULL archive, not just active listings -->
+        <div class="viz-root bg-base-100 border-2 border-base-content mb-6">
+          <div class="px-4 py-3 border-b-2 border-base-content bg-gradient-to-r from-primary/20 to-accent/20">
+            <h2 class="text-sm font-bold uppercase tracking-wide">&#128200; Market Trends &mdash; Full Archive</h2>
+            <p class="text-[10px] opacity-60">
+              Monthly medians over all <%= @stats.total_properties %> tracked properties (mieszkania)
+              <%= if @market.tracked_since do %>
+                &bull; since <%= Calendar.strftime(@market.tracked_since, "%b %Y") %>
+              <% end %>
+              &bull; outliers excluded
+            </p>
+          </div>
+          <div class="grid grid-cols-1 lg:grid-cols-2 divide-y-2 lg:divide-y-0 lg:divide-x-2 divide-base-content">
+            <div class="p-4">
+              <h3 class="text-xs font-bold uppercase tracking-wide mb-2">
+                <span class="inline-block w-3 h-3 align-middle mr-1" style="background: var(--viz-1)"></span>
+                Median Sale Price / m&sup2;
+              </h3>
+              <.trend_chart rows={@market.monthly_sale} color="var(--viz-1)" unit="zł/m²" label="Median sale price per square meter by month" />
+              <details class="mt-2">
+                <summary class="text-[10px] uppercase font-bold opacity-50 cursor-pointer">Data table</summary>
+                <table class="w-full text-xs mt-1">
+                  <thead><tr class="text-left opacity-60"><th class="px-2 py-1">Month</th><th class="px-2 py-1">Median z&#322;/m&sup2;</th><th class="px-2 py-1">Listings</th></tr></thead>
+                  <tbody>
+                    <%= for row <- Enum.reverse(@market.monthly_sale) do %>
+                      <tr class="border-t border-base-content/10"><td class="px-2 py-1"><%= short_month(row.month) %></td><td class="px-2 py-1 font-bold"><%= axis_number(row.value) %></td><td class="px-2 py-1 opacity-60"><%= row.count %></td></tr>
+                    <% end %>
+                  </tbody>
+                </table>
+              </details>
+            </div>
+            <div class="p-4">
+              <h3 class="text-xs font-bold uppercase tracking-wide mb-2">
+                <span class="inline-block w-3 h-3 align-middle mr-1" style="background: var(--viz-2)"></span>
+                Median Monthly Rent
+              </h3>
+              <.trend_chart rows={@market.monthly_rent} color="var(--viz-2)" unit="zł" label="Median monthly rent by month" />
+              <details class="mt-2">
+                <summary class="text-[10px] uppercase font-bold opacity-50 cursor-pointer">Data table</summary>
+                <table class="w-full text-xs mt-1">
+                  <thead><tr class="text-left opacity-60"><th class="px-2 py-1">Month</th><th class="px-2 py-1">Median z&#322;</th><th class="px-2 py-1">Listings</th></tr></thead>
+                  <tbody>
+                    <%= for row <- Enum.reverse(@market.monthly_rent) do %>
+                      <tr class="border-t border-base-content/10"><td class="px-2 py-1"><%= short_month(row.month) %></td><td class="px-2 py-1 font-bold"><%= axis_number(row.value) %></td><td class="px-2 py-1 opacity-60"><%= row.count %></td></tr>
+                    <% end %>
+                  </tbody>
+                </table>
+              </details>
+            </div>
+          </div>
+        </div>
+
+        <!-- Listing Volume + Market Velocity -->
+        <div class="viz-root grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <div class="bg-base-100 border-2 border-base-content">
+            <div class="px-4 py-2 border-b-2 border-base-content bg-secondary/20 flex items-center justify-between flex-wrap gap-2">
+              <h2 class="text-sm font-bold uppercase tracking-wide">&#128202; New Listings / Month</h2>
+              <div class="flex gap-3 text-[10px] font-bold uppercase">
+                <span><span class="inline-block w-3 h-3 align-middle mr-1" style="background: var(--viz-1)"></span>OLX</span>
+                <span><span class="inline-block w-3 h-3 align-middle mr-1" style="background: var(--viz-2)"></span>Otodom</span>
+                <%= if Enum.any?(@market.monthly_volume, & &1.other > 0) do %>
+                  <span><span class="inline-block w-3 h-3 align-middle mr-1" style="background: var(--viz-3)"></span>Other</span>
+                <% end %>
+              </div>
+            </div>
+            <div class="p-4">
+              <.volume_chart rows={@market.monthly_volume} />
+            </div>
+          </div>
+
+          <div class="bg-base-100 border-2 border-base-content">
+            <div class="px-4 py-2 border-b-2 border-base-content bg-accent/20">
+              <h2 class="text-sm font-bold uppercase tracking-wide">&#9201;&#65039; Market Velocity</h2>
+              <p class="text-[10px] opacity-60">Median days on market, from <%= @market.delisted_count %> delisted properties</p>
+            </div>
+            <%= if map_size(@market.velocity) > 0 do %>
+              <div class="grid grid-cols-2 divide-x-2 divide-base-content border-b border-base-content/20">
+                <%= for {key, css} <- [{"sprzedaż", "text-info"}, {"wynajem", "text-warning"}] do %>
+                  <div class="p-4 text-center">
+                    <%= if v = @market.velocity[key] do %>
+                      <div class={"text-3xl font-black #{css}"}><%= round(v.median_days) %>d</div>
+                      <div class="text-[10px] font-bold uppercase tracking-wide opacity-60"><%= key %></div>
+                      <div class="text-xs opacity-50"><%= v.count %> delisted</div>
+                    <% else %>
+                      <div class="text-3xl font-black opacity-30">&mdash;</div>
+                      <div class="text-[10px] font-bold uppercase tracking-wide opacity-60"><%= key %></div>
+                    <% end %>
+                  </div>
+                <% end %>
+              </div>
+              <div class="p-3">
+                <%= for v <- @market.velocity_by_type do %>
+                  <div class="flex items-center justify-between py-1 text-xs border-b border-base-content/10 last:border-0">
+                    <span class="font-bold"><%= v.key %></span>
+                    <span><span class="font-black"><%= round(v.median_days) %> days</span> <span class="opacity-50">(<%= v.count %>)</span></span>
+                  </div>
+                <% end %>
+              </div>
+            <% else %>
+              <div class="p-8 text-center text-xs opacity-50">No delisted properties yet &mdash; velocity appears once listings start expiring</div>
+            <% end %>
+          </div>
+        </div>
+
+        <!-- City medians over full archive -->
+        <div class="bg-base-100 border-2 border-base-content mb-6">
+          <div class="px-4 py-2 border-b-2 border-base-content bg-primary/20">
+            <h2 class="text-sm font-bold uppercase tracking-wide">&#127961;&#65039; Sale Price / m&sup2; by City &mdash; Full Archive</h2>
+            <p class="text-[10px] opacity-60">Median over all tracked mieszkania listings (min. 10 per city)</p>
+          </div>
+          <%= if @market.city_medians != [] do %>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead class="bg-base-200 border-b border-base-content/30">
+                  <tr class="text-left text-[10px] font-bold uppercase tracking-wide">
+                    <th class="px-3 py-2">City</th>
+                    <th class="px-3 py-2 text-right">Median z&#322;/m&sup2;</th>
+                    <th class="px-3 py-2 text-right">Listings</th>
+                    <th class="px-3 py-2 w-1/3"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% max_median = @market.city_medians |> Enum.map(& &1.median_sqm) |> Enum.max() %>
+                  <%= for c <- Enum.sort_by(@market.city_medians, & &1.median_sqm, :desc) do %>
+                    <tr class="border-t border-base-content/10 hover:bg-base-200/50">
+                      <td class="px-3 py-1.5 font-bold"><%= c.city %></td>
+                      <td class="px-3 py-1.5 text-right font-black"><%= axis_number(c.median_sqm) %></td>
+                      <td class="px-3 py-1.5 text-right opacity-60"><%= c.count %></td>
+                      <td class="px-3 py-1.5">
+                        <div class="h-3 rounded-sm" style={"width: #{round(c.median_sqm / max_median * 100)}%; background: var(--viz-1)"}></div>
+                      </td>
+                    </tr>
+                  <% end %>
+                </tbody>
+              </table>
+            </div>
+          <% else %>
+            <div class="p-8 text-center text-xs opacity-50">Not enough data per city yet</div>
+          <% end %>
+        </div>
+
         <!-- Price Statistics -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           <!-- Sale Prices -->
@@ -589,6 +735,204 @@ defmodule RzeczywiscieWeb.StatsLive do
     """
   end
 
+  # --- SVG chart components (no JS deps; hover via native <title> tooltips) ---
+
+  # ponytail: native SVG <title> tooltips instead of a JS crosshair layer;
+  # upgrade to a Svelte chart component if richer interaction is ever needed
+
+  @chart_w 560
+  @chart_h 200
+  @pad_l 46
+  @pad_r 10
+  @pad_t 12
+  @pad_b 24
+
+  defp trend_chart(assigns) do
+    rows = assigns.rows
+    plot_w = @chart_w - @pad_l - @pad_r
+    plot_h = @chart_h - @pad_t - @pad_b
+
+    if length(rows) < 2 do
+      ~H"""
+      <div class="p-8 text-center text-xs opacity-50">Not enough monthly data yet — check back after a few scrape cycles</div>
+      """
+    else
+      vals = Enum.map(rows, & &1.value)
+      {vmin, vmax} = {Enum.min(vals), Enum.max(vals)}
+      span = max(vmax - vmin, max(vmax * 0.05, 1.0))
+      dmin = vmin - span * 0.1
+      dmax = vmax + span * 0.1
+
+      n = length(rows)
+      dx = plot_w / (n - 1)
+
+      pts =
+        rows
+        |> Enum.with_index()
+        |> Enum.map(fn {r, i} ->
+          %{
+            x: Float.round(@pad_l + i * dx, 1),
+            y: Float.round(@pad_t + plot_h - (r.value - dmin) / (dmax - dmin) * plot_h, 1),
+            row: r
+          }
+        end)
+
+      ticks =
+        Enum.map(1..3, fn i ->
+          v = dmin + (dmax - dmin) * i / 4
+          %{y: Float.round(@pad_t + plot_h - i / 4 * plot_h, 1), label: axis_number(v)}
+        end)
+
+      # label roughly 6 x-axis months, always including first and last
+      step = max(div(n - 1, 5), 1)
+      x_labels =
+        pts
+        |> Enum.with_index()
+        |> Enum.filter(fn {_, i} -> rem(i, step) == 0 or i == n - 1 end)
+        |> Enum.map(fn {pt, _} -> pt end)
+
+      last = List.last(pts)
+
+      assigns =
+        assign(assigns,
+          pts: pts,
+          poly: Enum.map_join(pts, " ", &"#{&1.x},#{&1.y}"),
+          ticks: ticks,
+          x_labels: x_labels,
+          last: last,
+          baseline_y: @pad_t + plot_h
+        )
+
+      ~H"""
+      <svg viewBox="0 0 560 200" class="w-full" role="img" aria-label={@label}>
+        <%= for tick <- @ticks do %>
+          <line x1="46" y1={tick.y} x2="550" y2={tick.y} class="stroke-base-content/10" stroke-width="1" />
+          <text x="40" y={tick.y + 3} text-anchor="end" class="fill-base-content/50" font-size="9"><%= tick.label %></text>
+        <% end %>
+        <line x1="46" y1={@baseline_y} x2="550" y2={@baseline_y} class="stroke-base-content/25" stroke-width="1" />
+        <%= for pt <- @x_labels do %>
+          <text x={pt.x} y="194" text-anchor="middle" class="fill-base-content/50" font-size="9"><%= short_month(pt.row.month) %></text>
+        <% end %>
+        <polyline points={@poly} fill="none" stroke={@color} stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+        <%= for pt <- @pts do %>
+          <g>
+            <circle cx={pt.x} cy={pt.y} r="9" fill="transparent">
+              <title><%= "#{short_month(pt.row.month)}: #{axis_number(pt.row.value)} #{@unit} (#{pt.row.count} listings)" %></title>
+            </circle>
+            <circle cx={pt.x} cy={pt.y} r="2.5" fill={@color} pointer-events="none" />
+          </g>
+        <% end %>
+        <text x={min(@last.x, 548)} y={max(@last.y - 8, 10)} text-anchor="end" class="fill-base-content" font-size="10" font-weight="bold">
+          <%= axis_number(@last.row.value) %> <%= @unit %>
+        </text>
+      </svg>
+      """
+    end
+  end
+
+  defp volume_chart(assigns) do
+    rows = assigns.rows
+    plot_w = @chart_w - @pad_l - @pad_r
+    plot_h = @chart_h - @pad_t - @pad_b
+
+    if rows == [] do
+      ~H"""
+      <div class="p-8 text-center text-xs opacity-50">No data yet</div>
+      """
+    else
+      n = length(rows)
+      band = plot_w / n
+      bar_w = Float.round(max(band * 0.7, 2.0), 1)
+      vmax = rows |> Enum.map(&(&1.olx + &1.otodom + &1.other)) |> Enum.max() |> max(1)
+
+      bars =
+        rows
+        |> Enum.with_index()
+        |> Enum.map(fn {r, i} ->
+          x = Float.round(@pad_l + i * band + (band - bar_w) / 2, 1)
+          # stacked segments bottom-up with a 2px surface gap between them
+          segments =
+            [{r.olx, "olx"}, {r.otodom, "otodom"}, {r.other, "other"}]
+            |> Enum.reject(fn {count, _} -> count == 0 end)
+
+          {rects, _} =
+            Enum.map_reduce(segments, @pad_t + plot_h, fn {count, source}, y_bottom ->
+              h = count / vmax * plot_h
+              {%{x: x, y: Float.round(y_bottom - h, 1), h: Float.round(max(h - 2, 1.0), 1), source: source, count: count},
+               y_bottom - h}
+            end)
+
+          %{x: x, month: r.month, total: r.olx + r.otodom + r.other, rects: rects}
+        end)
+
+      step = max(div(n - 1, 5), 1)
+
+      x_labels =
+        bars
+        |> Enum.with_index()
+        |> Enum.filter(fn {_, i} -> rem(i, step) == 0 or i == n - 1 end)
+        |> Enum.map(fn {b, _} -> b end)
+
+      ticks =
+        Enum.map(1..3, fn i ->
+          %{
+            y: Float.round(@pad_t + plot_h - i / 4 * plot_h, 1),
+            label: axis_number(vmax * i / 4)
+          }
+        end)
+
+      assigns =
+        assign(assigns, bars: bars, bar_w: bar_w, ticks: ticks, x_labels: x_labels, baseline_y: @pad_t + plot_h)
+
+      ~H"""
+      <svg viewBox="0 0 560 200" class="w-full" role="img" aria-label="New listings per month by source">
+        <%= for tick <- @ticks do %>
+          <line x1="46" y1={tick.y} x2="550" y2={tick.y} class="stroke-base-content/10" stroke-width="1" />
+          <text x="40" y={tick.y + 3} text-anchor="end" class="fill-base-content/50" font-size="9"><%= tick.label %></text>
+        <% end %>
+        <line x1="46" y1={@baseline_y} x2="550" y2={@baseline_y} class="stroke-base-content/25" stroke-width="1" />
+        <%= for bar <- @bars do %>
+          <g>
+            <%= for rect <- bar.rects do %>
+              <rect x={rect.x} y={rect.y} width={@bar_w} height={rect.h} rx="1" fill={source_color(rect.source)} />
+            <% end %>
+            <rect x={bar.x} y="12" width={@bar_w} height="164" fill="transparent">
+              <title><%= "#{short_month(bar.month)}: #{bar.total} listings (#{Enum.map_join(bar.rects, ", ", &"#{&1.source} #{&1.count}")})" %></title>
+            </rect>
+          </g>
+        <% end %>
+        <%= for bar <- @x_labels do %>
+          <text x={bar.x + @bar_w / 2} y="194" text-anchor="middle" class="fill-base-content/50" font-size="9"><%= short_month(bar.month) %></text>
+        <% end %>
+      </svg>
+      """
+    end
+  end
+
+  # Palette validated with dataviz six-checks for light+dark surfaces
+  # (blue #2a78d6 / aqua #1baf7a / yellow #eda100)
+  defp source_color("olx"), do: "var(--viz-1)"
+  defp source_color("otodom"), do: "var(--viz-2)"
+  defp source_color(_), do: "var(--viz-3)"
+
+  defp axis_number(v) when is_number(v) do
+    cond do
+      v >= 1_000_000 -> "#{Float.round(v / 1_000_000, 1)}M"
+      v >= 10_000 -> "#{round(v / 1000)}k"
+      v >= 1_000 -> "#{Float.round(v / 1000, 1)}k"
+      true -> "#{round(v)}"
+    end
+  end
+
+  defp axis_number(_), do: "—"
+
+  @month_names ~w(Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec)
+  defp short_month(<<year::binary-4, "-", mm::binary-2>>) do
+    "#{Enum.at(@month_names, String.to_integer(mm) - 1)} '#{String.slice(year, 2, 2)}"
+  end
+
+  defp short_month(other), do: other
+
   attr :column, :string, required: true
   attr :label, :string, required: true
   attr :sort_by, :string, required: true
@@ -704,6 +1048,7 @@ defmodule RzeczywiscieWeb.StatsLive do
       socket
       |> assign(:refreshing, true)
       |> assign(:stats, calculate_stats())
+      |> assign(:market, calculate_market_stats())
       |> assign(:filtered_district_prices, calculate_filtered_district_prices(
           socket.assigns.selected_property_type,
           socket.assigns.selected_transaction_type
@@ -860,6 +1205,148 @@ defmodule RzeczywiscieWeb.StatsLive do
       |> sort_filtered_prices()
 
     {:noreply, socket}
+  end
+
+  # Market analytics over ALL properties (including delisted ones) - the
+  # historical archive is what makes trends and velocity computable
+  defp calculate_market_stats do
+    {sale_min, sale_max} = price_range("sprzedaż")
+    {rent_min, rent_max} = price_range("wynajem")
+
+    monthly_sale =
+      Repo.all(
+        from p in Property,
+          where:
+            p.transaction_type == "sprzedaż" and p.property_type == "mieszkanie" and
+              not is_nil(p.price) and p.price >= ^sale_min and p.price <= ^sale_max and
+              not is_nil(p.area_sqm) and p.area_sqm > 0,
+          group_by: fragment("to_char(?, 'YYYY-MM')", p.inserted_at),
+          order_by: fragment("to_char(?, 'YYYY-MM')", p.inserted_at),
+          select: %{
+            month: fragment("to_char(?, 'YYYY-MM')", p.inserted_at),
+            value:
+              fragment(
+                "percentile_cont(0.5) WITHIN GROUP (ORDER BY ?::float / ?::float)",
+                p.price,
+                p.area_sqm
+              ),
+            count: count(p.id)
+          }
+      )
+
+    monthly_rent =
+      Repo.all(
+        from p in Property,
+          where:
+            p.transaction_type == "wynajem" and p.property_type == "mieszkanie" and
+              not is_nil(p.price) and p.price >= ^rent_min and p.price <= ^rent_max,
+          group_by: fragment("to_char(?, 'YYYY-MM')", p.inserted_at),
+          order_by: fragment("to_char(?, 'YYYY-MM')", p.inserted_at),
+          select: %{
+            month: fragment("to_char(?, 'YYYY-MM')", p.inserted_at),
+            value: fragment("percentile_cont(0.5) WITHIN GROUP (ORDER BY ?::float)", p.price),
+            count: count(p.id)
+          }
+      )
+
+    monthly_volume =
+      Repo.all(
+        from p in Property,
+          group_by: [fragment("to_char(?, 'YYYY-MM')", p.inserted_at), p.source],
+          order_by: fragment("to_char(?, 'YYYY-MM')", p.inserted_at),
+          select: {fragment("to_char(?, 'YYYY-MM')", p.inserted_at), p.source, count(p.id)}
+      )
+      |> Enum.group_by(fn {month, _, _} -> month end)
+      |> Enum.map(fn {month, rows} ->
+        by_source = Map.new(rows, fn {_, source, count} -> {source, count} end)
+        olx = Map.get(by_source, "olx", 0)
+        otodom = Map.get(by_source, "otodom", 0)
+        other = (by_source |> Map.values() |> Enum.sum()) - olx - otodom
+        %{month: month, olx: olx, otodom: otodom, other: other}
+      end)
+      |> Enum.sort_by(& &1.month)
+
+    velocity =
+      Repo.all(
+        from p in Property,
+          where:
+            p.active == false and not is_nil(p.last_seen_at) and
+              not is_nil(p.transaction_type) and p.last_seen_at > p.inserted_at,
+          group_by: p.transaction_type,
+          select: %{
+            key: p.transaction_type,
+            median_days:
+              fragment(
+                "percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (? - ?)) / 86400.0)",
+                p.last_seen_at,
+                p.inserted_at
+              ),
+            count: count(p.id)
+          }
+      )
+
+    velocity_by_type =
+      Repo.all(
+        from p in Property,
+          where:
+            p.active == false and not is_nil(p.last_seen_at) and
+              not is_nil(p.property_type) and p.last_seen_at > p.inserted_at,
+          group_by: p.property_type,
+          having: count(p.id) >= 10,
+          order_by: [
+            asc:
+              fragment(
+                "percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (? - ?)) / 86400.0)",
+                p.last_seen_at,
+                p.inserted_at
+              )
+          ],
+          select: %{
+            key: p.property_type,
+            median_days:
+              fragment(
+                "percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (? - ?)) / 86400.0)",
+                p.last_seen_at,
+                p.inserted_at
+              ),
+            count: count(p.id)
+          }
+      )
+
+    city_medians =
+      Repo.all(
+        from p in Property,
+          where:
+            p.transaction_type == "sprzedaż" and p.property_type == "mieszkanie" and
+              not is_nil(p.price) and p.price >= ^sale_min and p.price <= ^sale_max and
+              not is_nil(p.area_sqm) and p.area_sqm > 0 and not is_nil(p.city),
+          group_by: fragment("SPLIT_PART(?, ',', 1)", p.city),
+          having: count(p.id) >= 10,
+          order_by: [desc: count(p.id)],
+          limit: 12,
+          select: %{
+            city: fragment("SPLIT_PART(?, ',', 1)", p.city),
+            median_sqm:
+              fragment(
+                "percentile_cont(0.5) WITHIN GROUP (ORDER BY ?::float / ?::float)",
+                p.price,
+                p.area_sqm
+              ),
+            count: count(p.id)
+          }
+      )
+
+    %{
+      monthly_sale: monthly_sale,
+      monthly_rent: monthly_rent,
+      monthly_volume: monthly_volume,
+      velocity: Map.new(velocity, &{&1.key, &1}),
+      velocity_by_type: velocity_by_type,
+      city_medians: city_medians,
+      tracked_since: Repo.one(from p in Property, select: min(p.inserted_at)),
+      delisted_count:
+        Repo.aggregate(from(p in Property, where: p.active == false), :count, :id)
+    }
   end
 
   defp calculate_stats do
