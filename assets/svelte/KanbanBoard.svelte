@@ -87,13 +87,15 @@
     $: inProgressCount = cards.filter(c => c.column === 'in_progress').length;
     $: totalCards = cards.length;
     $: progressPercent = totalCards > 0 ? Math.round((doneCount / totalCards) * 100) : 0;
+    let prevTodoCount = 0;
     $: {
-        if (todoCount >= 5) {
+        if (todoCount >= 5 && todoCount > prevTodoCount) {
             magdaMessage = magdaMessages[Math.floor(Math.random() * magdaMessages.length)];
             showMagdaWarning = true;
-        } else {
+        } else if (todoCount < 5) {
             showMagdaWarning = false;
         }
+        prevTodoCount = todoCount;
     }
 
     const columnColors = {
@@ -156,16 +158,24 @@
     function handleDragStart(e, card) {
         draggedCard = card;
         e.dataTransfer.effectAllowed = 'move';
-        // Add visual feedback - slightly faded but still visible
-        e.target.style.opacity = '0.8';
-        e.target.style.transform = 'rotate(2deg) scale(1.02)';
-        e.target.style.boxShadow = '0 10px 25px rgba(0,0,0,0.3)';
+        // Only the handle is draggable (so card text stays selectable);
+        // use the whole card as the drag image and feedback target
+        const cardEl = e.target.closest('[data-card]');
+        if (cardEl) {
+            e.dataTransfer.setDragImage(cardEl, 24, 24);
+            cardEl.style.opacity = '0.8';
+            cardEl.style.transform = 'rotate(2deg) scale(1.02)';
+            cardEl.style.boxShadow = '0 10px 25px rgba(0,0,0,0.3)';
+        }
     }
 
     function handleDragEnd(e) {
-        e.target.style.opacity = '1';
-        e.target.style.transform = '';
-        e.target.style.boxShadow = '';
+        const cardEl = e.target.closest('[data-card]');
+        if (cardEl) {
+            cardEl.style.opacity = '1';
+            cardEl.style.transform = '';
+            cardEl.style.boxShadow = '';
+        }
         draggedCard = null;
     }
 
@@ -471,6 +481,19 @@
         }, 3000);
     }
 
+    // Escape HTML, then turn bare URLs into clickable links
+    function linkify(text) {
+        const escaped = (text || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+        return escaped.replace(
+            /\bhttps?:\/\/[^\s<]+/g,
+            (url) => `<a href="${url}" target="_blank" rel="noopener noreferrer" class="underline text-primary break-all">${url}</a>`
+        );
+    }
+
     function openLightbox(imageSrc) {
         lightboxImage = imageSrc;
     }
@@ -641,13 +664,11 @@
                         
                         {#each getCardsForColumn(column.id) as card (card.id)}
                             <div
-                                draggable="true"
-                                ondragstart={(e) => handleDragStart(e, card)}
-                                ondragend={handleDragEnd}
+                                data-card
                                 ondragover={(e) => handleCardDragOver(e, card)}
                                 ondragleave={handleCardDragLeave}
                                 ondrop={(e) => handleCardDrop(e, card)}
-                                class="bg-base-100 border-4 border-base-content p-4 cursor-grab active:cursor-grabbing transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:-translate-x-0.5 hover:-translate-y-0.5 {dragOverCard === card.id ? 'border-t-primary border-t-8' : ''}"
+                                class="bg-base-100 border-4 border-base-content p-4 select-text transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:-translate-x-0.5 hover:-translate-y-0.5 {dragOverCard === card.id ? 'border-t-primary border-t-8' : ''}"
                             >
                                 {#if editingCard === card.id}
                                     <!-- Edit Mode - Brutalist -->
@@ -715,7 +736,13 @@
                                     <!-- View Mode - Brutalist -->
                                     <!-- Drag Handle -->
                                     <div class="flex items-center justify-between mb-2">
-                                        <div class="flex items-center gap-1 opacity-30 hover:opacity-60 transition-opacity cursor-grab active:cursor-grabbing">
+                                        <div
+                                            draggable="true"
+                                            ondragstart={(e) => handleDragStart(e, card)}
+                                            ondragend={handleDragEnd}
+                                            title="Drag to move"
+                                            class="flex items-center gap-1 py-2 pr-4 -my-1 opacity-30 hover:opacity-60 transition-opacity cursor-grab active:cursor-grabbing"
+                                        >
                                             <div class="w-1 h-1 bg-base-content"></div>
                                             <div class="w-1 h-1 bg-base-content"></div>
                                             <div class="w-1 h-1 bg-base-content"></div>
@@ -752,7 +779,7 @@
                                         />
                                     {/if}
                                     <p class="whitespace-pre-wrap break-words font-medium leading-relaxed">
-                                        {card.text}
+                                        {@html linkify(card.text)}
                                     </p>
                                     <div class="text-xs uppercase tracking-wider opacity-50 mt-3 font-bold border-t-2 border-base-content/10 pt-2 flex justify-between items-center">
                                         {#if card.created_by}
@@ -872,9 +899,9 @@
             <div class="border-4 border-base-content bg-base-100 p-4 transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:-translate-x-0.5 hover:-translate-y-0.5">
                 <div class="text-2xl mb-2">🖱️</div>
                 <p class="text-xs font-bold uppercase tracking-wider">
-                    Drag & Drop Cards
+                    Drag Cards by the Handle
                 </p>
-                <p class="text-xs opacity-60 mt-1">Between columns to update status</p>
+                <p class="text-xs opacity-60 mt-1">Grab the dots (top-left) to move between columns &mdash; card text stays selectable</p>
             </div>
             
             <!-- Tip 2 -->
