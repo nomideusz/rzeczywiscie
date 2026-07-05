@@ -60,6 +60,11 @@ defmodule Rzeczywiscie.RealEstate.Property do
     field :llm_listing_quality, :integer  # 1-5 quality score
     field :llm_is_agency, :boolean  # true=agency, false=private, nil=unknown
 
+    # Price position vs archive median zł/m² for comparable listings
+    # (set by RealEstate.update_price_positions/0, negative = below median)
+    field :price_vs_median, :integer
+    field :price_median_n, :integer
+
     timestamps(type: :utc_datetime)
   end
 

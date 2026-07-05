@@ -302,6 +302,8 @@ defmodule RzeczywiscieWeb.RealEstateLive do
         url: property.url,
         image_url: property.image_url,
         active: property.active,
+        price_vs_median: property.price_vs_median,
+        price_median_n: property.price_median_n,
         last_seen_at: serialize_datetime(property.last_seen_at),
         inserted_at: serialize_datetime(property.inserted_at),
         updated_at: serialize_datetime(property.updated_at),

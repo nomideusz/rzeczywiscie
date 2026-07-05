@@ -710,6 +710,62 @@ defmodule Rzeczywiscie.RealEstate do
     end
   end
 
+  @doc """
+  Recompute price_vs_median / price_median_n for all active properties.
+
+  Medians are zł/m² over the FULL archive (including delisted listings),
+  grouped by (district, property_type, transaction_type) with a city-level
+  fallback for listings without a district match. Requires >= 10 comparable
+  listings; same outlier bounds as the stats page.
+
+  Runs as one SQL pass per level - call it from a worker, not per request.
+  """
+  def update_price_positions do
+    # ponytail: no size buckets - zł/m² already normalizes size; add area
+    # bands to the GROUP BY if medians prove too coarse
+    bounds = """
+    p.price IS NOT NULL AND p.area_sqm > 0
+      AND ((p.transaction_type = 'sprzedaż' AND p.price BETWEEN 30000 AND 50000000)
+        OR (p.transaction_type = 'wynajem' AND p.price BETWEEN 300 AND 100000))
+    """
+
+    {:ok, _} =
+      Repo.query(
+        "UPDATE properties SET price_vs_median = NULL, price_median_n = NULL WHERE active = true"
+      )
+
+    update_for_level = fn location_col ->
+      {:ok, %{num_rows: n}} =
+        Repo.query("""
+        WITH medians AS (
+          SELECT #{location_col} AS loc, property_type, transaction_type,
+                 percentile_cont(0.5) WITHIN GROUP (ORDER BY price::float / area_sqm::float) AS median_sqm,
+                 count(*) AS n
+          FROM properties p
+          WHERE #{location_col} IS NOT NULL AND #{location_col} != '' AND #{bounds}
+          GROUP BY 1, 2, 3
+          HAVING count(*) >= 10
+        )
+        UPDATE properties p
+        SET price_vs_median = ROUND(((p.price::float / p.area_sqm::float) / m.median_sqm - 1) * 100),
+            price_median_n = m.n
+        FROM medians m
+        WHERE p.active = true AND p.price_vs_median IS NULL
+          AND p.#{location_col} = m.loc
+          AND p.property_type = m.property_type
+          AND p.transaction_type = m.transaction_type
+          AND #{bounds}
+        """)
+
+      n
+    end
+
+    by_district = update_for_level.("district")
+    by_city = update_for_level.("city")
+
+    %{by_district: by_district, by_city: by_city}
+  end
+
   # Price History functions
 
   @doc """

@@ -75,6 +75,10 @@ defmodule Rzeczywiscie.Workers.PriceTrackerWorker do
       end
     end)
 
+    # Refresh statistical price position (vs archive median) for active listings
+    positions = RealEstate.update_price_positions()
+    Logger.info("Updated price positions: #{positions.by_district} by district, #{positions.by_city} by city")
+
     :ok
   end
 end

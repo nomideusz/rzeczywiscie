@@ -100,6 +100,16 @@
     }).format(numPrice / numArea) + ' zł/m²'
   }
 
+  function pricePositionClass(pct) {
+    if (pct <= -10) return 'text-success'
+    if (pct >= 10) return 'text-error'
+    return 'opacity-50'
+  }
+
+  function pricePositionLabel(pct) {
+    return (pct > 0 ? '+' : '') + pct + '% vs median'
+  }
+
   function formatDate(dateString) {
     if (!dateString) return '—'
     const date = new Date(dateString)
@@ -701,6 +711,14 @@
                 <!-- Price -->
                 <td class="px-2 py-1.5 text-right">
                   <div class="font-bold text-[13px]">{formatPrice(property.price)}</div>
+                  {#if property.price_vs_median != null}
+                    <div
+                      class="text-[9px] font-bold whitespace-nowrap {pricePositionClass(property.price_vs_median)}"
+                      title={`vs archive median zł/m² for ${property.property_type || 'listings'} in this area (${property.price_median_n} comparables)`}
+                    >
+                      {pricePositionLabel(property.price_vs_median)}
+                    </div>
+                  {/if}
                 </td>
 
                 <!-- Area -->
@@ -855,6 +873,14 @@
               <div>
                 <div class="text-2xl font-black text-primary">{formatPrice(property.price)}</div>
                 <div class="text-xs opacity-60">{formatPricePerSqm(property.price, property.area_sqm)}</div>
+                {#if property.price_vs_median != null}
+                  <div
+                    class="text-[10px] font-bold {pricePositionClass(property.price_vs_median)}"
+                    title={`vs archive median zł/m² (${property.price_median_n} comparables)`}
+                  >
+                    {pricePositionLabel(property.price_vs_median)}
+                  </div>
+                {/if}
               </div>
               <div class="text-right">
                 <div class="text-lg font-bold">{formatArea(property.area_sqm)}</div>
