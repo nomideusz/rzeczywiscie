@@ -107,7 +107,9 @@
     ctx = canvasEl.getContext("2d")
     draw()
 
-    live.handleEvent("canvas", ({pixels}) => {
+    // Pull (not push) the initial canvas: onMount runs after LiveView has
+    // already flushed mount-time push_events, so a server push would be lost.
+    live.pushEvent("load_canvas", {}, ({pixels}) => {
       pixelMap = new Map(pixels.map(([x, y, c]) => [`${x},${y}`, c]))
       draw()
     })

@@ -24,15 +24,6 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
       |> assign(:stats, PixelCanvas.stats())
       |> assign(:page_title, "Pixels")
 
-    # The full canvas goes over push_event once per connect; afterwards only
-    # single-pixel events flow, so props stay tiny.
-    socket =
-      if connected?(socket) do
-        push_event(socket, "canvas", %{pixels: PixelCanvas.load_canvas()})
-      else
-        socket
-      end
-
     {:ok, socket}
   end
 
@@ -73,6 +64,12 @@ defmodule RzeczywiscieWeb.PixelCanvasLive do
       {:error, _} ->
         {:noreply, put_flash(socket, :error, "Could not place pixel")}
     end
+  end
+
+  # Client asks for the full canvas once its event handlers are mounted;
+  # afterwards only single-pixel events flow, so props stay tiny.
+  def handle_event("load_canvas", _params, socket) do
+    {:reply, %{pixels: PixelCanvas.load_canvas()}, socket}
   end
 
   def handle_event("select_color", %{"color" => color}, socket) do
