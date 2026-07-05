@@ -10,7 +10,7 @@
   export let cooldownSeconds = 15
   export let stats = null
 
-  const MIN_SCALE = 2
+  const MIN_SCALE = 4
   const MAX_SCALE = 24
 
   let canvasEl
@@ -199,14 +199,10 @@
           style="width: {width * scale}px; height: {height * scale}px; image-rendering: pixelated;"
           onclick={handleClick}
         ></canvas>
-        <!-- subtle grid: 10-cell lines always, per-cell lines once zoomed in -->
+        <!-- pixel grid: every cell gets a square, slightly stronger line every 10 cells -->
         <div
           class="absolute inset-0 pointer-events-none"
-          style="background-image: linear-gradient(to right, rgba(0,0,0,0.12) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.12) 1px, transparent 1px){scale >= 6
-            ? ', linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px)'
-            : ''}; background-size: {scale * 10}px {scale * 10}px, {scale * 10}px {scale * 10}px{scale >= 6
-            ? `, ${scale}px ${scale}px, ${scale}px ${scale}px`
-            : ''};"
+          style="background-image: linear-gradient(to right, rgba(0,0,0,0.12) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.12) 1px, transparent 1px), linear-gradient(to right, rgba(0,0,0,0.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.06) 1px, transparent 1px); background-size: {scale * 10}px {scale * 10}px, {scale * 10}px {scale * 10}px, {scale}px {scale}px, {scale}px {scale}px;"
         ></div>
       </div>
     </div>
