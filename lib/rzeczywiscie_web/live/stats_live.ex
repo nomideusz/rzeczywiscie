@@ -9,6 +9,24 @@ defmodule RzeczywiscieWeb.StatsLive do
 
   # Stale threshold in hours (4 days)
   @stale_hours 96
+
+  # Stats only change when scrapers run; a short cache absorbs the double
+  # (dead + connected) mount and repeat visitors. Refresh button bypasses it.
+  @stats_cache_ttl_ms 60_000
+
+  defp cached(key, fun) do
+    now = System.monotonic_time(:millisecond)
+
+    case :persistent_term.get({__MODULE__, key}, nil) do
+      {ts, val} when now - ts < @stats_cache_ttl_ms -> val
+      _ -> cache_put(key, fun.())
+    end
+  end
+
+  defp cache_put(key, val) do
+    :persistent_term.put({__MODULE__, key}, {System.monotonic_time(:millisecond), val})
+    val
+  end
   
   @impl true
   def mount(_params, _session, socket) do
@@ -17,11 +35,11 @@ defmodule RzeczywiscieWeb.StatsLive do
     
     socket =
       socket
-      |> assign(:stats, calculate_stats())
-      |> assign(:market, calculate_market_stats())
+      |> assign(:stats, cached(:stats, &calculate_stats/0))
+      |> assign(:market, cached(:market, &calculate_market_stats/0))
       |> assign(:city_property_type, "mieszkanie")
       |> assign(:city_transaction_type, "sprzedaż")
-      |> assign(:city_medians, calculate_city_medians("mieszkanie", "sprzedaż"))
+      |> assign(:city_medians, cached({:medians, "mieszkanie", "sprzedaż"}, fn -> calculate_city_medians("mieszkanie", "sprzedaż") end))
       |> assign(:refreshing, false)
       |> assign(:last_updated, DateTime.utc_now())
       |> assign(:property_types, property_types)
@@ -33,7 +51,7 @@ defmodule RzeczywiscieWeb.StatsLive do
       |> assign(:max_rooms, nil)
       |> assign(:sort_by, "sale_count")
       |> assign(:sort_dir, :desc)
-      |> assign(:filtered_district_prices, calculate_filtered_district_prices("mieszkanie", "all"))
+      |> assign(:filtered_district_prices, cached({:districts, "mieszkanie", "all"}, fn -> calculate_filtered_district_prices("mieszkanie", "all") end))
       |> assign(:expanded_district, nil)
       |> assign(:district_properties, [])
       |> sort_filtered_prices()
@@ -1095,29 +1113,35 @@ defmodule RzeczywiscieWeb.StatsLive do
     {:noreply,
      socket
      |> assign(:city_property_type, type)
-     |> assign(:city_medians, calculate_city_medians(type, socket.assigns.city_transaction_type))}
+     |> assign(:city_medians, cached({:medians, type, socket.assigns.city_transaction_type}, fn -> calculate_city_medians(type, socket.assigns.city_transaction_type) end))}
   end
 
   def handle_event("city_transaction_type", %{"type" => type}, socket) do
     {:noreply,
      socket
      |> assign(:city_transaction_type, type)
-     |> assign(:city_medians, calculate_city_medians(socket.assigns.city_property_type, type))}
+     |> assign(:city_medians, cached({:medians, socket.assigns.city_property_type, type}, fn -> calculate_city_medians(socket.assigns.city_property_type, type) end))}
   end
 
   def handle_event("refresh_stats", _params, socket) do
     socket =
       socket
       |> assign(:refreshing, true)
-      |> assign(:stats, calculate_stats())
-      |> assign(:market, calculate_market_stats())
-      |> assign(:city_medians, calculate_city_medians(
-          socket.assigns.city_property_type,
-          socket.assigns.city_transaction_type
+      |> assign(:stats, cache_put(:stats, calculate_stats()))
+      |> assign(:market, cache_put(:market, calculate_market_stats()))
+      |> assign(:city_medians, cache_put(
+          {:medians, socket.assigns.city_property_type, socket.assigns.city_transaction_type},
+          calculate_city_medians(
+            socket.assigns.city_property_type,
+            socket.assigns.city_transaction_type
+          )
         ))
-      |> assign(:filtered_district_prices, calculate_filtered_district_prices(
-          socket.assigns.selected_property_type,
-          socket.assigns.selected_transaction_type
+      |> assign(:filtered_district_prices, cache_put(
+          {:districts, socket.assigns.selected_property_type, socket.assigns.selected_transaction_type},
+          calculate_filtered_district_prices(
+            socket.assigns.selected_property_type,
+            socket.assigns.selected_transaction_type
+          )
         ))
       |> assign(:last_updated, DateTime.utc_now())
       |> assign(:refreshing, false)

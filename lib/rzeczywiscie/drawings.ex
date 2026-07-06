@@ -24,6 +24,19 @@ defmodule Rzeczywiscie.Drawings do
   end
 
   @doc """
+  Relay a live in-progress segment to everyone except the sender
+  (the sender already drew it locally).
+  """
+  def broadcast_segment(segment) do
+    Phoenix.PubSub.broadcast_from(
+      Rzeczywiscie.PubSub,
+      self(),
+      @topic,
+      {:draw_segment, segment}
+    )
+  end
+
+  @doc """
   Get or create a drawing board by name.
   """
   def get_or_create_board(name, attrs \\ %{}) do
@@ -47,26 +60,19 @@ defmodule Rzeczywiscie.Drawings do
   def get_strokes(board_id) do
     Stroke
     |> where([s], s.drawing_board_id == ^board_id)
-    |> order_by([s], asc: s.inserted_at)
+    |> order_by([s], asc: s.id)
     |> Repo.all()
     |> Enum.map(& &1.stroke_data)
   end
 
   @doc """
-  Add a stroke to a drawing board and broadcast it.
+  Persist a completed stroke (one row per stroke; live segments are
+  broadcast separately and never stored point-by-point).
   """
   def add_stroke(board_id, stroke_data) do
     %Stroke{}
     |> Stroke.changeset(%{drawing_board_id: board_id, stroke_data: stroke_data})
     |> Repo.insert()
-    |> case do
-      {:ok, _stroke} ->
-        broadcast(stroke_data, :draw_stroke)
-        {:ok, stroke_data}
-
-      error ->
-        error
-    end
   end
 
   @doc """

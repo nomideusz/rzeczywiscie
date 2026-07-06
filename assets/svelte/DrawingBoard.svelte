@@ -14,6 +14,8 @@
     let cursors = {};
     let isMobile = false;
     let lastPos = null;
+    let strokePoints = [];
+    let lastCursorPush = 0;
 
     const colors = [
         '#000000', '#FF0000', '#00FF00', '#0000FF',
@@ -40,8 +42,9 @@
             loadStrokes(e.detail.strokes);
         });
 
-        window.addEventListener('phx:draw_stroke', (e) => {
-            drawStroke(e.detail);
+        window.addEventListener('phx:draw_segment', (e) => {
+            const d = e.detail;
+            drawSegment(d.x1, d.y1, d.x2, d.y2, d.color, d.size);
         });
 
         window.addEventListener('phx:clear_canvas', () => {
@@ -95,22 +98,28 @@
         };
     }
 
+    // Stateless: every segment is a self-contained path, so local drawing,
+    // remote segments and history replay can interleave freely without
+    // inheriting each other's pen position (the old "extra lines" bug).
+    function drawSegment(x1, y1, x2, y2, color, size) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = size;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+    }
+
     function startDrawing(e) {
         e.preventDefault();
         isDrawing = true;
         const pos = getMousePos(e);
         lastPos = pos;
-        
-        ctx.beginPath();
-        ctx.moveTo(pos.x, pos.y);
+        strokePoints = [[pos.x, pos.y]];
 
-        live.pushEvent('draw_stroke', {
-            x: pos.x,
-            y: pos.y,
-            color: currentColor,
-            size: brushSize,
-            type: 'start'
-        });
+        // a click should leave a dot (round line caps render it)
+        drawSegment(pos.x, pos.y, pos.x, pos.y, currentColor, brushSize);
+        pushSegment(pos, pos);
     }
 
     function draw(e) {
@@ -118,25 +127,20 @@
         e.preventDefault();
 
         const pos = getMousePos(e);
-
-        // Draw locally
-        ctx.strokeStyle = currentColor;
-        ctx.lineWidth = brushSize;
-        ctx.lineTo(pos.x, pos.y);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(pos.x, pos.y);
-
-        // Broadcast to other users
-        live.pushEvent('draw_stroke', {
-            x: pos.x,
-            y: pos.y,
-            color: currentColor,
-            size: brushSize,
-            type: 'draw'
-        });
-
+        drawSegment(lastPos.x, lastPos.y, pos.x, pos.y, currentColor, brushSize);
+        pushSegment(lastPos, pos);
+        strokePoints.push([pos.x, pos.y]);
         lastPos = pos;
+    }
+
+    // Live segments are broadcast-only; the full stroke is persisted once on 'end'.
+    function pushSegment(from, to) {
+        live.pushEvent('draw_segment', {
+            x1: from.x, y1: from.y,
+            x2: to.x, y2: to.y,
+            color: currentColor,
+            size: brushSize
+        });
     }
 
     function stopDrawing(e) {
@@ -144,44 +148,39 @@
             if (e) e.preventDefault();
             isDrawing = false;
             lastPos = null;
-            ctx.beginPath();
 
-            live.pushEvent('draw_stroke', {
-                type: 'end'
+            live.pushEvent('stroke_end', {
+                color: currentColor,
+                size: brushSize,
+                points: strokePoints
             });
+            strokePoints = [];
         }
     }
 
     function loadStrokes(strokes) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        const chronological = [...strokes].reverse();
-
-        chronological.forEach(stroke => {
-            drawStroke(stroke);
+        let legacyLast = null; // pen position while replaying old per-point rows
+        strokes.forEach(stroke => {
+            if (stroke.points) {
+                const pts = stroke.points;
+                if (pts.length === 1) {
+                    drawSegment(pts[0][0], pts[0][1], pts[0][0], pts[0][1], stroke.color, stroke.size);
+                }
+                for (let i = 1; i < pts.length; i++) {
+                    drawSegment(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], stroke.color, stroke.size);
+                }
+            } else if (stroke.type === 'start') {
+                legacyLast = stroke;
+                drawSegment(stroke.x, stroke.y, stroke.x, stroke.y, stroke.color, stroke.size);
+            } else if (stroke.type === 'draw' && legacyLast) {
+                drawSegment(legacyLast.x, legacyLast.y, stroke.x, stroke.y, stroke.color, stroke.size);
+                legacyLast = stroke;
+            } else if (stroke.type === 'end') {
+                legacyLast = null;
+            }
         });
-    }
-
-    function drawStroke(data) {
-        if (data.type === 'start') {
-            ctx.beginPath();
-            ctx.strokeStyle = data.color;
-            ctx.lineWidth = data.size;
-            ctx.moveTo(data.x, data.y);
-            return;
-        }
-
-        if (data.type === 'end') {
-            ctx.beginPath();
-            return;
-        }
-
-        ctx.strokeStyle = data.color;
-        ctx.lineWidth = data.size;
-        ctx.lineTo(data.x, data.y);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(data.x, data.y);
     }
 
     function handleClearCanvas() {
@@ -196,6 +195,9 @@
     }
 
     function handleMouseMove(e) {
+        const now = Date.now();
+        if (now - lastCursorPush < 50) return; // ~20/s is plenty for a cursor dot
+        lastCursorPush = now;
         const pos = getMousePos(e);
         live.pushEvent('cursor_move', {
             x: pos.x,

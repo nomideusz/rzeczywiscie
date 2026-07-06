@@ -15,6 +15,7 @@
     let editText = '';
     let editImage = null;
     let editImagePreview = null;
+    let editImageChanged = false;
     let lightboxImage = null;
     let dragOverColumn = null;
     let dragOverCard = null;  // Track which card we're hovering over for reordering
@@ -81,10 +82,14 @@
         "Magda mode: ACTIVATED 🔥 (wyłącz mnie)",
     ];
 
-    // Check TODO count and show warning
-    $: todoCount = cards.filter(c => c.column === 'todo').length;
-    $: doneCount = cards.filter(c => c.column === 'done').length;
-    $: inProgressCount = cards.filter(c => c.column === 'in_progress').length;
+    // One pass over cards per change; every count/column read reuses it.
+    $: cardsByColumn = cards.reduce((acc, c) => {
+        (acc[c.column] ||= []).push(c);
+        return acc;
+    }, {});
+    $: todoCount = (cardsByColumn['todo'] || []).length;
+    $: doneCount = (cardsByColumn['done'] || []).length;
+    $: inProgressCount = (cardsByColumn['in_progress'] || []).length;
     $: totalCards = cards.length;
     $: progressPercent = totalCards > 0 ? Math.round((doneCount / totalCards) * 100) : 0;
     let prevTodoCount = 0;
@@ -111,11 +116,6 @@
     };
 
     onMount(() => {
-        // Listen for card updates from server
-        window.addEventListener('phx:cards_updated', (e) => {
-            cards = e.detail.cards;
-        });
-
         // Listen for presence updates
         window.addEventListener('phx:presence_update', (e) => {
             users = e.detail.users;
@@ -356,6 +356,7 @@
             // Determine if we're adding a new card or editing
             if (editingCard) {
                 editImage = e.target.result;
+                editImageChanged = true;
                 editImagePreview = e.target.result;
             } else if (newCardColumn) {
                 newCardImage = e.target.result;
@@ -373,8 +374,9 @@
     function startEdit(card) {
         editingCard = card.id;
         editText = card.text;
-        editImage = card.image_data;
-        editImagePreview = card.image_data;
+        editImage = null;
+        editImageChanged = false;
+        editImagePreview = card.image_url;
         setTimeout(() => {
             document.getElementById(`edit-input-${card.id}`)?.focus();
         }, 100);
@@ -384,16 +386,15 @@
         editingCard = null;
         editText = '';
         editImage = null;
+        editImageChanged = false;
         editImagePreview = null;
     }
 
     function saveEdit(cardId) {
         if (editText.trim()) {
-            live.pushEvent('update_card', {
-                card_id: cardId,
-                text: editText.trim(),
-                image_data: editImage
-            });
+            const payload = { card_id: cardId, text: editText.trim() };
+            if (editImageChanged) payload.image_data = editImage;
+            live.pushEvent('update_card', payload);
         }
         cancelEdit();
     }
@@ -407,6 +408,7 @@
 
     function removeEditImage() {
         editImage = null;
+        editImageChanged = true;
         editImagePreview = null;
     }
 
@@ -417,7 +419,7 @@
     }
 
     function getCardsForColumn(columnId) {
-        return cards.filter(c => c.column === columnId);
+        return cardsByColumn[columnId] || [];
     }
 
     function getColumnIcon(columnId) {
@@ -767,15 +769,16 @@
                                             </button>
                                         </div>
                                     </div>
-                                    {#if card.image_data}
+                                    {#if card.image_url}
                                         <img
-                                            src={card.image_data}
+                                            src={card.image_url}
                                             alt="Card"
+                                            loading="lazy"
                                             class="w-full h-32 object-contain bg-base-200 border-2 border-base-content mb-2 cursor-pointer hover:opacity-80 transition-opacity"
-                                            onclick={() => openLightbox(card.image_data)}
+                                            onclick={() => openLightbox(card.image_url)}
                                             role="button"
                                             tabindex="0"
-                                            onkeydown={(e) => e.key === 'Enter' && openLightbox(card.image_data)}
+                                            onkeydown={(e) => e.key === 'Enter' && openLightbox(card.image_url)}
                                         />
                                     {/if}
                                     <p class="whitespace-pre-wrap break-words font-medium leading-relaxed">

@@ -175,18 +175,38 @@ defmodule RzeczywiscieWeb.RealEstateLive do
     end
   end
 
+  # Scrapes broadcast one message per upserted property; reloading the whole
+  # page of queries for each one made every open tab crawl during a scrape.
+  # Coalesce bursts into a single refresh.
+  @refresh_debounce_ms 5_000
+
   @impl true
   def handle_info({:property_created, _property}, socket) do
-    Logger.debug("New property created, reloading...")
-    socket = load_properties(socket, load_map: socket.assigns.map_loaded)
-    {:noreply, socket}
+    {:noreply, schedule_refresh(socket)}
   end
 
   @impl true
   def handle_info({:property_updated, _property}, socket) do
-    Logger.debug("Property updated, reloading...")
-    socket = load_properties(socket, load_map: socket.assigns.map_loaded)
+    {:noreply, schedule_refresh(socket)}
+  end
+
+  @impl true
+  def handle_info(:refresh_properties, socket) do
+    socket =
+      socket
+      |> assign(:refresh_scheduled, false)
+      |> load_properties(load_map: socket.assigns.map_loaded)
+
     {:noreply, socket}
+  end
+
+  defp schedule_refresh(socket) do
+    if socket.assigns[:refresh_scheduled] do
+      socket
+    else
+      Process.send_after(self(), :refresh_properties, @refresh_debounce_ms)
+      assign(socket, :refresh_scheduled, true)
+    end
   end
 
   defp load_properties(socket, opts \\ []) do
@@ -220,9 +240,11 @@ defmodule RzeczywiscieWeb.RealEstateLive do
     user_id = socket.assigns.user_id
     favorited_ids = RealEstate.get_favorited_property_ids(user_id)
 
-    # Serialize properties with is_favorited field
-    # Include AQI for table view (uses cache, so it's fast)
-    serialized_properties = serialize_properties(properties, favorited_ids, include_aqi: true)
+    # Serialize properties with is_favorited field.
+    # AQI comes from one batched cache query — never a per-row query or
+    # an in-band external API call.
+    aqi_map = AirQuality.get_aqi_map(properties)
+    serialized_properties = serialize_properties(properties, favorited_ids, aqi_map: aqi_map)
 
     # Always calculate global stats from database (not from loaded properties)
     filter_keyword = Keyword.new(Map.to_list(filters))
@@ -243,7 +265,8 @@ defmodule RzeczywiscieWeb.RealEstateLive do
         |> Keyword.put(:limit, 500)  # Reduced from 10000 for better performance
 
       map_props = RealEstate.list_properties(map_opts)
-      serialized_map = serialize_properties(map_props, favorited_ids, include_aqi: true)
+      map_aqi = AirQuality.get_aqi_map(map_props)
+      serialized_map = serialize_properties(map_props, favorited_ids, aqi_map: map_aqi)
 
       {map_props, serialized_map}
     else
@@ -266,15 +289,10 @@ defmodule RzeczywiscieWeb.RealEstateLive do
   end
 
   defp serialize_properties(properties, favorited_ids, opts \\ []) do
-    include_aqi = Keyword.get(opts, :include_aqi, false)
+    aqi_map = Keyword.get(opts, :aqi_map, %{})
 
     Enum.map(properties, fn property ->
-      # Get air quality data only if requested (expensive operation)
-      aqi_data = if include_aqi do
-        AirQuality.get_property_aqi(property)
-      else
-        nil
-      end
+      aqi_data = AirQuality.property_aqi_from_map(aqi_map, property)
 
       # Check if property is favorited (O(1) lookup in Set)
       is_favorited = MapSet.member?(favorited_ids, property.id)

@@ -19,14 +19,12 @@ defmodule RzeczywiscieWeb.DrawingBoardLive do
 
   def mount(_params, _session, socket) do
     if connected?(socket) do
-      # Subscribe to the drawing board topic
+      # One subscription covers both stroke tuples and cursor broadcasts —
+      # subscribing twice to the same topic delivers every message twice.
       Drawings.subscribe()
 
       # Get or create the main drawing board
       {:ok, board} = Drawings.get_or_create_board("main")
-
-      # Subscribe to cursor updates
-      RzeczywiscieWeb.Endpoint.subscribe(@topic)
 
       # Generate a unique user ID for this session
       user_id = generate_user_id()
@@ -47,11 +45,20 @@ defmodule RzeczywiscieWeb.DrawingBoardLive do
     {:noreply, push_event(socket, "load_strokes", %{strokes: strokes})}
   end
 
-  def handle_event("draw_stroke", stroke_data, socket) do
-    # Save stroke to database and broadcast
-    Drawings.add_stroke(socket.assigns.board_id, stroke_data)
+  def handle_event("draw_segment", segment, socket) do
+    # Live relay to everyone else; the sender already drew it locally.
+    Drawings.broadcast_segment(segment)
     {:noreply, socket}
   end
+
+  def handle_event("stroke_end", %{"points" => points} = stroke, socket)
+      when is_list(points) and points != [] do
+    # Persist the whole stroke as one row (segments were broadcast live).
+    Drawings.add_stroke(socket.assigns.board_id, Map.take(stroke, ["color", "size", "points"]))
+    {:noreply, socket}
+  end
+
+  def handle_event("stroke_end", _params, socket), do: {:noreply, socket}
 
   def handle_event("clear_canvas", _params, socket) do
     # Clear database and broadcast
@@ -77,20 +84,11 @@ defmodule RzeczywiscieWeb.DrawingBoardLive do
   end
 
   # Handle incoming PubSub messages from Drawings context
-  def handle_info({:draw_stroke, stroke_data}, socket) do
-    {:noreply, push_event(socket, "draw_stroke", stroke_data)}
+  def handle_info({:draw_segment, segment}, socket) do
+    {:noreply, push_event(socket, "draw_segment", segment)}
   end
 
   def handle_info({:clear_canvas, _}, socket) do
-    {:noreply, push_event(socket, "clear_canvas", %{})}
-  end
-
-  # Handle cursor updates (still using Endpoint.broadcast)
-  def handle_info(%{event: "draw_stroke", payload: stroke_data}, socket) do
-    {:noreply, push_event(socket, "draw_stroke", stroke_data)}
-  end
-
-  def handle_info(%{event: "clear_canvas"}, socket) do
     {:noreply, push_event(socket, "clear_canvas", %{})}
   end
 

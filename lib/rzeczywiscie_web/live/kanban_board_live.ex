@@ -1,10 +1,8 @@
 defmodule RzeczywiscieWeb.KanbanBoardLive do
   use RzeczywiscieWeb, :live_view
   import RzeczywiscieWeb.Layouts
-  alias Phoenix.PubSub
   alias Rzeczywiscie.Boards
 
-  @topic "kanban_board"
   @presence_topic "kanban_presence"
 
   def render(assigns) do
@@ -84,10 +82,15 @@ defmodule RzeczywiscieWeb.KanbanBoardLive do
   end
 
   def handle_event("update_card", %{"card_id" => card_id, "text" => text} = params, socket) do
-    image_data = Map.get(params, "image_data")
+    # Only touch the image when the client explicitly sent one (or an
+    # explicit nil to remove it) — the edit form no longer round-trips
+    # unchanged image blobs.
+    attrs =
+      case Map.fetch(params, "image_data") do
+        {:ok, image_data} -> %{text: text, image_data: image_data}
+        :error -> %{text: text}
+      end
 
-    # Update database and broadcast
-    attrs = %{text: text, image_data: image_data}
     cards = Boards.update_card(socket.assigns.board_id, card_id, attrs)
 
     {:noreply, assign(socket, :cards, cards)}
@@ -114,12 +117,11 @@ defmodule RzeczywiscieWeb.KanbanBoardLive do
     {:noreply, assign(socket, :cards, cards)}
   end
 
-  # Handle incoming PubSub messages from Boards context
+  # Handle incoming PubSub messages from Boards context (other clients'
+  # changes — our own actions update assigns in handle_event). Props are the
+  # single channel to Svelte; the push_event copy doubled every update.
   def handle_info({:cards_updated, cards}, socket) do
-    {:noreply,
-     socket
-     |> assign(:cards, cards)
-     |> push_event("cards_updated", %{cards: cards})}
+    {:noreply, assign(socket, :cards, cards)}
   end
 
   # Handle presence updates

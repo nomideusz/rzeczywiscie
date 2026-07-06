@@ -20,8 +20,11 @@ defmodule Rzeczywiscie.Boards do
   Broadcast cards update to all subscribed clients.
   """
   def broadcast_cards_update(cards) do
-    Phoenix.PubSub.broadcast(
+    # broadcast_from: the acting client already got the new list as the
+    # return value of the context call — echoing it back doubled every render.
+    Phoenix.PubSub.broadcast_from(
       Rzeczywiscie.PubSub,
+      self(),
       @topic,
       {:cards_updated, cards}
     )
@@ -85,11 +88,32 @@ defmodule Rzeczywiscie.Boards do
   Get all cards for a board as a list of maps (for compatibility with existing Svelte component).
   """
   def get_cards(board_id) do
+    # image blobs are served by KanbanImageController and cached by the
+    # browser — never load or ship them with the board.
     KanbanCard
     |> where([c], c.kanban_board_id == ^board_id)
-    |> order_by([c], [asc: c.position, asc: c.inserted_at])
+    |> order_by([c], asc: c.position, asc: c.inserted_at)
+    |> select([c], %{
+      card_id: c.card_id,
+      text: c.text,
+      column: c.column,
+      created_by: c.created_by,
+      has_image: not is_nil(c.image_data),
+      inserted_at: c.inserted_at,
+      updated_at: c.updated_at
+    })
     |> Repo.all()
     |> Enum.map(&card_to_map/1)
+  end
+
+  @doc """
+  Fetch a single card's image data URL (or nil).
+  """
+  def get_card_image(card_id) do
+    KanbanCard
+    |> where([c], c.card_id == ^card_id)
+    |> select([c], c.image_data)
+    |> Repo.one()
   end
 
   @doc """
@@ -181,12 +205,14 @@ defmodule Rzeczywiscie.Boards do
   end
 
   defp card_to_map(card) do
+    updated = card.updated_at |> DateTime.from_naive!("Etc/UTC") |> DateTime.to_unix()
+
     %{
       id: card.card_id,
       text: card.text,
       column: card.column,
       created_by: card.created_by,
-      image_data: card.image_data,
+      image_url: if(card.has_image, do: "/kanban/image/#{card.card_id}?v=#{updated}"),
       created_at: card.inserted_at |> DateTime.from_naive!("Etc/UTC") |> DateTime.to_unix()
     }
   end

@@ -58,6 +58,57 @@ defmodule Rzeczywiscie.Services.AirQuality do
     end
   end
 
+  @doc """
+  Batch lookup for listing pages: one cache query for all properties.
+  Never calls the external API in-band — a few missing grid cells are
+  refreshed in the background so subsequent loads hit the cache.
+  Returns a map keyed by grid cell; read it with `property_aqi_from_map/2`.
+  """
+  def get_aqi_map(properties) do
+    coords =
+      properties
+      |> Enum.filter(fn p -> p.latitude && p.longitude end)
+      |> Enum.map(fn p -> {round_to_grid(to_float(p.latitude)), round_to_grid(to_float(p.longitude))} end)
+      |> Enum.uniq()
+
+    if coords == [] do
+      %{}
+    else
+      lats = coords |> Enum.map(fn {la, _} -> Decimal.from_float(la) end) |> Enum.uniq()
+      lngs = coords |> Enum.map(fn {_, ln} -> Decimal.from_float(ln) end) |> Enum.uniq()
+      now = DateTime.utc_now()
+
+      cached =
+        from(c in Cache, where: c.lat in ^lats and c.lng in ^lngs)
+        |> Repo.all()
+        |> Enum.filter(fn c -> DateTime.compare(c.expires_at, now) == :gt end)
+        |> Map.new(fn c -> {grid_key(Decimal.to_float(c.lat), Decimal.to_float(c.lng)), format_cache_data(c)} end)
+
+      # ponytail: refill at most 10 missing cells per page load, in the background
+      coords
+      |> Enum.reject(fn {la, ln} -> Map.has_key?(cached, grid_key(la, ln)) end)
+      |> Enum.take(10)
+      |> Enum.each(fn {la, ln} -> Task.start(fn -> fetch_and_cache(la, ln) end) end)
+
+      cached
+    end
+  end
+
+  @doc """
+  Read a property's AQI out of a `get_aqi_map/1` result.
+  """
+  def property_aqi_from_map(aqi_map, property) do
+    if property.latitude && property.longitude do
+      Map.get(aqi_map, grid_key(round_to_grid(to_float(property.latitude)), round_to_grid(to_float(property.longitude))))
+    end
+  end
+
+  # integer grid key avoids float-equality pitfalls
+  defp grid_key(lat, lng), do: {round(lat * 100), round(lng * 100)}
+
+  defp to_float(%Decimal{} = d), do: Decimal.to_float(d)
+  defp to_float(n) when is_number(n), do: n / 1
+
   defp get_from_cache(lat, lng) do
     lat_decimal = Decimal.from_float(lat)
     lng_decimal = Decimal.from_float(lng)

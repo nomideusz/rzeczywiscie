@@ -41,7 +41,7 @@ if config_env() == :prod do
   config :rzeczywiscie, Rzeczywiscie.Repo,
     # ssl: true,
     url: database_url,
-    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
+    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "20"),
     # For machines with several cores, consider starting multiple pools of `pool_size`
     # pool_count: 4,
     socket_options: maybe_ipv6
@@ -134,4 +134,9 @@ if config_env() == :prod do
   #     config :swoosh, :api_client, Swoosh.ApiClient.Req
   #
   # See https://hexdocs.pm/swoosh/Swoosh.html#module-installation for details.
+end
+
+# Admin panel BasicAuth (any username). Unset => /admin is inaccessible.
+if config_env() == :prod do
+  config :rzeczywiscie, :admin_password, System.get_env("ADMIN_PASSWORD")
 end

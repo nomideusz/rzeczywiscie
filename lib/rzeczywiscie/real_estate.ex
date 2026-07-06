@@ -53,7 +53,7 @@ defmodule Rzeczywiscie.RealEstate do
     sort_direction = Keyword.get(opts, :sort_direction, "desc")
 
     Property
-    |> where([p], p.active == true)
+    |> maybe_only_active(opts)
     |> apply_filters(opts)
     |> apply_sorting(sort_by, sort_direction)
     |> limit(^Keyword.get(opts, :limit, 100))
@@ -66,9 +66,18 @@ defmodule Rzeczywiscie.RealEstate do
   """
   def count_properties(opts \\ []) do
     Property
-    |> where([p], p.active == true)
+    |> maybe_only_active(opts)
     |> apply_filters(opts)
     |> Repo.aggregate(:count)
+  end
+
+  # admin passes include_inactive: true; everything else sees active only
+  defp maybe_only_active(query, opts) do
+    if Keyword.get(opts, :include_inactive, false) do
+      query
+    else
+      where(query, [p], p.active == true)
+    end
   end
 
   @doc """
