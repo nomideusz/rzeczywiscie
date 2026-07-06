@@ -25,21 +25,30 @@ defmodule RzeczywiscieWeb.HotDealsLive do
     {:ok, socket}
   end
 
+  # Deals only change when scrapers run — cache per filter combo so mounts
+  # and filter toggles don't rescore the whole market every time. The
+  # refresh button forces a recompute via ttl 0.
+  @deals_cache_ttl_ms 300_000
+
   @impl true
   def handle_info(:load_data, socket) do
-    hot_deals = DealScorer.get_hot_deals(
+    ttl = if socket.assigns[:force_refresh], do: 0, else: @deals_cache_ttl_ms
+
+    opts = [
       limit: 30,
       transaction_type: socket.assigns.transaction_type,
       property_type: socket.assigns.property_type,
       min_score: socket.assigns.min_score
-    )
-    
-    price_drops = DealScorer.get_price_drops(7, 15)
-    summary = DealScorer.get_hot_deals_summary()
-    
+    ]
+
+    hot_deals = Rzeczywiscie.Cache.fetch({:hot_deals, opts}, ttl, fn -> DealScorer.get_hot_deals(opts) end)
+    price_drops = Rzeczywiscie.Cache.fetch(:price_drops, ttl, fn -> DealScorer.get_price_drops(7, 15) end)
+    summary = Rzeczywiscie.Cache.fetch(:deals_summary, ttl, fn -> DealScorer.get_hot_deals_summary() end)
+
     {:noreply, 
       socket 
       |> assign(:loading, false)
+      |> assign(:force_refresh, false)
       |> assign(:hot_deals, hot_deals)
       |> assign(:price_drops, price_drops)
       |> assign(:summary, summary)
@@ -88,7 +97,7 @@ defmodule RzeczywiscieWeb.HotDealsLive do
   
   @impl true
   def handle_event("refresh", _params, socket) do
-    socket = assign(socket, :loading, true)
+    socket = socket |> assign(:loading, true) |> assign(:force_refresh, true)
     send(self(), :load_data)
     {:noreply, socket}
   end

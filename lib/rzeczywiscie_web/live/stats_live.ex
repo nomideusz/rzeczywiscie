@@ -14,19 +14,8 @@ defmodule RzeczywiscieWeb.StatsLive do
   # (dead + connected) mount and repeat visitors. Refresh button bypasses it.
   @stats_cache_ttl_ms 60_000
 
-  defp cached(key, fun) do
-    now = System.monotonic_time(:millisecond)
-
-    case :persistent_term.get({__MODULE__, key}, nil) do
-      {ts, val} when now - ts < @stats_cache_ttl_ms -> val
-      _ -> cache_put(key, fun.())
-    end
-  end
-
-  defp cache_put(key, val) do
-    :persistent_term.put({__MODULE__, key}, {System.monotonic_time(:millisecond), val})
-    val
-  end
+  defp cached(key, fun), do: Rzeczywiscie.Cache.fetch({__MODULE__, key}, @stats_cache_ttl_ms, fun)
+  defp cache_put(key, val), do: Rzeczywiscie.Cache.put({__MODULE__, key}, val)
   
   @impl true
   def mount(_params, _session, socket) do

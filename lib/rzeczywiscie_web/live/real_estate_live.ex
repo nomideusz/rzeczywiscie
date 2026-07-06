@@ -252,7 +252,7 @@ defmodule RzeczywiscieWeb.RealEstateLive do
     with_aqi = RealEstate.count_properties_with_aqi(filter_keyword)
 
     # Conditionally load map properties (deferred until user switches to map view)
-    {all_map_properties, serialized_map_properties} = if load_map do
+    serialized_map_properties = if load_map do
       # Get properties for map (limit to 500 for performance)
       # Only fetch properties with coordinates to avoid loading unnecessary data
       map_opts =
@@ -266,12 +266,10 @@ defmodule RzeczywiscieWeb.RealEstateLive do
 
       map_props = RealEstate.list_properties(map_opts)
       map_aqi = AirQuality.get_aqi_map(map_props)
-      serialized_map = serialize_properties(map_props, favorited_ids, aqi_map: map_aqi)
-
-      {map_props, serialized_map}
+      serialize_properties(map_props, favorited_ids, aqi_map: map_aqi)
     else
       # Don't load map properties on initial mount
-      {[], []}
+      []
     end
 
     socket
