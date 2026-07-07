@@ -6,10 +6,11 @@ defmodule RzeczywiscieWeb.PixelCanvasLiveTest do
   test "canvas loads, pixel placement round-trips, cooldown enforced", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/pixels")
 
-    # initial canvas state arrives as a push event
-    assert_push_event(view, "canvas", %{pixels: []})
-
     hook = element(view, "[phx-hook=SvelteHook]")
+
+    # the client pulls initial state once mounted; server replies with the canvas
+    render_hook(hook, "load_canvas", %{})
+    assert_reply(view, %{pixels: []})
 
     # place a pixel -> broadcast comes back to this client as a push event
     render_hook(hook, "place_pixel", %{"x" => 3, "y" => 4})
