@@ -208,7 +208,7 @@ defmodule RzeczywiscieWeb.AdminLive do
                       <span class="font-mono text-[10px] opacity-70"><%= format_args(job.args) %></span>
                     <% end %>
                     <span class="ml-auto font-mono text-[10px]">
-                      ⏳ <%= format_duration(job.attempted_at) %>
+                      ⏳ <%= job.running_for %>
                       <%= if job.attempt > 1 do %>· attempt <%= job.attempt %>/<%= job.max_attempts %><% end %>
                     </span>
                   </div>
@@ -223,7 +223,7 @@ defmodule RzeczywiscieWeb.AdminLive do
               <%= for entry <- @cron_schedule do %>
                 <div class="flex items-center gap-2 text-xs py-1 border-b border-base-content/10">
                   <span class="font-mono text-[10px] px-1.5 py-0.5 bg-base-200 whitespace-nowrap">
-                    <%= format_eta(entry.next_at) %>
+                    <%= entry.eta %>
                   </span>
                   <span class="font-bold"><%= entry.worker %></span>
                   <%= if entry.args != %{} do %>
@@ -595,46 +595,41 @@ defmodule RzeczywiscieWeb.AdminLive do
       |> assign(:running_task, nil)
       |> assign(:task_result, result)
       |> assign(:stats, get_stats())
+      |> assign(:queue, get_queue_snapshot())
     }
   end
 
+  # Pipeline actions go through each worker's trigger/1 so they run as real
+  # Oban jobs — visible in the Job Queue panel with args and live runtime
+  # (the old inline runs were invisible to it).
   defp run_task("scrape_olx") do
-    alias Rzeczywiscie.Scrapers.OlxScraper
-    case OlxScraper.scrape(pages: 3, enrich: true) do
-      {:ok, result} -> "OLX: #{result.saved}/#{result.total} saved"
-      {:error, e} -> "OLX error: #{inspect(e)}"
-    end
+    {:ok, _job} = Rzeczywiscie.Workers.OlxScraperWorker.trigger(pages: 3, enrich: true)
+    "OLX scrape queued (3 pages, enriched) — see Job Queue above"
   end
 
   defp run_task("scrape_otodom") do
-    alias Rzeczywiscie.Scrapers.OtodomScraper
-    case OtodomScraper.scrape(pages: 3, enrich: true) do
-      {:ok, result} -> "Otodom: #{result.saved}/#{result.total} saved"
-      {:error, e} -> "Otodom error: #{inspect(e)}"
-    end
+    {:ok, _job} = Rzeczywiscie.Workers.OtodomScraperWorker.trigger(pages: 3, enrich: true)
+    "Otodom scrape queued (3 pages, enriched) — see Job Queue above"
   end
 
   defp run_task("geocode") do
-    alias Rzeczywiscie.Workers.GeocodingWorker
-    :ok = GeocodingWorker.perform(%Oban.Job{args: %{"batch_size" => 50, "delay_ms" => 500}})
-    "Geocoded up to 50 properties"
+    {:ok, _job} = Rzeczywiscie.Workers.GeocodingWorker.trigger(batch_size: 50, delay_ms: 500)
+    "Geocoding queued (batch of 50) — see Job Queue above"
   end
 
   defp run_task("llm") do
-    alias Rzeczywiscie.Workers.LLMAnalysisWorker
-    {:ok, _job} = LLMAnalysisWorker.trigger(limit: 30)
-    "LLM analysis job queued (30 properties)"
+    {:ok, _job} = Rzeczywiscie.Workers.LLMAnalysisWorker.trigger(limit: 30)
+    "LLM analysis queued (30 properties) — see Job Queue above"
   end
 
   defp run_task("maintenance") do
-    alias Rzeczywiscie.Workers.DataMaintenanceWorker
-    {:ok, _job} = DataMaintenanceWorker.trigger()
-    "Maintenance job queued"
+    {:ok, _job} = Rzeczywiscie.Workers.DataMaintenanceWorker.trigger()
+    "Maintenance job queued — see Job Queue above"
   end
 
   defp run_task("cleanup") do
-    {count, _} = RealEstate.mark_stale_properties_inactive(96)
-    "Marked #{count} stale properties as inactive"
+    {:ok, _job} = Rzeczywiscie.Workers.CleanupWorker.trigger(hours: 96)
+    "Stale cleanup queued (96h threshold) — see Job Queue above"
   end
 
   defp run_task("dedup") do
@@ -827,6 +822,10 @@ defmodule RzeczywiscieWeb.AdminLive do
           }
         )
       )
+      # running_for is part of the assign on purpose: durations rendered from
+      # the wall clock freeze, because an unchanged job row means an unchanged
+      # assign and LiveView skips the re-render
+      |> Enum.map(fn j -> Map.put(j, :running_for, format_duration(j.attempted_at)) end)
 
     counts =
       Repo.all(from(j in "oban_jobs", group_by: j.state, select: {j.state, count(j.id)}))
@@ -848,7 +847,7 @@ defmodule RzeczywiscieWeb.AdminLive do
       end)
       |> Enum.map(fn {expr, worker, args} ->
         next_at = expr |> Oban.Cron.Expression.parse!() |> Oban.Cron.Expression.next_at("Etc/UTC")
-        %{worker: short_worker(inspect(worker)), args: args, next_at: next_at}
+        %{worker: short_worker(inspect(worker)), args: args, next_at: next_at, eta: format_eta(next_at)}
       end)
       |> Enum.sort_by(& &1.next_at, DateTime)
     else
