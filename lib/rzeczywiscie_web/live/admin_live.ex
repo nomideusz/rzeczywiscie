@@ -14,9 +14,10 @@ defmodule RzeczywiscieWeb.AdminLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    # Subscribe to job updates if connected
+    # Poll the job queue while the page is open (nothing broadcasts job
+    # state, and a 5s indexed query on oban_jobs is cheap)
     if connected?(socket) do
-      Phoenix.PubSub.subscribe(Rzeczywiscie.PubSub, "oban:jobs")
+      :timer.send_interval(5_000, :tick_jobs)
     end
     
     socket =
@@ -28,6 +29,8 @@ defmodule RzeczywiscieWeb.AdminLive do
       |> assign(:show_manual, false)
       |> assign(:prop_search, "")
       |> assign(:prop_page, 1)
+      |> assign(:queue, get_queue_snapshot())
+      |> assign(:cron_schedule, get_cron_schedule())
       |> load_admin_properties()
 
     {:ok, socket}
@@ -167,6 +170,70 @@ defmodule RzeczywiscieWeb.AdminLive do
                 <p>• Daily at 5 AM</p>
                 <p>• Deactivates properties not seen in 4+ days</p>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Job Queue (live, 5s refresh) -->
+        <div class="bg-base-100 border-2 border-base-content mb-6">
+          <div class="px-4 py-3 border-b-2 border-base-content bg-gradient-to-r from-info/20 to-transparent flex items-center justify-between">
+            <div>
+              <h2 class="text-sm font-bold uppercase tracking-wide">⏱️ Job Queue</h2>
+              <p class="text-[10px] opacity-60">Live — refreshes every 5s</p>
+            </div>
+            <div class="flex gap-2 text-[10px] font-bold uppercase">
+              <span class={"px-2 py-1 #{if queue_count(@queue, "executing") > 0, do: "bg-info/20 text-info", else: "bg-base-200 opacity-50"}"}>
+                ▶ <%= queue_count(@queue, "executing") %> running
+              </span>
+              <span class="px-2 py-1 bg-base-200 opacity-70"><%= queue_count(@queue, "available") %> queued</span>
+              <span class="px-2 py-1 bg-base-200 opacity-70"><%= queue_count(@queue, "scheduled") %> scheduled</span>
+              <span class={"px-2 py-1 #{if queue_count(@queue, "retryable") > 0, do: "bg-warning/20 text-warning", else: "bg-base-200 opacity-50"}"}>
+                <%= queue_count(@queue, "retryable") %> retryable
+              </span>
+              <span class={"px-2 py-1 #{if queue_count(@queue, "discarded") > 0, do: "bg-error/20 text-error", else: "bg-base-200 opacity-50"}"}>
+                <%= queue_count(@queue, "discarded") %> discarded
+              </span>
+            </div>
+          </div>
+
+          <%= if @queue.executing != [] do %>
+            <div class="p-4 border-b border-base-content/20">
+              <h3 class="text-[10px] font-bold uppercase tracking-wide opacity-60 mb-2">Running now</h3>
+              <div class="space-y-2">
+                <%= for job <- @queue.executing do %>
+                  <div class="flex flex-wrap items-center gap-3 text-xs border border-info/40 bg-info/5 px-3 py-2">
+                    <span class="font-bold"><%= short_worker(job.worker) %></span>
+                    <span class="opacity-50">queue: <%= job.queue %></span>
+                    <%= if job.args != %{} do %>
+                      <span class="font-mono text-[10px] opacity-70"><%= format_args(job.args) %></span>
+                    <% end %>
+                    <span class="ml-auto font-mono text-[10px]">
+                      ⏳ <%= format_duration(job.attempted_at) %>
+                      <%= if job.attempt > 1 do %>· attempt <%= job.attempt %>/<%= job.max_attempts %><% end %>
+                    </span>
+                  </div>
+                <% end %>
+              </div>
+            </div>
+          <% end %>
+
+          <div class="p-4">
+            <h3 class="text-[10px] font-bold uppercase tracking-wide opacity-60 mb-2">Upcoming cron runs</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1">
+              <%= for entry <- @cron_schedule do %>
+                <div class="flex items-center gap-2 text-xs py-1 border-b border-base-content/10">
+                  <span class="font-mono text-[10px] px-1.5 py-0.5 bg-base-200 whitespace-nowrap">
+                    <%= format_eta(entry.next_at) %>
+                  </span>
+                  <span class="font-bold"><%= entry.worker %></span>
+                  <%= if entry.args != %{} do %>
+                    <span class="font-mono text-[10px] opacity-60 truncate"><%= format_args(entry.args) %></span>
+                  <% end %>
+                  <span class="ml-auto font-mono text-[10px] opacity-40 whitespace-nowrap">
+                    <%= Calendar.strftime(entry.next_at, "%H:%M UTC") %>
+                  </span>
+                </div>
+              <% end %>
             </div>
           </div>
         </div>
@@ -514,6 +581,14 @@ defmodule RzeczywiscieWeb.AdminLive do
   end
 
   @impl true
+  def handle_info(:tick_jobs, socket) do
+    {:noreply,
+     socket
+     |> assign(:queue, get_queue_snapshot())
+     |> assign(:cron_schedule, get_cron_schedule())}
+  end
+
+  @impl true
   def handle_info({:task_complete, result}, socket) do
     {:noreply, 
       socket
@@ -732,6 +807,94 @@ defmodule RzeczywiscieWeb.AdminLive do
       other -> other
     end
   end
+
+  # ── Job queue helpers ────────────────────────────────
+
+  defp get_queue_snapshot do
+    executing =
+      Repo.all(
+        from(j in "oban_jobs",
+          where: j.state == "executing",
+          order_by: [asc: j.attempted_at],
+          limit: 20,
+          select: %{
+            worker: j.worker,
+            queue: j.queue,
+            args: j.args,
+            attempt: j.attempt,
+            max_attempts: j.max_attempts,
+            attempted_at: j.attempted_at
+          }
+        )
+      )
+
+    counts =
+      Repo.all(from(j in "oban_jobs", group_by: j.state, select: {j.state, count(j.id)}))
+      |> Map.new()
+
+    %{executing: executing, counts: counts}
+  end
+
+  defp queue_count(queue, state), do: Map.get(queue.counts, state, 0)
+
+  defp get_cron_schedule do
+    plugins = Application.get_env(:rzeczywiscie, Oban, [])[:plugins] || []
+
+    with {_, cron_opts} <- List.keyfind(plugins, Oban.Plugins.Cron, 0) do
+      (cron_opts[:crontab] || [])
+      |> Enum.map(fn
+        {expr, worker} -> {expr, worker, %{}}
+        {expr, worker, opts} -> {expr, worker, Map.new(opts[:args] || %{})}
+      end)
+      |> Enum.map(fn {expr, worker, args} ->
+        next_at = expr |> Oban.Cron.Expression.parse!() |> Oban.Cron.Expression.next_at("Etc/UTC")
+        %{worker: short_worker(inspect(worker)), args: args, next_at: next_at}
+      end)
+      |> Enum.sort_by(& &1.next_at, DateTime)
+    else
+      _ -> []
+    end
+  end
+
+  defp short_worker(worker) do
+    worker
+    |> String.replace_prefix("Rzeczywiscie.Workers.", "")
+    |> String.replace_suffix("Worker", "")
+  end
+
+  defp format_args(args) do
+    args
+    |> Enum.map_join(" ", fn {k, v} -> "#{k}=#{v}" end)
+  end
+
+  # running-for duration from a (naive) attempted_at timestamp
+  defp format_duration(%NaiveDateTime{} = naive),
+    do: format_duration(DateTime.from_naive!(naive, "Etc/UTC"))
+
+  defp format_duration(%DateTime{} = dt) do
+    secs = DateTime.diff(DateTime.utc_now(), dt)
+
+    cond do
+      secs < 60 -> "#{secs}s"
+      secs < 3600 -> "#{div(secs, 60)}m #{rem(secs, 60)}s"
+      true -> "#{div(secs, 3600)}h #{div(rem(secs, 3600), 60)}m"
+    end
+  end
+
+  defp format_duration(_), do: "—"
+
+  # "in 23m" / "in 3h 05m" until a future timestamp
+  defp format_eta(%DateTime{} = dt) do
+    secs = max(DateTime.diff(dt, DateTime.utc_now()), 0)
+
+    cond do
+      secs < 60 -> "in <1m"
+      secs < 3600 -> "in #{div(secs, 60)}m"
+      true -> "in #{div(secs, 3600)}h #{String.pad_leading(to_string(div(rem(secs, 3600), 60)), 2, "0")}m"
+    end
+  end
+
+  defp format_eta(_), do: "—"
 
   defp format_time_ago(nil), do: "—"
   defp format_time_ago(datetime) do
