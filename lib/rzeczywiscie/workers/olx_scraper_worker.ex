@@ -15,16 +15,19 @@ defmodule Rzeczywiscie.Workers.OlxScraperWorker do
   alias Rzeczywiscie.Scrapers.OlxScraper
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
     pages = Map.get(args, "pages", 3)
     delay = Map.get(args, "delay", 2000)
     enrich = Map.get(args, "enrich", false)
 
     Logger.info("OlxScraperWorker starting: scraping #{pages} page(s)#{if enrich, do: " + enrichment", else: ""}")
 
-    case OlxScraper.scrape(pages: pages, delay: delay, enrich: enrich) do
+    progress = fn msg -> Rzeczywiscie.JobProgress.report(job, msg) end
+
+    case OlxScraper.scrape(pages: pages, delay: delay, enrich: enrich, progress: progress) do
       {:ok, result} ->
         Logger.info("OlxScraperWorker completed: #{result.saved}/#{result.total} properties saved")
+        progress.("done — #{result.saved}/#{result.total} properties saved")
         :ok
 
       {:error, reason} ->

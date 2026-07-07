@@ -21,7 +21,7 @@ defmodule Rzeczywiscie.Workers.LLMAnalysisWorker do
   alias Rzeczywiscie.RealEstate.Property
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
     limit = Map.get(args, "limit", 30)
     
     Logger.info("🤖 LLM Analysis Worker starting (limit: #{limit})")
@@ -33,6 +33,7 @@ defmodule Rzeczywiscie.Workers.LLMAnalysisWorker do
       :ok
     else
       # Step 1: Fetch descriptions for properties that need them
+      Rzeczywiscie.JobProgress.report(job, "step 1/2 - fetching descriptions (up to #{limit})")
       fetch_result = fetch_descriptions(limit)
       Logger.info("📝 Description fetch: #{fetch_result}")
       
@@ -40,8 +41,10 @@ defmodule Rzeczywiscie.Workers.LLMAnalysisWorker do
       Process.sleep(2000)
       
       # Step 2: Run LLM analysis on properties with descriptions
+      Rzeczywiscie.JobProgress.report(job, "step 2/2 - descriptions: #{fetch_result}; analyzing")
       llm_result = run_llm_analysis(limit)
       Logger.info("🤖 LLM analysis: #{llm_result}")
+      Rzeczywiscie.JobProgress.report(job, "done - #{fetch_result}; #{llm_result}")
       
       :ok
     end

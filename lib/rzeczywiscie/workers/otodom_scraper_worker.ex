@@ -17,14 +17,14 @@ defmodule Rzeczywiscie.Workers.OtodomScraperWorker do
   alias Rzeczywiscie.Scrapers.OtodomScraper
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
     pages = Map.get(args, "pages", 2)  # Scrape 2 pages by default
     delay = Map.get(args, "delay", 3000)  # 3 second delay to be respectful
     enrich = Map.get(args, "enrich", false)
 
     Logger.info("Starting scheduled Otodom scrape: #{pages} page(s)#{if enrich, do: " + enrichment", else: ""}")
 
-    case OtodomScraper.scrape(pages: pages, delay: delay, enrich: enrich) do
+    case OtodomScraper.scrape(pages: pages, delay: delay, enrich: enrich, progress: fn msg -> Rzeczywiscie.JobProgress.report(job, msg) end) do
       {:ok, %{total: total, saved: saved}} ->
         Logger.info("Otodom scrape job completed: #{saved}/#{total} properties saved")
         :ok

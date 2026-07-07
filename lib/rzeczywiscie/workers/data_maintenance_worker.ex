@@ -25,36 +25,44 @@ defmodule Rzeczywiscie.Workers.DataMaintenanceWorker do
   alias Rzeczywiscie.RealEstate.Property
 
   @impl Oban.Worker
-  def perform(%Oban.Job{}) do
+  def perform(%Oban.Job{} = job) do
     Logger.info("🧹 Data Maintenance Worker starting")
     
     results = []
     
     # 1. Remove duplicates
+    Rzeczywiscie.JobProgress.report(job, "1/6 removing duplicates")
     dupes_result = remove_duplicates()
     results = ["Duplicates: #{dupes_result}" | results]
     
     # 2. Fix misclassified transaction types
+    Rzeczywiscie.JobProgress.report(job, "2/6 fixing misclassified types")
     misclass_result = fix_misclassified()
     results = ["Misclassified: #{misclass_result}" | results]
     
     # 3. Backfill districts
+    Rzeczywiscie.JobProgress.report(job, "3/6 backfilling districts")
     districts_result = backfill_districts()
     results = ["Districts: #{districts_result}" | results]
     
     # 4. Backfill cities
+    Rzeczywiscie.JobProgress.report(job, "4/6 backfilling cities")
     cities_result = backfill_cities()
     results = ["Cities: #{cities_result}" | results]
     
     # 5. Clear invalid prices
+    Rzeczywiscie.JobProgress.report(job, "5/6 clearing invalid prices")
     prices_result = clear_invalid_prices()
     results = ["Invalid prices: #{prices_result}" | results]
     
     # 6. Clear bad descriptions (CSS, navigation garbage)
+    Rzeczywiscie.JobProgress.report(job, "6/6 clearing bad descriptions")
     desc_result = clear_bad_descriptions()
     results = ["Bad descriptions: #{desc_result}" | results]
     
-    Logger.info("🧹 Data Maintenance complete: #{Enum.join(Enum.reverse(results), ", ")}")
+    summary = Enum.join(Enum.reverse(results), ", ")
+    Logger.info("🧹 Data Maintenance complete: #{summary}")
+    Rzeczywiscie.JobProgress.report(job, "done - #{summary}")
     
     :ok
   end

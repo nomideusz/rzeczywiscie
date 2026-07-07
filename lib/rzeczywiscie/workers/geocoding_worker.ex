@@ -12,7 +12,7 @@ defmodule Rzeczywiscie.Workers.GeocodingWorker do
   import Ecto.Query
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
     batch_size = Map.get(args, "batch_size", 10)
     delay_ms = Map.get(args, "delay_ms", 1000)
 
@@ -40,12 +40,17 @@ defmodule Rzeczywiscie.Workers.GeocodingWorker do
       
       Logger.info("Geocoding batch: #{cached_count} from cache (FREE), #{api_count} API calls")
       
+      total = length(properties)
+
       results =
-        Enum.map(properties, fn property ->
+        properties
+        |> Enum.with_index(1)
+        |> Enum.map(fn {property, i} ->
           has_street? = property.street && property.street != "" && String.length(property.street) > 3
           needs_api? = has_street? || (!Geocoding.location_cached?(property.district) && !Geocoding.location_cached?(property.city))
-          
+
           result = geocode_property(property)
+          Rzeczywiscie.JobProgress.report(job, "#{i}/#{total} processed")
 
           # Only delay for actual API calls
           if needs_api? && delay_ms > 0, do: Process.sleep(delay_ms)
@@ -54,7 +59,8 @@ defmodule Rzeczywiscie.Workers.GeocodingWorker do
         end)
 
       successful = Enum.count(results, fn {status, _} -> status == :ok end)
-      Logger.info("GeocodingWorker completed: #{successful}/#{length(properties)} geocoded (#{cached_count} from cache)")
+      Logger.info("GeocodingWorker completed: #{successful}/#{total} geocoded (#{cached_count} from cache)")
+      Rzeczywiscie.JobProgress.report(job, "done - #{successful}/#{total} geocoded (#{cached_count} from cache)")
 
       :ok
     end

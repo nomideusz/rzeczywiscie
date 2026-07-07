@@ -211,6 +211,35 @@ defmodule RzeczywiscieWeb.AdminLive do
                       ⏳ <%= job.running_for %>
                       <%= if job.attempt > 1 do %>· attempt <%= job.attempt %>/<%= job.max_attempts %><% end %>
                     </span>
+                    <%= if job.meta["progress"] do %>
+                      <div class="w-full font-mono text-[10px] text-info pt-1 border-t border-info/20">
+                        → <%= job.meta["progress"] %>
+                      </div>
+                    <% end %>
+                  </div>
+                <% end %>
+              </div>
+            </div>
+          <% end %>
+
+          <%= if @queue.finished != [] do %>
+            <div class="p-4 border-b border-base-content/20">
+              <h3 class="text-[10px] font-bold uppercase tracking-wide opacity-60 mb-2">Recently finished</h3>
+              <div class="space-y-1">
+                <%= for job <- @queue.finished do %>
+                  <div class="flex flex-wrap items-center gap-2 text-xs py-1 border-b border-base-content/10">
+                    <span title={job.state}><%= if job.state == "completed", do: "✅", else: "❌" %></span>
+                    <span class="font-bold"><%= short_worker(job.worker) %></span>
+                    <%= if job.args != %{} do %>
+                      <span class="font-mono text-[10px] opacity-50"><%= format_args(job.args) %></span>
+                    <% end %>
+                    <%= if job.meta["progress"] do %>
+                      <span class="font-mono text-[10px] opacity-70 truncate max-w-md"><%= job.meta["progress"] %></span>
+                    <% end %>
+                    <span class="ml-auto font-mono text-[10px] opacity-40 whitespace-nowrap">
+                      <%= if job.took do %>took <%= job.took %> ·<% end %>
+                      <%= job.ago %>
+                    </span>
                   </div>
                 <% end %>
               </div>
@@ -816,6 +845,7 @@ defmodule RzeczywiscieWeb.AdminLive do
             worker: j.worker,
             queue: j.queue,
             args: j.args,
+            meta: j.meta,
             attempt: j.attempt,
             max_attempts: j.max_attempts,
             attempted_at: j.attempted_at
@@ -831,8 +861,47 @@ defmodule RzeczywiscieWeb.AdminLive do
       Repo.all(from(j in "oban_jobs", group_by: j.state, select: {j.state, count(j.id)}))
       |> Map.new()
 
-    %{executing: executing, counts: counts}
+    finished =
+      Repo.all(
+        from(j in "oban_jobs",
+          where: j.state in ["completed", "discarded", "cancelled"],
+          order_by: [desc: j.attempted_at],
+          limit: 5,
+          select: %{
+            worker: j.worker,
+            state: j.state,
+            args: j.args,
+            meta: j.meta,
+            attempted_at: j.attempted_at,
+            finished_at: fragment("coalesce(?, ?, ?)", j.completed_at, j.discarded_at, j.cancelled_at)
+          }
+        )
+      )
+      |> Enum.map(fn j ->
+        j
+        |> Map.put(:took, format_took(j.attempted_at, j.finished_at))
+        |> Map.put(:ago, format_ago(j.finished_at))
+      end)
+
+    %{executing: executing, counts: counts, finished: finished}
   end
+
+  defp format_took(%NaiveDateTime{} = from, %NaiveDateTime{} = to),
+    do: format_secs(NaiveDateTime.diff(to, from))
+
+  defp format_took(_, _), do: nil
+
+  defp format_ago(%NaiveDateTime{} = naive) do
+    secs = max(NaiveDateTime.diff(NaiveDateTime.utc_now(), naive), 0)
+    "#{format_secs(secs)} ago"
+  end
+
+  defp format_ago(_), do: nil
+
+  defp format_secs(secs) when secs < 60, do: "#{secs}s"
+  defp format_secs(secs) when secs < 3600, do: "#{div(secs, 60)}m #{rem(secs, 60)}s"
+  defp format_secs(secs), do: "#{div(secs, 3600)}h #{div(rem(secs, 3600), 60)}m"
+  
 
   defp queue_count(queue, state), do: Map.get(queue.counts, state, 0)
 

@@ -30,20 +30,30 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
     pages = Keyword.get(opts, :pages, 1)
     delay = Keyword.get(opts, :delay, 5000)
     enrich = Keyword.get(opts, :enrich, false)
+    progress = Keyword.get(opts, :progress, fn _msg -> :ok end)
 
     Logger.info("Starting Otodom scrape for Malopolskie region, #{pages} page(s) per search")
 
+    search_count = length(@searches)
+
     all_results =
-      Enum.flat_map(@searches, fn {transaction, estate} ->
+      @searches
+      |> Enum.with_index(1)
+      |> Enum.flat_map(fn {{transaction, estate}, i} ->
+        progress.("search #{i}/#{search_count} (#{transaction}/#{estate})…")
         scrape_search(transaction, estate, pages, delay)
       end)
     
     # Save results
+    progress.("saving #{length(all_results)} listings…")
     result = save_results(all_results)
     
     # Auto-enrich if requested
     if enrich do
       Logger.info("🔄 Auto-enriching properties with missing data...")
+      with {:ok, %{saved: saved, total: total}} <- result do
+        progress.("#{saved}/#{total} saved — enriching missing data…")
+      end
       enrich_recent_properties(delay)
     end
     

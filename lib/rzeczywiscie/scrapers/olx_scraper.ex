@@ -53,6 +53,7 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
     pages = Keyword.get(opts, :pages, 1)
     delay = Keyword.get(opts, :delay, 2000)
     enrich = Keyword.get(opts, :enrich, false)
+    progress = Keyword.get(opts, :progress, fn _msg -> :ok end)
 
     Logger.info("Starting OLX scrape for Malopolskie region, #{pages} page(s)")
 
@@ -63,6 +64,7 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
           {:ok, ads} ->
             properties = ads |> Enum.map(&parse_ad/1) |> Enum.reject(&is_nil/1)
             Logger.info("Scraped page #{page}: found #{length(properties)} properties")
+            progress.("page #{page}/#{pages} — #{length(properties)} found")
 
             # Add delay between requests to be respectful
             if page < pages, do: Process.sleep(delay)
@@ -71,16 +73,21 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
 
           {:error, reason} ->
             Logger.error("Failed to fetch page #{page}: #{inspect(reason)}")
+            progress.("page #{page}/#{pages} — failed: #{inspect(reason)}")
             []
         end
       end)
 
     # Save results
+    progress.("saving #{length(results)} listings…")
     result = save_results(results)
     
     # Auto-enrich if requested
     if enrich do
       Logger.info("🔄 Auto-enriching properties with missing data...")
+      with {:ok, %{saved: saved, total: total}} <- result do
+        progress.("#{saved}/#{total} saved — enriching missing data…")
+      end
       enrich_recent_properties(delay)
     end
     
