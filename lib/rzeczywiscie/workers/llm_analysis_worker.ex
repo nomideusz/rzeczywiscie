@@ -34,7 +34,7 @@ defmodule Rzeczywiscie.Workers.LLMAnalysisWorker do
     else
       # Step 1: Fetch descriptions for properties that need them
       Rzeczywiscie.JobProgress.report(job, "step 1/2 - fetching descriptions (up to #{limit})")
-      fetch_result = fetch_descriptions(limit)
+      fetch_result = fetch_descriptions(limit, fn msg -> Rzeczywiscie.JobProgress.report(job, "step 1/2 - " <> msg) end)
       Logger.info("📝 Description fetch: #{fetch_result}")
       
       # Small delay between steps
@@ -42,7 +42,7 @@ defmodule Rzeczywiscie.Workers.LLMAnalysisWorker do
       
       # Step 2: Run LLM analysis on properties with descriptions
       Rzeczywiscie.JobProgress.report(job, "step 2/2 - descriptions: #{fetch_result}; analyzing")
-      llm_result = run_llm_analysis(limit)
+      llm_result = run_llm_analysis(limit, fn msg -> Rzeczywiscie.JobProgress.report(job, "step 2/2 - " <> msg) end)
       Logger.info("🤖 LLM analysis: #{llm_result}")
       Rzeczywiscie.JobProgress.report(job, "done - #{fetch_result}; #{llm_result}")
       
@@ -50,10 +50,10 @@ defmodule Rzeczywiscie.Workers.LLMAnalysisWorker do
     end
   end
 
-  defp fetch_descriptions(limit) do
+  defp fetch_descriptions(limit, progress \\ fn _ -> :ok end) do
     alias Rzeczywiscie.Services.DescriptionFetcher
     
-    case DescriptionFetcher.fetch_top_deals(limit: limit, delay: 2500) do
+    case DescriptionFetcher.fetch_top_deals(limit: limit, delay: 2500, progress: progress) do
       {:ok, %{total: total, fetched: fetched, failed: failed}} ->
         "#{fetched}/#{total} fetched (#{failed} failed)"
       {:error, reason} ->
@@ -61,7 +61,7 @@ defmodule Rzeczywiscie.Workers.LLMAnalysisWorker do
     end
   end
 
-  defp run_llm_analysis(limit) do
+  defp run_llm_analysis(limit, progress \\ fn _ -> :ok end) do
     alias Rzeczywiscie.Services.LLMAnalyzer
     alias Rzeczywiscie.Scrapers.ExtractionHelpers
     
@@ -114,26 +114,28 @@ defmodule Rzeczywiscie.Workers.LLMAnalysisWorker do
     if total == 0 and metadata_count == 0 do
       "No properties pending analysis (#{length(css_garbage)} garbage skipped)"
     else
-      successful = properties
+      {successful, failed, last_error} = properties
       |> Enum.with_index(1)
-      |> Enum.reduce(0, fn {property, idx}, count ->
+      |> Enum.reduce({0, 0, nil}, fn {property, idx}, {ok, failed, last_error} ->
         Logger.info("[#{idx}/#{total}] Analyzing property ##{property.id}...")
-        
+        progress.("analyzing #{idx}/#{total} (#{ok} ok, #{failed} failed)")
+
         context = build_context(property)
         
         case analyze_with_timeout(property.description, context) do
           {:ok, signals} ->
             signals = enhance_with_prefab_detection(signals, property)
             save_analysis(property, signals)
-            count + 1
+            {ok + 1, failed, last_error}
             
           {:error, reason} ->
             Logger.warning("  ✗ Failed: #{inspect(reason)}")
-            count
+            {ok, failed + 1, reason}
         end
       end)
       
       result = "#{successful}/#{total} analyzed"
+      result = if failed > 0, do: result <> ", #{failed} failed (last: #{inspect(last_error)})", else: result
       result = if metadata_count > 0, do: result <> ", #{metadata_count} metadata-only", else: result
       result = if length(css_garbage) > 0, do: result <> ", #{length(css_garbage)} garbage skipped", else: result
       result

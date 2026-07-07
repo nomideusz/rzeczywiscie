@@ -21,6 +21,7 @@ defmodule Rzeczywiscie.Services.DescriptionFetcher do
     limit = Keyword.get(opts, :limit, 50)
     delay = Keyword.get(opts, :delay, 2000)
     min_score = Keyword.get(opts, :min_score, 40)
+    progress = Keyword.get(opts, :progress, fn _msg -> :ok end)
 
     Logger.info("Fetching descriptions for top #{limit} deals (min score: #{min_score})")
 
@@ -44,7 +45,8 @@ defmodule Rzeczywiscie.Services.DescriptionFetcher do
         |> Enum.with_index(1)
         |> Enum.map(fn {{property, _score_data}, index} ->
           Logger.info("[#{index}/#{length(deals_needing_desc)}] Fetching description for ##{property.id}")
-          
+          progress.("fetching description #{index}/#{length(deals_needing_desc)}")
+
           result = fetch_description(property)
           
           # Add delay between requests

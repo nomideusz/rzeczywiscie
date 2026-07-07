@@ -216,6 +216,35 @@ defmodule RzeczywiscieWeb.AdminLive do
                         → <%= job.meta["progress"] %>
                       </div>
                     <% end %>
+                    <%= if job.retry_error do %>
+                      <div class="w-full font-mono text-[10px] text-warning pt-1 border-t border-warning/20">
+                        ⚠ previous attempt failed: <%= job.retry_error %>
+                      </div>
+                    <% end %>
+                  </div>
+                <% end %>
+              </div>
+            </div>
+          <% end %>
+
+          <%= if @queue.retryable != [] do %>
+            <div class="p-4 border-b border-base-content/20">
+              <h3 class="text-[10px] font-bold uppercase tracking-wide text-warning mb-2">Failing — waiting to retry</h3>
+              <div class="space-y-1">
+                <%= for job <- @queue.retryable do %>
+                  <div class="text-xs border border-warning/40 bg-warning/5 px-3 py-2">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <span class="font-bold"><%= short_worker(job.worker) %></span>
+                      <%= if job.args != %{} do %>
+                        <span class="font-mono text-[10px] opacity-50"><%= format_args(job.args) %></span>
+                      <% end %>
+                      <span class="ml-auto font-mono text-[10px] opacity-60">
+                        attempt <%= job.attempt %>/<%= job.max_attempts %> · retry <%= job.retry_in %>
+                      </span>
+                    </div>
+                    <%= if job.last_error do %>
+                      <div class="font-mono text-[10px] text-warning pt-1">✗ <%= job.last_error %></div>
+                    <% end %>
                   </div>
                 <% end %>
               </div>
@@ -240,6 +269,9 @@ defmodule RzeczywiscieWeb.AdminLive do
                       <%= if job.took do %>took <%= job.took %> ·<% end %>
                       <%= job.ago %>
                     </span>
+                    <%= if job.fail_error do %>
+                      <div class="w-full font-mono text-[10px] text-error pt-1">✗ <%= job.fail_error %></div>
+                    <% end %>
                   </div>
                 <% end %>
               </div>
@@ -848,14 +880,19 @@ defmodule RzeczywiscieWeb.AdminLive do
             meta: j.meta,
             attempt: j.attempt,
             max_attempts: j.max_attempts,
-            attempted_at: j.attempted_at
+            attempted_at: j.attempted_at,
+            errors: j.errors
           }
         )
       )
       # running_for is part of the assign on purpose: durations rendered from
       # the wall clock freeze, because an unchanged job row means an unchanged
       # assign and LiveView skips the re-render
-      |> Enum.map(fn j -> Map.put(j, :running_for, format_duration(j.attempted_at)) end)
+      |> Enum.map(fn j ->
+        j
+        |> Map.put(:running_for, format_duration(j.attempted_at))
+        |> Map.put(:retry_error, if(j.attempt > 1, do: last_error(j.errors)))
+      end)
 
     counts =
       Repo.all(from(j in "oban_jobs", group_by: j.state, select: {j.state, count(j.id)}))
@@ -872,6 +909,7 @@ defmodule RzeczywiscieWeb.AdminLive do
             state: j.state,
             args: j.args,
             meta: j.meta,
+            errors: j.errors,
             attempted_at: j.attempted_at,
             finished_at: fragment("coalesce(?, ?, ?)", j.completed_at, j.discarded_at, j.cancelled_at)
           }
@@ -881,10 +919,54 @@ defmodule RzeczywiscieWeb.AdminLive do
         j
         |> Map.put(:took, format_took(j.attempted_at, j.finished_at))
         |> Map.put(:ago, format_ago(j.finished_at))
+        |> Map.put(:fail_error, if(j.state != "completed", do: last_error(j.errors)))
       end)
 
-    %{executing: executing, counts: counts, finished: finished}
+    retryable =
+      Repo.all(
+        from(j in "oban_jobs",
+          where: j.state == "retryable",
+          order_by: [asc: j.scheduled_at],
+          limit: 10,
+          select: %{
+            worker: j.worker,
+            args: j.args,
+            attempt: j.attempt,
+            max_attempts: j.max_attempts,
+            errors: j.errors,
+            scheduled_at: j.scheduled_at
+          }
+        )
+      )
+      |> Enum.map(fn j ->
+        j
+        |> Map.put(:last_error, last_error(j.errors))
+        |> Map.put(:retry_in, format_in(j.scheduled_at))
+      end)
+
+    %{executing: executing, counts: counts, finished: finished, retryable: retryable}
   end
+
+  # Oban stores one entry per failed attempt; the first line of the newest
+  # one is the human-readable exception, the rest is stacktrace.
+  defp last_error(errors) when is_list(errors) and errors != [] do
+    errors
+    |> List.last()
+    |> Map.get("error", "")
+    |> String.split("\n")
+    |> hd()
+    |> String.slice(0, 200)
+  end
+
+  defp last_error(_), do: nil
+
+  defp format_in(%NaiveDateTime{} = naive) do
+    secs = NaiveDateTime.diff(naive, NaiveDateTime.utc_now())
+    if secs <= 0, do: "any moment", else: "in #{format_secs(secs)}"
+  end
+
+  defp format_in(_), do: nil
+  
 
   defp format_took(%NaiveDateTime{} = from, %NaiveDateTime{} = to),
     do: format_secs(NaiveDateTime.diff(to, from))
