@@ -7,6 +7,65 @@ defmodule RzeczywiscieWeb.AdminLiveTest do
     assert get(conn, "/admin").status == 401
   end
 
+  describe "email alerts panel" do
+    setup %{conn: conn} do
+      %{conn: Plug.Test.init_test_session(conn, %{admin_authed: true})}
+    end
+
+    test "creates an alert from the form and lists it", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/admin")
+
+      html =
+        view
+        |> form("form[phx-submit='alert_create']", %{
+          "name" => "Rzeszów flats",
+          "voivodeship" => "podkarpackie",
+          "max_price" => "450000",
+          "city" => "",
+          "transaction_type" => "sprzedaż",
+          "property_type" => "",
+          "min_area" => ""
+        })
+        |> render_submit()
+
+      assert html =~ "Rzeszów flats"
+      assert html =~ "voivodeship: podkarpackie"
+      assert html =~ "max price: 450000"
+      # blank fields must not become criteria that match nothing
+      refute html =~ "city:"
+
+      assert [alert] = Rzeczywiscie.Alerts.list_alerts()
+      assert alert.name == "Rzeszów flats"
+      assert alert.enabled
+    end
+
+    test "surfaces a validation error instead of silently dropping the alert", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/admin")
+
+      html =
+        view
+        |> form("form[phx-submit='alert_create']", %{"name" => "", "voivodeship" => ""})
+        |> render_submit()
+
+      assert html =~ "name can&#39;t be blank"
+      assert Rzeczywiscie.Alerts.list_alerts() == []
+    end
+
+    test "pauses and deletes an alert", %{conn: conn} do
+      # created before the mount so the row is on the page the test clicks
+      {:ok, alert} = Rzeczywiscie.Alerts.create_alert(%{name: "Temporary", criteria: %{}})
+      {:ok, view, html} = live(conn, "/admin")
+      assert html =~ "Temporary"
+
+      html = view |> element("button[phx-click='alert_toggle'][phx-value-id='#{alert.id}']") |> render_click()
+      assert html =~ "paused"
+      refute Rzeczywiscie.Alerts.get_alert(alert.id).enabled
+
+      view |> element("button[phx-click='alert_delete'][phx-value-id='#{alert.id}']") |> render_click()
+      assert Rzeczywiscie.Alerts.get_alert(alert.id) == nil
+    end
+  end
+
   test "job queue panel shows executing jobs and runtime advances on tick", %{conn: conn} do
     Ecto.Adapters.SQL.query!(Rzeczywiscie.Repo, """
     INSERT INTO oban_jobs

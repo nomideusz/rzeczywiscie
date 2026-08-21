@@ -4,6 +4,7 @@ defmodule RzeczywiscieWeb.RealEstateLive do
 
   require Logger
   alias Rzeczywiscie.RealEstate
+  alias Rzeczywiscie.RealEstate.Voivodeships
   alias Rzeczywiscie.Services.AirQuality
 
   # Temporary assigns: properties don't accumulate in LiveView state
@@ -54,6 +55,9 @@ defmodule RzeczywiscieWeb.RealEstateLive do
             with_coords: @total_with_coords,
             with_aqi: @total_with_aqi
           },
+          voivodeships: Voivodeships.select_options(),
+          selected_voivodeship: @selected_voivodeship,
+          map_center: @map_center,
           user_id: @user_id
         }}
         socket={@socket}
@@ -273,12 +277,23 @@ defmodule RzeczywiscieWeb.RealEstateLive do
     end
 
     socket
+    |> assign_region(filters)
     |> assign(:properties, serialized_properties)
     |> assign(:all_map_properties, serialized_map_properties)
     |> assign(:total_count, total_count)
     |> assign(:total_pages, ceil(total_count / page_size))
     |> assign(:total_with_coords, with_coords)
     |> assign(:total_with_aqi, with_aqi)
+  end
+
+  # Which region the user is looking at: drives the header subtitle and the
+  # map's fallback center (the map itself fits bounds once markers exist)
+  defp assign_region(socket, filters) do
+    region = Voivodeships.get(Map.get(filters, :voivodeship))
+
+    socket
+    |> assign(:selected_voivodeship, region && region.name)
+    |> assign(:map_center, (region || Voivodeships.default()).center)
   end
 
   defp load_map_properties(socket) do

@@ -1,10 +1,14 @@
 defmodule Rzeczywiscie.Scrapers.OtodomScraper do
   @moduledoc """
-  Scraper for Otodom.pl real estate listings in Malopolskie region.
+  Scraper for Otodom.pl real estate listings.
+
+  Covers every voivodeship in `Rzeczywiscie.RealEstate.Voivodeships` (currently
+  małopolskie and podkarpackie); each region is a path segment in the search URL.
   """
 
   require Logger
   alias Rzeczywiscie.RealEstate
+  alias Rzeczywiscie.RealEstate.Voivodeships
   alias Rzeczywiscie.Scrapers.ExtractionHelpers
 
   @base_url "https://www.otodom.pl"
@@ -19,29 +23,33 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
   ]
 
   @doc """
-  Scrape properties from Otodom for Malopolskie region.
+  Scrape properties from Otodom.
 
   ## Options
-    * `:pages` - Number of pages to scrape per transaction type (default: 1)
+    * `:pages` - Number of pages to scrape per search (default: 1)
     * `:delay` - Delay between requests in milliseconds (default: 5000)
     * `:enrich` - If true, auto-enriches properties missing data after scraping (default: false)
+    * `:voivodeships` - Regions to scrape, by name or slug (default: all supported regions)
   """
   def scrape(opts \\ []) do
     pages = Keyword.get(opts, :pages, 1)
     delay = Keyword.get(opts, :delay, 5000)
     enrich = Keyword.get(opts, :enrich, false)
     progress = Keyword.get(opts, :progress, fn _msg -> :ok end)
+    voivodeships = Voivodeships.resolve(Keyword.get(opts, :voivodeships))
 
-    Logger.info("Starting Otodom scrape for Malopolskie region, #{pages} page(s) per search")
+    region_labels = voivodeships |> Enum.map(& &1.label) |> Enum.join(", ")
+    Logger.info("Starting Otodom scrape for #{region_labels}, #{pages} page(s) per search")
 
-    search_count = length(@searches)
+    searches = for v <- voivodeships, {transaction, estate} <- @searches, do: {v, transaction, estate}
+    search_count = length(searches)
 
     all_results =
-      @searches
+      searches
       |> Enum.with_index(1)
-      |> Enum.flat_map(fn {{transaction, estate}, i} ->
-        progress.("search #{i}/#{search_count} (#{transaction}/#{estate})…")
-        scrape_search(transaction, estate, pages, delay)
+      |> Enum.flat_map(fn {{voivodeship, transaction, estate}, i} ->
+        progress.("search #{i}/#{search_count} (#{voivodeship.label} #{transaction}/#{estate})…")
+        scrape_search(voivodeship, transaction, estate, pages, delay)
       end)
     
     # Save results
@@ -186,8 +194,8 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
   # NOTE: Deep scrape code removed - use :enrich option instead for reliable data extraction
   # The PropertyRescraper does a better job of parsing individual detail pages
 
-  defp scrape_search(transaction, estate, pages, delay) do
-    base_url = "#{@base_url}/pl/wyniki/#{transaction}/#{estate}/malopolskie"
+  defp scrape_search(voivodeship, transaction, estate, pages, delay) do
+    base_url = "#{@base_url}/pl/wyniki/#{transaction}/#{estate}/#{voivodeship.otodom_slug}"
 
     1..pages
     |> Enum.flat_map(fn page ->
@@ -195,8 +203,8 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
 
       case fetch_page(url) do
         {:ok, html} ->
-          properties = parse_listings(html)
-          Logger.info("Scraped #{transaction}/#{estate} page #{page}: found #{length(properties)} properties")
+          properties = parse_listings(html, voivodeship)
+          Logger.info("Scraped #{voivodeship.label} #{transaction}/#{estate} page #{page}: found #{length(properties)} properties")
 
           # Add delay between requests to be respectful
           if page < pages, do: Process.sleep(delay)
@@ -204,7 +212,7 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
           properties
 
         {:error, reason} ->
-          Logger.error("Failed to fetch #{transaction}/#{estate} page #{page}: #{inspect(reason)}")
+          Logger.error("Failed to fetch #{voivodeship.label} #{transaction}/#{estate} page #{page}: #{inspect(reason)}")
           []
       end
     end)
@@ -257,13 +265,13 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
 
   # Search results are embedded in the Next.js __NEXT_DATA__ script tag;
   # the page's JSON-LD only carries WebPage/WebSite metadata now.
-  defp parse_listings(html) do
+  defp parse_listings(html, voivodeship) do
     with {:ok, document} <- Floki.parse_document(html),
          [{_, _, [json]} | _] <- Floki.find(document, "script#__NEXT_DATA__"),
          {:ok, data} <- Jason.decode(json),
          items when is_list(items) <-
            get_in(data, ["props", "pageProps", "data", "searchAds", "items"]) do
-      items |> Enum.map(&parse_item/1) |> Enum.reject(&is_nil/1)
+      items |> Enum.map(&parse_item(&1, voivodeship)) |> Enum.reject(&is_nil/1)
     else
       other ->
         Logger.warning("Otodom: no searchAds items in __NEXT_DATA__: #{String.slice(inspect(other), 0, 200)}")
@@ -289,9 +297,9 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
 
   # Developer INVESTMENT entries are whole developments, not individual
   # listings (no url, no price) - skip them
-  defp parse_item(%{"estate" => "INVESTMENT"}), do: nil
+  defp parse_item(%{"estate" => "INVESTMENT"}, _voivodeship), do: nil
 
-  defp parse_item(%{"id" => id, "slug" => slug, "title" => title} = item) do
+  defp parse_item(%{"id" => id, "slug" => slug, "title" => title} = item, voivodeship) do
     address = get_in(item, ["location", "address"]) || %{}
 
     %{
@@ -309,7 +317,9 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
       city: get_in(address, ["city", "name"]),
       district: extract_district(item),
       street: get_in(address, ["street", "name"]),
-      voivodeship: "małopolskie",
+      # Prefer the region Otodom reports on the listing - border towns
+      # occasionally show up in a neighbouring region's results
+      voivodeship: extract_voivodeship(item) || voivodeship.name,
       image_url: get_in(item, ["images", Access.at(0), "medium"]),
       description: item["shortDescription"],
       raw_data: %{
@@ -318,7 +328,7 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
     }
   end
 
-  defp parse_item(item) do
+  defp parse_item(item, _voivodeship) do
     Logger.info("Skipping ad without id/slug/title: #{inspect(Map.keys(item))}")
     nil
   end
@@ -328,6 +338,16 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
 
   defp parse_number(v) when is_number(v), do: Decimal.new(to_string(v))
   defp parse_number(_), do: nil
+
+  defp extract_voivodeship(item) do
+    item
+    |> get_in(["location", "reverseGeocoding", "locations"])
+    |> List.wrap()
+    |> Enum.find_value(fn
+      %{"locationLevel" => "region", "name" => name} -> Voivodeships.normalize(name)
+      _ -> nil
+    end)
+  end
 
   defp extract_district(item) do
     item

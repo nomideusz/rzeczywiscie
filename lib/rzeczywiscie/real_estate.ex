@@ -6,6 +6,7 @@ defmodule Rzeczywiscie.RealEstate do
   import Ecto.Query, warn: false
   alias Rzeczywiscie.Repo
   alias Rzeczywiscie.RealEstate.Property
+  alias Rzeczywiscie.RealEstate.Voivodeships
   alias Rzeczywiscie.RealEstate.PriceHistory
   alias Rzeczywiscie.RealEstate.Favorite
 
@@ -41,6 +42,7 @@ defmodule Rzeczywiscie.RealEstate do
     * `:max_area` - Maximum area in sqm
     * `:rooms` - Filter by number of rooms
     * `:source` - Filter by source (olx, otodom, etc.)
+    * `:voivodeship` - Filter by voivodeship (name or slug, e.g. "podkarpackie")
     * `:transaction_type` - Filter by transaction type (sprzedaż, wynajem)
     * `:property_type` - Filter by property type (mieszkanie, dom, etc.)
     * `:sort_by` - Column to sort by (default: "inserted_at")
@@ -52,9 +54,8 @@ defmodule Rzeczywiscie.RealEstate do
     sort_by = Keyword.get(opts, :sort_by, "inserted_at")
     sort_direction = Keyword.get(opts, :sort_direction, "desc")
 
-    Property
-    |> maybe_only_active(opts)
-    |> apply_filters(opts)
+    opts
+    |> filter_query()
     |> apply_sorting(sort_by, sort_direction)
     |> limit(^Keyword.get(opts, :limit, 100))
     |> offset(^Keyword.get(opts, :offset, 0))
@@ -65,10 +66,21 @@ defmodule Rzeczywiscie.RealEstate do
   Count properties matching filters.
   """
   def count_properties(opts \\ []) do
+    opts
+    |> filter_query()
+    |> Repo.aggregate(:count)
+  end
+
+  @doc """
+  Build the listing query for a set of filters, without sorting or pagination.
+
+  Alerts run off this so a saved search matches exactly what the equivalent
+  filter on the listing page shows - there is one definition of "matching".
+  """
+  def filter_query(opts \\ []) do
     Property
     |> maybe_only_active(opts)
     |> apply_filters(opts)
-    |> Repo.aggregate(:count)
   end
 
   # admin passes include_inactive: true; everything else sees active only
@@ -117,6 +129,13 @@ defmodule Rzeczywiscie.RealEstate do
 
       {:city, city}, query when is_binary(city) and city != "" ->
         where(query, [p], ilike(p.city, ^"%#{city}%"))
+
+      {:voivodeship, voivodeship}, query when is_binary(voivodeship) and voivodeship != "" ->
+        # Accept either the stored name ("małopolskie") or the ASCII slug
+        case Voivodeships.normalize(voivodeship) do
+          nil -> query
+          name -> where(query, [p], p.voivodeship == ^name)
+        end
 
       {:min_price, min}, query when is_number(min) ->
         where(query, [p], p.price >= ^min)
@@ -208,6 +227,16 @@ defmodule Rzeczywiscie.RealEstate do
   end
 
   @doc """
+  Highest property id currently stored, or 0 when there are none.
+
+  Alerts use this as a watermark so a new saved search starts from the listings
+  that arrive after it, not the existing database.
+  """
+  def max_property_id do
+    Repo.aggregate(Property, :max, :id) || 0
+  end
+
+  @doc """
   Get a single property by ID.
   """
   def get_property(id) do
@@ -266,6 +295,8 @@ defmodule Rzeczywiscie.RealEstate do
     
     has_coords? = Map.get(attrs, :latitude) || Map.get(attrs, "latitude")
     district = Map.get(attrs, :district) || Map.get(attrs, "district")
+    city = Map.get(attrs, :city) || Map.get(attrs, "city")
+    voivodeship = Map.get(attrs, :voivodeship) || Map.get(attrs, "voivodeship")
     has_street? = case Map.get(attrs, :street) || Map.get(attrs, "street") do
       nil -> false
       "" -> false
@@ -285,9 +316,9 @@ defmodule Rzeczywiscie.RealEstate do
         # Has street address - let manual geocoding handle it for precision
         attrs
         
-      Geocoding.district_cached?(district) ->
+      Geocoding.district_cached?(district, voivodeship) ->
         # Use cached district coordinates (FREE, instant)
-        case Geocoding.geocode_property(%{district: district, street: nil, city: "Kraków", voivodeship: "małopolskie"}) do
+        case Geocoding.geocode_property(%{district: district, street: nil, city: city, voivodeship: voivodeship}) do
           {:ok, %{lat: lat, lng: lng}} ->
             require Logger
             Logger.debug("Auto-geocoded property in #{district} from cache")

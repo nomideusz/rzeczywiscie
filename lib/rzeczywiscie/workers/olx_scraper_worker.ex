@@ -4,14 +4,16 @@ defmodule Rzeczywiscie.Workers.OlxScraperWorker do
   Scheduled to run every 6 hours (regular) + every 8 hours (with enrichment).
   
   Options (via job args):
-    - pages: Number of pages to scrape (default: 3)
+    - pages: Number of pages to scrape per region (default: 3)
     - delay: Delay between requests in ms (default: 2000)
     - enrich: If true, auto-enriches missing data after scraping (default: false)
+    - voivodeships: Regions to scrape (default: all supported regions)
   """
 
   use Oban.Worker, queue: :scraper, max_attempts: 3
 
   require Logger
+  alias Rzeczywiscie.RealEstate.Voivodeships
   alias Rzeczywiscie.Scrapers.OlxScraper
 
   @impl Oban.Worker
@@ -19,12 +21,21 @@ defmodule Rzeczywiscie.Workers.OlxScraperWorker do
     pages = Map.get(args, "pages", 3)
     delay = Map.get(args, "delay", 2000)
     enrich = Map.get(args, "enrich", false)
+    voivodeships = Map.get(args, "voivodeships")
 
-    Logger.info("OlxScraperWorker starting: scraping #{pages} page(s)#{if enrich, do: " + enrichment", else: ""}")
+    regions = Voivodeships.resolve(voivodeships) |> Enum.map(& &1.label) |> Enum.join(", ")
+
+    Logger.info("OlxScraperWorker starting: scraping #{pages} page(s) of #{regions}#{if enrich, do: " + enrichment", else: ""}")
 
     progress = fn msg -> Rzeczywiscie.JobProgress.report(job, msg) end
 
-    case OlxScraper.scrape(pages: pages, delay: delay, enrich: enrich, progress: progress) do
+    case OlxScraper.scrape(
+           pages: pages,
+           delay: delay,
+           enrich: enrich,
+           voivodeships: voivodeships,
+           progress: progress
+         ) do
       {:ok, result} ->
         Logger.info("OlxScraperWorker completed: #{result.saved}/#{result.total} properties saved")
         progress.("done — #{result.saved}/#{result.total} properties saved")
@@ -41,15 +52,17 @@ defmodule Rzeczywiscie.Workers.OlxScraperWorker do
   Useful for testing or manual refreshes.
   
   Options:
-    - pages: Number of pages to scrape (default: 3)
+    - pages: Number of pages to scrape per region (default: 3)
     - delay: Delay between requests in ms (default: 2000)
     - enrich: If true, auto-enriches missing data after scraping (default: false)
+    - voivodeships: Regions to scrape (default: all supported regions)
   """
   def trigger(opts \\ []) do
     %{
       "pages" => Keyword.get(opts, :pages, 3),
       "delay" => Keyword.get(opts, :delay, 2000),
-      "enrich" => Keyword.get(opts, :enrich, false)
+      "enrich" => Keyword.get(opts, :enrich, false),
+      "voivodeships" => Keyword.get(opts, :voivodeships, Voivodeships.slugs())
     }
     |> __MODULE__.new()
     |> Oban.insert()

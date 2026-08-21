@@ -260,7 +260,7 @@ defmodule RzeczywiscieWeb.HomeLive do
               </h3>
 
               <p class="text-base opacity-70 mb-6 leading-relaxed">
-                Live property listings from OLX and Otodom for Małopolskie region. Auto-updating table with filters, search, and real-time notifications.
+                Live property listings from OLX and Otodom for the Małopolskie and Podkarpackie regions. Auto-updating table with filters, search, and real-time notifications.
               </p>
 
               <!-- Tags - raw style -->

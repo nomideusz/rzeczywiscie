@@ -45,6 +45,38 @@ Add each variable by clicking **"+ Add Environmental Variable"**:
 | `POOL_SIZE` | `10` | Database connection pool size |
 | `MIX_ENV` | `prod` | Production environment |
 
+### Email Alerts (optional)
+
+Saved-search alerts email new listings through our own Stalwart mail server.
+Leave these unset and the app runs normally — alerts collect matches but never
+send, and the admin panel shows "Mail not configured".
+
+| Key | Value | Notes |
+|-----|-------|-------|
+| `MAIL_SMTP_HOST` | `mail.zaur.app` | Stalwart submission endpoint |
+| `MAIL_SMTP_PORT` | `465` | Implicit TLS. See the note below before changing it |
+| `MAIL_SMTP_USERNAME` | `contact@kruk.live` | A real mailbox login (or a Stalwart app password) |
+| `MAIL_SMTP_PASSWORD` | `<mailbox password>` | Never commit this |
+| `MAIL_FROM` | `contact@kruk.live` | From address on outgoing alerts |
+| `MAIL_FROM_NAME` | `Kruk.live` | Display name; defaults to `Kruk.live` |
+| `ALERT_EMAIL_TO` | `contact@kruk.live` | Where digests are delivered; defaults to `MAIL_FROM` |
+
+**Use 465, not 587.** `srv-captain--mail` only exposes HTTP internally — there
+is no SMTP on port 25 inside CapRover — so mail goes out over the public
+submission endpoint with a mailbox login. Stalwart's 587/STARTTLS submission
+listener has historically not been reachable either. This mirrors what the
+`register` app in the `zaur` monorepo does (`INVITE_SMTP_*`).
+
+Two escape hatches exist for unusual deployments:
+
+| Key | Value | Notes |
+|-----|-------|-------|
+| `MAIL_SMTP_TLS_SERVERNAME` | `mail.zaur.app` | Override SNI when connecting through a relay alias |
+| `MAIL_SMTP_INSECURE` | `true` | Skip certificate verification (self-signed certs only) |
+
+After setting these, open `/admin` → **Email Alerts** → **Send test** to verify
+the whole path before relying on it.
+
 ## Step 4: Database Setup
 
 ### Option A: Using CapRover PostgreSQL One-Click App
@@ -171,6 +203,7 @@ Mark these off as you set them:
 - [ ] `DATABASE_URL=<your database url>`
 - [ ] `PHX_HOST=rzeczywiscie.zaur.app`
 - [ ] `PORT=80`
+- [ ] `MAIL_SMTP_*` + `ALERT_EMAIL_TO` (only if you want email alerts)
 - [ ] Database created
 - [ ] Migrations run
 - [ ] App restarted

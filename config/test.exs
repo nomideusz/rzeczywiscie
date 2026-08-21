@@ -23,6 +23,12 @@ config :rzeczywiscie, RzeczywiscieWeb.Endpoint,
 # In test we don't send emails
 config :rzeczywiscie, Rzeczywiscie.Mailer, adapter: Swoosh.Adapters.Test
 
+# Alerts consider mail configured when a from address and a recipient exist
+config :rzeczywiscie, :mail,
+  from: "alerts@example.test",
+  from_name: "Kruk.live",
+  alert_to: "owner@example.test"
+
 # Disable Oban plugins and cron during tests
 config :rzeczywiscie, Oban, testing: :manual
 
