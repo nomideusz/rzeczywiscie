@@ -2,11 +2,15 @@ defmodule Rzeczywiscie.Services.Geocoding do
   @moduledoc """
   Google Geocoding API integration to convert addresses to coordinates.
   
-  Includes location coordinate caching for Małopolskie region to avoid redundant API calls
-  for properties without street addresses.
+  Includes location coordinate caching per covered voivodeship (Małopolskie,
+  Podkarpackie) to avoid redundant API calls for properties without street
+  addresses. Lookups are scoped to the property's voivodeship when known, so
+  place names shared between regions ("Biała", "Stara Wieś") resolve correctly.
   """
 
   require Logger
+
+  alias Rzeczywiscie.RealEstate.Voivodeships
 
   @base_url "https://maps.googleapis.com/maps/api/geocode/json"
   
@@ -201,6 +205,125 @@ defmodule Rzeczywiscie.Services.Geocoding do
     "brzeźnica" => {49.9700, 19.6100}
   }
 
+  # Pre-computed coordinates for Podkarpackie locations - same idea as above
+  # Includes: Rzeszów districts (osiedla), powiat towns and notable localities
+  @podkarpackie_coords %{
+    # === RZESZÓW DISTRICTS (osiedla) ===
+    "śródmieście" => {50.0410, 21.9990},
+    "baranówka" => {50.0300, 22.0250},
+    "nowe miasto" => {50.0230, 22.0150},
+    "staromieście" => {50.0600, 21.9950},
+    "pobitno" => {50.0430, 22.0250},
+    "załęże" => {50.0480, 22.0400},
+    "drabinianka" => {50.0150, 22.0100},
+    "zalesie" => {50.0550, 22.0300},
+    "słocina" => {50.0350, 22.0450},
+    "przybyszówka" => {50.0350, 21.9300},
+    "wilkowyja" => {50.0250, 22.0350},
+    "staroniwa" => {50.0300, 21.9650},
+    "budziwój" => {49.9900, 22.0300},
+    "zwięczyca" => {49.9950, 21.9750},
+    "miłocin" => {50.0800, 21.9750},
+    "bzianka" => {50.0400, 21.8900},
+    "krakowska-południe" => {50.0300, 21.9800},
+    "tysiąclecia" => {50.0350, 21.9900},
+    "piastów" => {50.0380, 22.0080},
+    "mieszka i" => {50.0300, 22.0180},
+    "generała andersa" => {50.0180, 22.0270},
+    "paderewskiego" => {50.0450, 22.0120},
+    "kmity" => {50.0500, 22.0170},
+    "dąbrowskiego" => {50.0450, 21.9850},
+    "grota-roweckiego" => {50.0250, 22.0000},
+    "króla augusta" => {50.0330, 22.0330},
+
+    # === MAJOR CITIES ===
+    "rzeszów" => {50.0413, 21.9990},
+    "przemyśl" => {49.7838, 22.7677},
+    "stalowa wola" => {50.5826, 22.0537},
+    "mielec" => {50.2874, 21.4239},
+    "tarnobrzeg" => {50.5731, 21.6790},
+    "krosno" => {49.6886, 21.7706},
+    "dębica" => {50.0516, 21.4111},
+    "jarosław" => {50.0167, 22.6778},
+    "sanok" => {49.5558, 22.2059},
+    "jasło" => {49.7450, 21.4719},
+    "łańcut" => {50.0686, 22.2294},
+    "przeworsk" => {50.0589, 22.4939},
+    "nisko" => {50.5200, 22.1400},
+    "leżajsk" => {50.2617, 22.4200},
+    "lubaczów" => {50.1575, 23.1236},
+    "ropczyce" => {50.0525, 21.6100},
+    "kolbuszowa" => {50.2422, 21.7783},
+    "ustrzyki dolne" => {49.4300, 22.5900},
+    "strzyżów" => {49.8720, 21.7900},
+    "brzozów" => {49.6950, 22.0200},
+    "lesko" => {49.4700, 22.3300},
+
+    # === TOWNS & LARGER VILLAGES ===
+    "nowa dęba" => {50.4300, 21.7500},
+    "nowa sarzyna" => {50.3300, 22.3400},
+    "głogów małopolski" => {50.1600, 21.9600},
+    "boguchwała" => {49.9800, 21.9400},
+    "tyczyn" => {49.9600, 22.0400},
+    "sędziszów małopolski" => {50.0700, 21.7000},
+    "radymno" => {49.9900, 22.7300},
+    "dynów" => {49.8200, 22.2300},
+    "rymanów" => {49.5760, 21.8600},
+    "iwonicz-zdrój" => {49.5700, 21.7900},
+    "dukla" => {49.5570, 21.6840},
+    "jedlicze" => {49.7200, 21.6500},
+    "korczyna" => {49.7200, 21.8100},
+    "miejsce piastowe" => {49.6500, 21.8200},
+    "zagórz" => {49.5100, 22.2700},
+    "baligród" => {49.3300, 22.2800},
+    "cisna" => {49.2100, 22.3200},
+    "komańcza" => {49.3400, 22.0700},
+    "polańczyk" => {49.3800, 22.3600},
+    "solina" => {49.4000, 22.4500},
+    "lutowiska" => {49.2500, 22.6800},
+    "wetlina" => {49.1600, 22.4900},
+    "ustrzyki górne" => {49.0900, 22.6400},
+    "haczów" => {49.6700, 21.9200},
+    "besko" => {49.5600, 21.9500},
+    "bircza" => {49.6800, 22.4800},
+    "krasiczyn" => {49.7700, 22.6400},
+    "medyka" => {49.8000, 22.9200},
+    "pruchnik" => {49.9000, 22.5200},
+    "kańczuga" => {49.9800, 22.4100},
+    "sieniawa" => {50.1800, 22.6100},
+    "oleszyce" => {50.1600, 23.0300},
+    "cieszanów" => {50.2500, 23.1300},
+    "narol" => {50.3400, 23.3300},
+    "horyniec-zdrój" => {50.1900, 23.3500},
+    "rudnik nad sanem" => {50.4400, 22.2500},
+    "ulanów" => {50.4900, 22.2600},
+    "jeżowe" => {50.4300, 22.1500},
+    "pysznica" => {50.5700, 22.1300},
+    "zaleszany" => {50.6100, 21.8800},
+    "gorzyce" => {50.5100, 21.7700},
+    "baranów sandomierski" => {50.5000, 21.5400},
+    "radomyśl wielki" => {50.1900, 21.3000},
+    "przecław" => {50.1900, 21.4700},
+    "pilzno" => {49.9800, 21.2900},
+    "brzostek" => {49.8800, 21.4100},
+    "kołaczyce" => {49.8100, 21.4400},
+    "nowy żmigród" => {49.6100, 21.5200},
+    "frysztak" => {49.8300, 21.6100},
+    "niebylec" => {49.8300, 21.8900},
+    "czudec" => {49.9500, 21.8300},
+    "błażowa" => {49.8700, 22.1100},
+    "sokołów małopolski" => {50.2300, 22.1200},
+    "trzebownisko" => {50.0800, 22.0500},
+    "jasionka" => {50.1100, 22.0300},
+    "świlcza" => {50.0500, 21.8800}
+  }
+
+  # Every covered region's cache, keyed by the canonical voivodeship name
+  @coords_by_voivodeship %{
+    "małopolskie" => @malopolskie_coords,
+    "podkarpackie" => @podkarpackie_coords
+  }
+
   @doc """
   Geocode an address to get latitude and longitude.
 
@@ -254,6 +377,8 @@ defmodule Rzeczywiscie.Services.Geocoding do
   """
   def geocode_property(property) do
     has_street? = property.street && property.street != "" && String.length(property.street) > 3
+    voivodeship = Map.get(property, :voivodeship)
+    region_label = region_label(voivodeship)
     
     cond do
       # If we have a street, use full geocoding for precision
@@ -262,23 +387,23 @@ defmodule Rzeczywiscie.Services.Geocoding do
         if address && address != "", do: geocode(address), else: {:error, :insufficient_location_data}
       
       # Check district cache first (more specific)
-      cached = lookup_cached_coords(property.district) ->
+      cached = lookup_cached_coords(property.district, voivodeship) ->
         {lat, lng} = cached
         Logger.debug("Using cached coordinates for district: #{property.district}")
         {:ok, %{
           lat: Decimal.from_float(lat),
           lng: Decimal.from_float(lng),
-          formatted_address: "#{property.district}, #{property.city || "Małopolskie"}, Poland"
+          formatted_address: "#{property.district}, #{property.city || region_label}, Poland"
         }}
       
       # Then check city cache (for standalone cities/towns)
-      cached = lookup_cached_coords(property.city) ->
+      cached = lookup_cached_coords(property.city, voivodeship) ->
         {lat, lng} = cached
         Logger.debug("Using cached coordinates for city: #{property.city}")
         {:ok, %{
           lat: Decimal.from_float(lat),
           lng: Decimal.from_float(lng),
-          formatted_address: "#{property.city}, Małopolskie, Poland"
+          formatted_address: "#{property.city}, #{region_label}, Poland"
         }}
       
       # Not cached - try API with best available location data
@@ -300,18 +425,27 @@ defmodule Rzeczywiscie.Services.Geocoding do
   
   @doc """
   Check if a location (district or city) is cached.
+
+  Pass the property's voivodeship to scope the lookup to that region; without
+  one every covered region is searched, in registry order.
   """
-  def location_cached?(location) do
-    lookup_cached_coords(location) != nil
+  def location_cached?(location, voivodeship \\ nil) do
+    lookup_cached_coords(location, voivodeship) != nil
   end
   
   # Keep old function name for backward compatibility
-  def district_cached?(district), do: location_cached?(district)
+  def district_cached?(district, voivodeship \\ nil),
+    do: location_cached?(district, voivodeship)
   
   @doc """
-  List all cached locations.
+  List all cached locations, optionally for a single voivodeship.
   """
-  def cached_locations, do: Map.keys(@malopolskie_coords)
+  def cached_locations(voivodeship \\ nil) do
+    voivodeship
+    |> coords_for()
+    |> Enum.flat_map(&Map.keys/1)
+  end
+
   def cached_districts, do: cached_locations()
   
   defp normalize_location(nil), do: nil
@@ -322,20 +456,24 @@ defmodule Rzeczywiscie.Services.Geocoding do
     |> String.trim()
   end
   
-  # Try to find location in cache, handling diacritic variations
-  defp lookup_cached_coords(nil), do: nil
-  defp lookup_cached_coords(location) do
-    normalized = normalize_location(location)
-    
-    # First try exact match (after lowercase)
-    case Map.get(@malopolskie_coords, normalized) do
-      nil ->
-        # Try without diacritics
-        ascii_key = strip_diacritics(normalized)
-        find_by_ascii_key(ascii_key)
-      coords -> 
-        coords
+  # Caches to search: just the property's region when known, all of them otherwise
+  defp coords_for(voivodeship) do
+    case Voivodeships.normalize(voivodeship) do
+      nil -> Enum.map(Voivodeships.names(), &Map.fetch!(@coords_by_voivodeship, &1))
+      name -> [Map.fetch!(@coords_by_voivodeship, name)]
     end
+  end
+
+  # Try to find location in cache, handling diacritic variations
+  defp lookup_cached_coords(nil, _voivodeship), do: nil
+  defp lookup_cached_coords(location, voivodeship) do
+    normalized = normalize_location(location)
+    ascii_key = strip_diacritics(normalized)
+    
+    Enum.find_value(coords_for(voivodeship), fn coords ->
+      # First try exact match (after lowercase), then without diacritics
+      Map.get(coords, normalized) || find_by_ascii_key(coords, ascii_key)
+    end)
   end
   
   defp strip_diacritics(str) do
@@ -351,11 +489,19 @@ defmodule Rzeczywiscie.Services.Geocoding do
     |> String.replace("ź", "z")
   end
   
-  defp find_by_ascii_key(ascii_key) do
+  defp find_by_ascii_key(coords_map, ascii_key) do
     # Search through cache keys, strip diacritics from each and compare
-    Enum.find_value(@malopolskie_coords, fn {key, coords} ->
+    Enum.find_value(coords_map, fn {key, coords} ->
       if strip_diacritics(key) == ascii_key, do: coords, else: nil
     end)
+  end
+
+  # Display label for a region, falling back to the default coverage area
+  defp region_label(voivodeship) do
+    case Voivodeships.get(voivodeship) do
+      nil -> Voivodeships.default().label
+      region -> region.label
+    end
   end
 
   defp build_address_string(property) do
@@ -363,7 +509,7 @@ defmodule Rzeczywiscie.Services.Geocoding do
       property.street,
       property.district,
       property.city,
-      property.voivodeship || "małopolskie",
+      Map.get(property, :voivodeship) || Voivodeships.default().name,
       "Poland"
     ]
 

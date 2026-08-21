@@ -1,17 +1,20 @@
 defmodule Rzeczywiscie.Scrapers.OlxScraper do
   @moduledoc """
-  Scraper for OLX.pl real estate listings in Malopolskie region.
+  Scraper for OLX.pl real estate listings.
+
+  Covers every voivodeship in `Rzeczywiscie.RealEstate.Voivodeships` (currently
+  małopolskie and podkarpackie); each region maps to an OLX `region_id`.
   """
 
   require Logger
   alias Rzeczywiscie.RealEstate
+  alias Rzeczywiscie.RealEstate.Voivodeships
 
   @base_url "https://www.olx.pl"
   # OLX search pages are client-side rendered now (no listing HTML to scrape),
   # so we use the same JSON API the site itself calls.
   @api_url "#{@base_url}/api/v1/offers/"
   @category_nieruchomosci 3
-  @region_malopolskie 4
   @page_size 50
   @user_agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
@@ -42,40 +45,27 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
   }
 
   @doc """
-  Scrape properties from OLX for Malopolskie region.
+  Scrape properties from OLX.
 
   ## Options
-    * `:pages` - Number of pages to scrape (default: 1)
+    * `:pages` - Number of pages to scrape per region (default: 1)
     * `:delay` - Delay between requests in milliseconds (default: 2000)
     * `:enrich` - If true, auto-enriches properties missing data after scraping (default: false)
+    * `:voivodeships` - Regions to scrape, by name or slug (default: all supported regions)
   """
   def scrape(opts \\ []) do
     pages = Keyword.get(opts, :pages, 1)
     delay = Keyword.get(opts, :delay, 2000)
     enrich = Keyword.get(opts, :enrich, false)
     progress = Keyword.get(opts, :progress, fn _msg -> :ok end)
+    voivodeships = Voivodeships.resolve(Keyword.get(opts, :voivodeships))
 
-    Logger.info("Starting OLX scrape for Malopolskie region, #{pages} page(s)")
+    region_labels = voivodeships |> Enum.map(& &1.label) |> Enum.join(", ")
+    Logger.info("Starting OLX scrape for #{region_labels}, #{pages} page(s) per region")
 
     results =
-      1..pages
-      |> Enum.flat_map(fn page ->
-        case fetch_page(page) do
-          {:ok, ads} ->
-            properties = ads |> Enum.map(&parse_ad/1) |> Enum.reject(&is_nil/1)
-            Logger.info("Scraped page #{page}: found #{length(properties)} properties")
-            progress.("page #{page}/#{pages} — #{length(properties)} found")
-
-            # Add delay between requests to be respectful
-            if page < pages, do: Process.sleep(delay)
-
-            properties
-
-          {:error, reason} ->
-            Logger.error("Failed to fetch page #{page}: #{inspect(reason)}")
-            progress.("page #{page}/#{pages} — failed: #{inspect(reason)}")
-            []
-        end
+      Enum.flat_map(voivodeships, fn voivodeship ->
+        scrape_region(voivodeship, pages, delay, progress)
       end)
 
     # Save results
@@ -216,14 +206,43 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
     {:ok, %{total: length(results), saved: successful}}
   end
 
-  defp fetch_page(page) do
+  defp scrape_region(voivodeship, pages, delay, progress) do
+    1..pages
+    |> Enum.flat_map(fn page ->
+      case fetch_page(page, voivodeship) do
+        {:ok, ads} ->
+          properties =
+            ads
+            |> Enum.map(&parse_ad(&1, voivodeship))
+            |> Enum.reject(&is_nil/1)
+
+          Logger.info(
+            "Scraped #{voivodeship.label} page #{page}: found #{length(properties)} properties"
+          )
+
+          progress.("#{voivodeship.label} page #{page}/#{pages} — #{length(properties)} found")
+
+          # Add delay between requests to be respectful
+          if page < pages, do: Process.sleep(delay)
+
+          properties
+
+        {:error, reason} ->
+          Logger.error("Failed to fetch #{voivodeship.label} page #{page}: #{inspect(reason)}")
+          progress.("#{voivodeship.label} page #{page}/#{pages} — failed: #{inspect(reason)}")
+          []
+      end
+    end)
+  end
+
+  defp fetch_page(page, voivodeship) do
     offset = (page - 1) * @page_size
-    Logger.info("Fetching OLX API page #{page} (offset #{offset})")
+    Logger.info("Fetching OLX API page #{page} for #{voivodeship.label} (offset #{offset})")
 
     case Req.get(@api_url,
            params: [
              category_id: @category_nieruchomosci,
-             region_id: @region_malopolskie,
+             region_id: voivodeship.olx_region_id,
              limit: @page_size,
              offset: offset
            ],
@@ -241,7 +260,7 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
     end
   end
 
-  defp parse_ad(%{"id" => id, "url" => url, "title" => title} = ad) do
+  defp parse_ad(%{"id" => id, "url" => url, "title" => title} = ad, voivodeship) do
     params = Map.new(ad["params"] || [], fn %{"key" => k, "value" => v} -> {k, v} end)
     price = parse_decimal(get_in(params, ["price", "value"]))
 
@@ -266,7 +285,10 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
       property_type: ptype || extract_property_type(search_text),
       city: get_in(location, ["city", "name"]),
       district: get_in(location, ["district", "name"]),
-      voivodeship: "małopolskie",
+      # Prefer the region OLX reports on the ad - border towns occasionally
+      # show up in a neighbouring region's results
+      voivodeship:
+        Voivodeships.normalize(get_in(location, ["region", "name"])) || voivodeship.name,
       latitude: lat,
       longitude: lon,
       image_url: extract_image(ad["photos"]),
@@ -277,7 +299,7 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
     }
   end
 
-  defp parse_ad(ad) do
+  defp parse_ad(ad, _voivodeship) do
     Logger.info("Skipping ad without id/url/title: #{inspect(Map.keys(ad))}")
     nil
   end

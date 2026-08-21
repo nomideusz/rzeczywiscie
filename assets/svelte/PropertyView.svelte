@@ -6,6 +6,9 @@
   export let map_properties = []
   export let pagination = { page: 1, page_size: 50, total_count: 0, total_pages: 1 }
   export let stats = { total_count: 0, with_coords: 0, with_aqi: 0 }
+  export let voivodeships = [] // [{value, label, slug, center}] - regions we cover
+  export let selected_voivodeship = null
+  export let map_center = null // fallback map center for the selected region
   export let user_id = null
   export let live
 
@@ -25,6 +28,12 @@
     selectedPropertyId = propertyId
     switchView('map')
   }
+
+  // Header subtitle: the filtered region, or everything we cover
+  $: regionLabel =
+    (voivodeships.find(v => v.value === selected_voivodeship) || {}).label ||
+    voivodeships.map(v => v.label).join(' · ') ||
+    'Poland'
 
   // Calculate percentages for stats
   $: coordsPercent = stats.total_count > 0 ? Math.round((stats.with_coords / stats.total_count) * 100) : 0
@@ -64,7 +73,7 @@
             Properties
           </h1>
           <p class="text-xs md:text-sm font-bold uppercase tracking-wide opacity-60">
-            Małopolskie Region
+            {regionLabel}
           </p>
         </div>
 
@@ -138,11 +147,11 @@
   <!-- Main Content -->
   <div class="container mx-auto px-4 py-6">
     {#if currentView === 'table'}
-      <PropertyTable {properties} {pagination} {user_id} {live} viewMode="table" on:viewOnMap={handleViewOnMap} />
+      <PropertyTable {properties} {pagination} {user_id} {live} {voivodeships} {selected_voivodeship} viewMode="table" on:viewOnMap={handleViewOnMap} />
     {:else if currentView === 'cards'}
-      <PropertyTable {properties} {pagination} {user_id} {live} viewMode="cards" on:viewOnMap={handleViewOnMap} />
+      <PropertyTable {properties} {pagination} {user_id} {live} {voivodeships} {selected_voivodeship} viewMode="cards" on:viewOnMap={handleViewOnMap} />
     {:else}
-      <PropertyMap properties={map_properties} {live} {selectedPropertyId} />
+      <PropertyMap properties={map_properties} {live} {selectedPropertyId} defaultCenter={map_center} />
     {/if}
   </div>
 </div>

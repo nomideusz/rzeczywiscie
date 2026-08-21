@@ -6,12 +6,15 @@
   export let live
   export let user_id = null
   export let viewMode = 'table' // 'table' or 'cards'
+  export let voivodeships = [] // [{value, label, slug, center}] - regions we cover
+  export let selected_voivodeship = null
 
   const dispatch = createEventDispatcher()
 
   let sortColumn = 'inserted_at'
   let sortDirection = 'desc'
   let filterSearch = ''
+  let filterVoivodeship = selected_voivodeship || ''
   let filterCity = ''
   let filterMinPrice = ''
   let filterMaxPrice = ''
@@ -27,16 +30,20 @@
 
   // Computed: Check if any filters are active
   $: hasActiveFilters = !!(
-    filterSearch || filterCity || filterMinPrice || filterMaxPrice ||
+    filterSearch || filterVoivodeship || filterCity || filterMinPrice || filterMaxPrice ||
     filterMinArea || filterMaxArea || filterRooms || filterSource ||
     filterTransactionType || filterPropertyType
   )
 
   // Computed: Count active filters
   $: activeFilterCount = [
-    filterSearch, filterCity, filterMinPrice, filterMaxPrice, filterMinArea,
+    filterSearch, filterVoivodeship, filterCity, filterMinPrice, filterMaxPrice, filterMinArea,
     filterMaxArea, filterRooms, filterSource, filterTransactionType, filterPropertyType
   ].filter(Boolean).length
+
+  // Label for the region chip
+  $: selectedVoivodeshipLabel =
+    (voivodeships.find(v => v.value === filterVoivodeship) || {}).label || filterVoivodeship
 
   // Check if listing is new (added in last 24 hours)
   function isNew(dateString) {
@@ -172,6 +179,7 @@
   function applyFilters() {
     const filters = {}
     if (filterSearch) filters.search = filterSearch
+    if (filterVoivodeship) filters.voivodeship = filterVoivodeship
     if (filterCity) filters.city = filterCity
     if (filterMinPrice) filters.min_price = parseFloat(filterMinPrice)
     if (filterMaxPrice) filters.max_price = parseFloat(filterMaxPrice)
@@ -186,6 +194,7 @@
 
   function resetFilters() {
     filterSearch = ''
+    filterVoivodeship = ''
     filterCity = ''
     filterMinPrice = ''
     filterMaxPrice = ''
@@ -263,6 +272,29 @@
 <div>
   <!-- Filters Section - Mobile Optimized -->
   <div class="bg-base-100 border-2 border-base-content mb-6">
+    <!-- Region - only worth showing while we cover more than one voivodeship -->
+    {#if voivodeships.length > 1}
+      <div class="flex items-center border-b-2 border-base-content">
+        <span class="px-2 md:px-3 py-2 text-[10px] font-bold uppercase tracking-wide opacity-50 bg-base-200 shrink-0">Region</span>
+        <div class="flex flex-1 overflow-x-auto scrollbar-hide">
+          <button
+            onclick={() => { filterVoivodeship = ''; applyFilters() }}
+            class="px-2 md:px-3 py-2 text-xs font-bold transition-colors cursor-pointer border-l border-base-content/30 whitespace-nowrap {filterVoivodeship === '' ? 'bg-base-content text-base-100' : 'hover:bg-base-200'}"
+          >
+            All
+          </button>
+          {#each voivodeships as voivodeship}
+            <button
+              onclick={() => { filterVoivodeship = voivodeship.value; applyFilters() }}
+              class="px-2 md:px-3 py-2 text-xs font-bold transition-colors cursor-pointer border-l border-base-content/30 whitespace-nowrap {filterVoivodeship === voivodeship.value ? 'bg-base-content text-base-100' : 'hover:bg-base-200'}"
+            >
+              {voivodeship.label}
+            </button>
+          {/each}
+        </div>
+      </div>
+    {/if}
+
     <!-- Mobile: Stacked layout, Desktop: Row layout -->
     <div class="flex flex-col md:flex-row md:items-stretch border-b-2 border-base-content">
       <!-- Transaction Type -->
@@ -357,6 +389,12 @@
           <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-bold bg-primary text-primary-content">
             "{filterSearch}"
             <button onclick={() => { filterSearch = ''; applyFilters() }} class="hover:opacity-70 cursor-pointer">×</button>
+          </span>
+        {/if}
+        {#if filterVoivodeship}
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-bold bg-accent text-accent-content">
+            {selectedVoivodeshipLabel}
+            <button onclick={() => { filterVoivodeship = ''; applyFilters() }} class="hover:opacity-70 cursor-pointer">×</button>
           </span>
         {/if}
         {#if filterCity}

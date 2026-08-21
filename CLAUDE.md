@@ -2,13 +2,14 @@
 
 ## Project Overview
 
-**Kruk.live** is a real estate listing aggregator for the Małopolskie region of Poland, built with Phoenix 1.8.1 and LiveSvelte 0.16.0 (Svelte 5). It scrapes property listings from OLX and Otodom, stores them in PostgreSQL, and provides a modern web interface for browsing, filtering, and favoriting properties.
+**Kruk.live** is a real estate listing aggregator for the Małopolskie and Podkarpackie regions of Poland, built with Phoenix 1.8.1 and LiveSvelte 0.16.0 (Svelte 5). It scrapes property listings from OLX and Otodom, stores them in PostgreSQL, and provides a modern web interface for browsing, filtering, and favoriting properties.
 
 **Key Features:**
 - 🏠 **Property Listings**: Browse thousands of real estate listings from multiple sources
+- 🗾 **Multi-region**: Małopolskie and Podkarpackie, filterable per voivodeship
 - ⭐ **Favorites**: Save properties with persistent user sessions (browser fingerprint)
 - 🗺️ **Map View**: Interactive map showing properties with coordinates
-- 🔍 **Advanced Filters**: Filter by city, price, area, transaction type, property type, source
+- 🔍 **Advanced Filters**: Filter by region, city, price, area, transaction type, property type, source
 - 🌬️ **Air Quality Data**: Automatic AQI lookup for properties with coordinates
 - 📊 **Statistics**: View aggregated data about listings
 - 🔄 **Auto-scraping**: Scheduled scraping from OLX and Otodom
@@ -127,6 +128,7 @@ create table(:properties) do
   add :rooms, :integer
   add :city, :string
   add :district, :string
+  add :voivodeship, :string  # "małopolskie", "podkarpackie"
   add :url, :text, null: false
   add :source, :string  # "olx", "otodom", "gratka"
   add :external_id, :string
@@ -148,6 +150,7 @@ create index(:properties, [:transaction_type])
 create index(:properties, [:property_type])
 create index(:properties, [:active, :inserted_at])
 create index(:properties, [:source])
+create index(:properties, [:voivodeship])
 create index(:properties, [:active, :latitude, :longitude])
 create unique_index(:properties, [:source, :external_id])
 ```
@@ -181,23 +184,46 @@ The application includes scrapers for OLX and Otodom that automatically extract 
 - `olx_scraper.ex` - Scrapes OLX.pl property listings
 - `otodom_scraper.ex` - Scrapes Otodom.pl property listings
 
+### Covered Regions
+
+Regions live in one place: `lib/rzeczywiscie/real_estate/voivodeships.ex`. Each
+entry carries everything region-specific — the canonical name stored in
+`properties.voivodeship`, the OLX `region_id`, the Otodom URL slug and a map
+center:
+
+| Region | Stored name | OLX `region_id` | Otodom slug |
+|---|---|---|---|
+| Małopolskie | `małopolskie` | 4 | `malopolskie` |
+| Podkarpackie | `podkarpackie` | 17 | `podkarpackie` |
+
+Adding another voivodeship means adding one entry there (plus, optionally, its
+locality coordinates in `Services.Geocoding`) — scrapers, workers, filters and
+the UI region picker all read from the registry.
+
 ### Running Scrapers
 
 ```elixir
-# Manually run scrapers
-iex> Rzeczywiscie.Scrapers.OlxScraper.scrape_properties()
-iex> Rzeczywiscie.Scrapers.OtodomScraper.scrape_properties()
+# Both scrapers cover every registered region by default
+iex> Rzeczywiscie.Scrapers.OlxScraper.scrape(pages: 3)
+iex> Rzeczywiscie.Scrapers.OtodomScraper.scrape(pages: 3)
 
-# Or via mix commands
-mix run -e "Rzeczywiscie.Scrapers.OlxScraper.scrape_properties()"
-mix run -e "Rzeczywiscie.Scrapers.OtodomScraper.scrape_properties()"
+# Restrict to one region
+iex> Rzeczywiscie.Scrapers.OlxScraper.scrape(pages: 3, voivodeships: ["podkarpackie"])
+iex> Rzeczywiscie.Scrapers.OtodomScraper.scrape(pages: 3, voivodeships: ["podkarpackie"])
+
+# Or as background Oban jobs (same options)
+iex> Rzeczywiscie.Workers.OlxScraperWorker.trigger(pages: 3, enrich: true)
+iex> Rzeczywiscie.Workers.OtodomScraperWorker.trigger(pages: 3, voivodeships: ["podkarpackie"])
 ```
+
+Note: `:pages` is **per region** — a 5-page run over two regions fetches 10 pages.
 
 ### Metadata Extraction
 
 Both scrapers extract property metadata from multiple sources to maximize data quality:
 
 **OLX Scraper**:
+- One request per region, using that region's OLX `region_id`
 - Searches title + description + URL for keywords
 - Extracts transaction_type ("sprzedaż", "wynajem")
 - Extracts property_type ("mieszkanie", "dom", "pokój", etc.)
@@ -205,11 +231,16 @@ Both scrapers extract property metadata from multiple sources to maximize data q
 - Parses area from text patterns (e.g., "50 m²", "50m2")
 
 **Otodom Scraper**:
+- One search per region × transaction × estate combination
 - Parses JSON-LD structured data from listing pages
 - Extracts property_type from title + URL using keyword matching
 - Gets transaction_type from URL patterns
 - Handles both old and new Otodom URL formats
 - Extracts coordinates from geo data when available
+
+Both scrapers store the voivodeship the *listing* reports (border towns
+sometimes surface in a neighbouring region's results) and fall back to the
+region that was searched.
 
 ### Data Quality
 
@@ -412,6 +443,7 @@ Just use Tailwind classes in your Svelte components and they'll be included.
 - `lib/rzeczywiscie/scrapers/` - Web scraper modules
   - `olx_scraper.ex` - OLX.pl scraper
   - `otodom_scraper.ex` - Otodom.pl scraper
+- `lib/rzeczywiscie/real_estate/voivodeships.ex` - **Registry of covered regions**
 - `lib/rzeczywiscie/schemas/` - Ecto schemas
   - `property.ex` - Property schema
   - `favorite.ex` - Favorite schema
@@ -493,7 +525,7 @@ export PATH="/c/ProgramData/chocolatey/lib/elixir/tools/bin:/c/ProgramData/choco
 The core feature of the application:
 - **Table View**: Sortable, filterable table of all properties
   - Sort by: source, title, city, price, area, AQI, date added
-  - Filter by: city, price range, area range, source, transaction type, property type
+  - Filter by: region (voivodeship), city, price range, area range, source, transaction type, property type
   - Collapsible filters with active badges
   - Debounced auto-apply (500ms)
   - Pagination (50 properties per page)
@@ -550,6 +582,18 @@ end
 ```
 
 This allows favorites to persist across page refreshes for the same browser, while maintaining user privacy (no cookies, no tracking pixels).
+
+## Region Filtering
+
+The region picker sits above the type filters and only renders while more than
+one voivodeship is registered. Values round-trip as either the stored name
+(`"małopolskie"`) or the ASCII slug (`"malopolskie"`) — `Voivodeships.normalize/1`
+canonicalizes both before the query is built, and unsupported values are ignored
+rather than silently matching nothing.
+
+Unlike `transaction_type`/`property_type`, region filtering does **not** include
+rows with a `nil` voivodeship: the scrapers always set it, so NULL means the row
+predates region tracking rather than "unknown type".
 
 ## Filter UX Best Practices
 

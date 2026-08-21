@@ -5,8 +5,11 @@ defmodule Rzeczywiscie.Scrapers.Debug do
 
   require Logger
 
-  def fetch_and_inspect_olx do
-    url = "https://www.olx.pl/nieruchomosci/malopolskie/"
+  def fetch_and_inspect_olx(voivodeship \\ nil) do
+    region = Rzeczywiscie.RealEstate.Voivodeships.get(voivodeship) ||
+               Rzeczywiscie.RealEstate.Voivodeships.default()
+
+    url = "https://www.olx.pl/nieruchomosci/#{region.slug}/"
 
     case Req.get(url,
            headers: [

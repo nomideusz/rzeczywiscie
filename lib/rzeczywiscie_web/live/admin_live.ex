@@ -665,12 +665,12 @@ defmodule RzeczywiscieWeb.AdminLive do
   # (the old inline runs were invisible to it).
   defp run_task("scrape_olx") do
     {:ok, _job} = Rzeczywiscie.Workers.OlxScraperWorker.trigger(pages: 3, enrich: true)
-    "OLX scrape queued (3 pages, enriched) — see Job Queue above"
+    "OLX scrape queued (3 pages per region, #{covered_regions()}, enriched) — see Job Queue above"
   end
 
   defp run_task("scrape_otodom") do
     {:ok, _job} = Rzeczywiscie.Workers.OtodomScraperWorker.trigger(pages: 3, enrich: true)
-    "Otodom scrape queued (3 pages, enriched) — see Job Queue above"
+    "Otodom scrape queued (3 pages per search, #{covered_regions()}, enriched) — see Job Queue above"
   end
 
   defp run_task("geocode") do
@@ -691,6 +691,12 @@ defmodule RzeczywiscieWeb.AdminLive do
   defp run_task("cleanup") do
     {:ok, _job} = Rzeczywiscie.Workers.CleanupWorker.trigger(hours: 96)
     "Stale cleanup queued (96h threshold) — see Job Queue above"
+  end
+
+  defp covered_regions do
+    Rzeczywiscie.RealEstate.Voivodeships.all()
+    |> Enum.map(& &1.label)
+    |> Enum.join(" + ")
   end
 
   defp run_task("dedup") do

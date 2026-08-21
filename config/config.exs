@@ -39,6 +39,8 @@ config :rzeczywiscie, Oban,
     {Oban.Plugins.Cron,
      crontab: [
        # === SCRAPING (spread throughout day) ===
+       # Page counts are per region - every run covers all voivodeships in
+       # Rzeczywiscie.RealEstate.Voivodeships (małopolskie + podkarpackie)
        # OLX: Regular scrape every 6 hours - fast listing scrape
        {"0 0,6,12,18 * * *", Rzeczywiscie.Workers.OlxScraperWorker, args: %{"pages" => 10, "delay" => 2500}},
        # OLX: Enrichment every 8 hours - fetches detail pages for missing data

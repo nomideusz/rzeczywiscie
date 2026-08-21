@@ -6,6 +6,7 @@ defmodule Rzeczywiscie.RealEstate do
   import Ecto.Query, warn: false
   alias Rzeczywiscie.Repo
   alias Rzeczywiscie.RealEstate.Property
+  alias Rzeczywiscie.RealEstate.Voivodeships
   alias Rzeczywiscie.RealEstate.PriceHistory
   alias Rzeczywiscie.RealEstate.Favorite
 
@@ -41,6 +42,7 @@ defmodule Rzeczywiscie.RealEstate do
     * `:max_area` - Maximum area in sqm
     * `:rooms` - Filter by number of rooms
     * `:source` - Filter by source (olx, otodom, etc.)
+    * `:voivodeship` - Filter by voivodeship (name or slug, e.g. "podkarpackie")
     * `:transaction_type` - Filter by transaction type (sprzedaż, wynajem)
     * `:property_type` - Filter by property type (mieszkanie, dom, etc.)
     * `:sort_by` - Column to sort by (default: "inserted_at")
@@ -117,6 +119,13 @@ defmodule Rzeczywiscie.RealEstate do
 
       {:city, city}, query when is_binary(city) and city != "" ->
         where(query, [p], ilike(p.city, ^"%#{city}%"))
+
+      {:voivodeship, voivodeship}, query when is_binary(voivodeship) and voivodeship != "" ->
+        # Accept either the stored name ("małopolskie") or the ASCII slug
+        case Voivodeships.normalize(voivodeship) do
+          nil -> query
+          name -> where(query, [p], p.voivodeship == ^name)
+        end
 
       {:min_price, min}, query when is_number(min) ->
         where(query, [p], p.price >= ^min)
@@ -266,6 +275,8 @@ defmodule Rzeczywiscie.RealEstate do
     
     has_coords? = Map.get(attrs, :latitude) || Map.get(attrs, "latitude")
     district = Map.get(attrs, :district) || Map.get(attrs, "district")
+    city = Map.get(attrs, :city) || Map.get(attrs, "city")
+    voivodeship = Map.get(attrs, :voivodeship) || Map.get(attrs, "voivodeship")
     has_street? = case Map.get(attrs, :street) || Map.get(attrs, "street") do
       nil -> false
       "" -> false
@@ -285,9 +296,9 @@ defmodule Rzeczywiscie.RealEstate do
         # Has street address - let manual geocoding handle it for precision
         attrs
         
-      Geocoding.district_cached?(district) ->
+      Geocoding.district_cached?(district, voivodeship) ->
         # Use cached district coordinates (FREE, instant)
-        case Geocoding.geocode_property(%{district: district, street: nil, city: "Kraków", voivodeship: "małopolskie"}) do
+        case Geocoding.geocode_property(%{district: district, street: nil, city: city, voivodeship: voivodeship}) do
           {:ok, %{lat: lat, lng: lng}} ->
             require Logger
             Logger.debug("Auto-geocoded property in #{district} from cache")

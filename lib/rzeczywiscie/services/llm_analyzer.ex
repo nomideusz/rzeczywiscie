@@ -728,6 +728,7 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
       # Product indicators
       "producent",
       "całe małopolskie",  # delivery range = product
+      "całe podkarpackie",
       "dostawa gratis",
       "transport w cenie"
     ]

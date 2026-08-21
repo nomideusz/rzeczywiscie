@@ -4,6 +4,7 @@
   export let properties = []
   export let live
   export let selectedPropertyId = null
+  export let defaultCenter = null // region center, used until markers set the bounds
 
   let mapContainer
   let map
@@ -28,8 +29,10 @@
     })
   }
 
-  // Default center: Kraków, Małopolskie
-  const DEFAULT_CENTER = { lat: 50.0647, lng: 19.9450 }
+  // Default center: Kraków, Małopolskie - only used while there are no markers
+  // to fit bounds to (the region filter supplies its own center via defaultCenter)
+  const FALLBACK_CENTER = { lat: 50.0647, lng: 19.9450 }
+  $: DEFAULT_CENTER = defaultCenter || FALLBACK_CENTER
   const DEFAULT_ZOOM = 11
 
   // Get Google Maps API key from meta tag
