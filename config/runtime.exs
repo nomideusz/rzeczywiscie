@@ -117,23 +117,72 @@ if config_env() == :prod do
   #
   # Check `Plug.SSL` for all available options in `force_ssl`.
 
-  # ## Configuring the mailer
-  #
-  # In production you need to configure the mailer to use a different adapter.
-  # Here is an example configuration for Mailgun:
-  #
-  #     config :rzeczywiscie, Rzeczywiscie.Mailer,
-  #       adapter: Swoosh.Adapters.Mailgun,
-  #       api_key: System.get_env("MAILGUN_API_KEY"),
-  #       domain: System.get_env("MAILGUN_DOMAIN")
-  #
-  # Most non-SMTP adapters require an API client. Swoosh supports Req, Hackney,
-  # and Finch out-of-the-box. This configuration is typically done at
-  # compile-time in your config/prod.exs:
-  #
-  #     config :swoosh, :api_client, Swoosh.ApiClient.Req
-  #
-  # See https://hexdocs.pm/swoosh/Swoosh.html#module-installation for details.
+end
+
+# ## Mailer - SMTP submission to our own Stalwart server
+#
+# Alerts are sent through the mailbox server (Stalwart) over SMTP submission.
+# Only 465 with implicit TLS is used: Stalwart's 587/STARTTLS submission
+# listener is not reliably exposed, and on CapRover the internal
+# srv-captain--mail address only serves HTTP - so this always goes out over the
+# public submission endpoint with a real mailbox login.
+#
+#     MAIL_SMTP_HOST=mail.zaur.app
+#     MAIL_SMTP_PORT=465
+#     MAIL_SMTP_USERNAME=contact@kruk.live
+#     MAIL_SMTP_PASSWORD=…            # mailbox password or Stalwart app password
+#     MAIL_FROM=contact@kruk.live
+#     MAIL_FROM_NAME=Kruk.live
+#     ALERT_EMAIL_TO=contact@kruk.live # where alert digests are delivered
+#
+# With MAIL_SMTP_HOST unset the mailer stays on the local (no-op) adapter and
+# Alerts.deliver/1 reports {:error, :not_configured} instead of crashing jobs.
+smtp_host = System.get_env("MAIL_SMTP_HOST")
+
+if smtp_host not in [nil, ""] do
+  smtp_port = String.to_integer(System.get_env("MAIL_SMTP_PORT") || "465")
+
+  # Implicit TLS on 465; STARTTLS only if someone deliberately points this at 587
+  implicit_tls? = smtp_port == 465
+
+  tls_options =
+    [
+      # SNI must name the public host even when connecting through a relay alias
+      server_name_indication:
+        String.to_charlist(System.get_env("MAIL_SMTP_TLS_SERVERNAME") || smtp_host),
+      versions: [:"tlsv1.2", :"tlsv1.3"],
+      depth: 3
+    ] ++
+      if System.get_env("MAIL_SMTP_INSECURE") == "true" do
+        # Escape hatch for a self-signed cert on a private deployment
+        [verify: :verify_none]
+      else
+        [
+          verify: :verify_peer,
+          cacerts: :public_key.cacerts_get(),
+          customize_hostname_check: [
+            match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
+          ]
+        ]
+      end
+
+  config :rzeczywiscie, Rzeczywiscie.Mailer,
+    adapter: Swoosh.Adapters.SMTP,
+    relay: smtp_host,
+    port: smtp_port,
+    username: System.get_env("MAIL_SMTP_USERNAME"),
+    password: System.get_env("MAIL_SMTP_PASSWORD"),
+    ssl: implicit_tls?,
+    tls: if(implicit_tls?, do: :never, else: :always),
+    auth: :always,
+    tls_options: tls_options,
+    retries: 1,
+    no_mx_lookups: true
+
+  config :rzeczywiscie, :mail,
+    from: System.get_env("MAIL_FROM") || System.get_env("MAIL_SMTP_USERNAME"),
+    from_name: System.get_env("MAIL_FROM_NAME") || "Kruk.live",
+    alert_to: System.get_env("ALERT_EMAIL_TO") || System.get_env("MAIL_FROM")
 end
 
 # Admin panel BasicAuth (any username). Unset => /admin is inaccessible.

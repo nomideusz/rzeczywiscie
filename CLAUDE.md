@@ -11,6 +11,7 @@
 - 🗺️ **Map View**: Interactive map showing properties with coordinates
 - 🔍 **Advanced Filters**: Filter by region, city, price, area, transaction type, property type, source
 - 🌬️ **Air Quality Data**: Automatic AQI lookup for properties with coordinates
+- 📧 **Email Alerts**: Saved searches that email new matching listings
 - 📊 **Statistics**: View aggregated data about listings
 - 🔄 **Auto-scraping**: Scheduled scraping from OLX and Otodom
 
@@ -249,6 +250,66 @@ Properties with missing `transaction_type` or `property_type` are:
 - Shown in filtered results with visual indicators ("?" badge, "Unknown" text)
 - Included when users filter by type (won't miss potential matches)
 
+## Email Alerts
+
+Saved searches that email new listings to one address (the owner). Managed from
+`/admin` → **Email Alerts**.
+
+**How a run works** (`Rzeczywiscie.Alerts.run_alert/1`, hourly at `:40` via
+`Workers.AlertWorker`):
+
+1. Find listings matching the alert's criteria that it hasn't reported yet.
+2. Email them as one digest (up to 40 per email; the rest wait for the next run).
+3. Record what was sent in `property_alert_matches`.
+
+Two invariants matter:
+
+- **No backlog on creation.** An alert stamps `since_property_id` with the
+  highest property id at creation and only looks above it, so adding an alert
+  never mails the thousands of listings already in the database. Property ids
+  are monotonic, which makes this exact — an `inserted_at` comparison would be
+  ambiguous for anything scraped in the same second.
+- **Never twice.** Every reported listing is written to `property_alert_matches`
+  under `unique_index([:alert_id, :property_id])`. Retries, overlapping cron
+  ticks and manual runs cannot re-send. Nothing is recorded unless the mail
+  server accepted the message, so a delivery failure just retries next run.
+
+Alert criteria are the same filter keys the listing page sends, and matching
+runs through `RealEstate.filter_query/1` — the same query builder the UI uses,
+so an alert matches exactly what the equivalent filter shows. Criteria are
+whitelisted on write (`Alert.criteria_keys/0`) and again on read
+(`Alerts.to_filters/1`); nothing from the database reaches the query builder as
+an arbitrary atom.
+
+### Mail transport
+
+Alerts go out over SMTP submission to our own Stalwart server — **port 465 with
+implicit TLS**, authenticating as a real mailbox. Configured entirely from the
+environment in `config/runtime.exs`:
+
+```
+MAIL_SMTP_HOST=mail.zaur.app
+MAIL_SMTP_PORT=465
+MAIL_SMTP_USERNAME=contact@kruk.live
+MAIL_SMTP_PASSWORD=…
+MAIL_FROM=contact@kruk.live
+ALERT_EMAIL_TO=contact@kruk.live
+```
+
+With `MAIL_SMTP_HOST` unset the mailer stays on Swoosh's local adapter,
+`Alerts.configured?/0` returns false, and the worker logs and skips instead of
+failing jobs. Certificates are verified against the system CA store with SNI
+pinned to the host; `MAIL_SMTP_INSECURE=true` exists for self-signed setups.
+
+Port 465 is not a preference — 25 isn't reachable from inside CapRover
+(`srv-captain--mail` only serves HTTP), and Stalwart's 587/STARTTLS listener has
+historically not been exposed. The `register` app in the `zaur` monorepo uses
+the same settings (`INVITE_SMTP_*`).
+
+Use `/admin` → **Email Alerts** → **Send test** to verify the path end to end;
+scraped titles are HTML-escaped in the digest, so a listing title cannot inject
+markup into the email.
+
 ## Performance Optimizations
 
 The application has been heavily optimized for performance:
@@ -440,6 +501,10 @@ Just use Tailwind classes in your Svelte components and they'll be included.
 
 ### Business Logic
 - `lib/rzeczywiscie/real_estate.ex` - Database context for properties and favorites
+- `lib/rzeczywiscie/alerts.ex` - **Email alerts context** (saved searches, dedupe, delivery)
+  - `alerts/alert.ex` - Saved search schema, criteria whitelist
+  - `alerts/alert_match.ex` - Ledger of already-reported listings
+  - `alerts/alert_email.ex` - Digest email (text + HTML)
 - `lib/rzeczywiscie/scrapers/` - Web scraper modules
   - `olx_scraper.ex` - OLX.pl scraper
   - `otodom_scraper.ex` - Otodom.pl scraper

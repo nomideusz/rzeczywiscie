@@ -54,9 +54,8 @@ defmodule Rzeczywiscie.RealEstate do
     sort_by = Keyword.get(opts, :sort_by, "inserted_at")
     sort_direction = Keyword.get(opts, :sort_direction, "desc")
 
-    Property
-    |> maybe_only_active(opts)
-    |> apply_filters(opts)
+    opts
+    |> filter_query()
     |> apply_sorting(sort_by, sort_direction)
     |> limit(^Keyword.get(opts, :limit, 100))
     |> offset(^Keyword.get(opts, :offset, 0))
@@ -67,10 +66,21 @@ defmodule Rzeczywiscie.RealEstate do
   Count properties matching filters.
   """
   def count_properties(opts \\ []) do
+    opts
+    |> filter_query()
+    |> Repo.aggregate(:count)
+  end
+
+  @doc """
+  Build the listing query for a set of filters, without sorting or pagination.
+
+  Alerts run off this so a saved search matches exactly what the equivalent
+  filter on the listing page shows - there is one definition of "matching".
+  """
+  def filter_query(opts \\ []) do
     Property
     |> maybe_only_active(opts)
     |> apply_filters(opts)
-    |> Repo.aggregate(:count)
   end
 
   # admin passes include_inactive: true; everything else sees active only
@@ -214,6 +224,16 @@ defmodule Rzeczywiscie.RealEstate do
             order_by(query, [p], [desc_nulls_last: field(p, ^column_atom)])
         end
     end
+  end
+
+  @doc """
+  Highest property id currently stored, or 0 when there are none.
+
+  Alerts use this as a watermark so a new saved search starts from the listings
+  that arrive after it, not the existing database.
+  """
+  def max_property_id do
+    Repo.aggregate(Property, :max, :id) || 0
   end
 
   @doc """

@@ -8,9 +8,11 @@ defmodule RzeczywiscieWeb.AdminLive do
   import RzeczywiscieWeb.Layouts
   import Ecto.Query
   require Logger
+  alias Rzeczywiscie.Alerts
   alias Rzeczywiscie.Repo
   alias Rzeczywiscie.RealEstate
   alias Rzeczywiscie.RealEstate.Property
+  alias Rzeczywiscie.RealEstate.Voivodeships
 
   @impl true
   def mount(_params, _session, socket) do
@@ -31,6 +33,10 @@ defmodule RzeczywiscieWeb.AdminLive do
       |> assign(:prop_page, 1)
       |> assign(:queue, get_queue_snapshot())
       |> assign(:cron_schedule, get_cron_schedule())
+      |> assign(:alert_error, nil)
+      |> assign(:mail_configured, Alerts.configured?())
+      |> assign(:alert_recipient, Alerts.alert_recipient())
+      |> load_alerts()
       |> load_admin_properties()
 
     {:ok, socket}
@@ -453,6 +459,166 @@ defmodule RzeczywiscieWeb.AdminLive do
           </div>
         <% end %>
 
+        <!-- Email Alerts -->
+        <div class="bg-base-100 border-2 border-base-content mb-6">
+          <div class="px-4 py-3 border-b-2 border-base-content bg-base-200 flex flex-wrap items-center justify-between gap-3">
+            <h2 class="text-sm font-bold uppercase tracking-wide">📧 Email Alerts (<%= length(@alerts) %>)</h2>
+            <div class="flex items-center gap-3">
+              <%= if @mail_configured do %>
+                <span class="text-[10px] font-bold uppercase tracking-wide opacity-60">
+                  → <%= @alert_recipient %>
+                </span>
+                <button
+                  phx-click="run_task"
+                  phx-value-task="alert_test"
+                  disabled={@running_task != nil}
+                  class={"px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @running_task != nil, do: "opacity-50 border-base-content/30", else: "border-base-content hover:bg-base-content hover:text-base-100"}"}
+                >
+                  Send test
+                </button>
+                <button
+                  phx-click="run_task"
+                  phx-value-task="alerts"
+                  disabled={@running_task != nil}
+                  class={"px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @running_task != nil, do: "opacity-50 border-base-content/30", else: "border-primary text-primary hover:bg-primary hover:text-primary-content"}"}
+                >
+                  Run now
+                </button>
+              <% else %>
+                <span class="px-2 py-1 text-[10px] font-bold uppercase tracking-wide bg-warning/20 text-warning border border-warning">
+                  Mail not configured
+                </span>
+              <% end %>
+            </div>
+          </div>
+
+          <%= if !@mail_configured do %>
+            <div class="px-4 py-3 text-xs border-b border-base-content/20 bg-warning/10">
+              Set <code class="font-mono">MAIL_SMTP_HOST</code>, <code class="font-mono">MAIL_SMTP_USERNAME</code>,
+              <code class="font-mono">MAIL_SMTP_PASSWORD</code>, <code class="font-mono">MAIL_FROM</code> and
+              <code class="font-mono">ALERT_EMAIL_TO</code> to start sending. Alerts still collect matches
+              until then — nothing is lost, it just isn't delivered.
+            </div>
+          <% end %>
+
+          <!-- New alert -->
+          <form phx-submit="alert_create" class="p-4 border-b border-base-content/20 grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
+            <div class="col-span-2">
+              <label class="block text-[10px] font-bold uppercase tracking-wide mb-1 opacity-60" for="alert-name">Name</label>
+              <input id="alert-name" type="text" name="name" required placeholder="Cheap flats in Rzeszów"
+                class="w-full px-2 py-1.5 text-xs border-2 border-base-content bg-base-100" />
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold uppercase tracking-wide mb-1 opacity-60" for="alert-region">Region</label>
+              <select id="alert-region" name="voivodeship" class="w-full px-2 py-1.5 text-xs border-2 border-base-content bg-base-100">
+                <option value="">Any</option>
+                <%= for region <- Voivodeships.all() do %>
+                  <option value={region.name}><%= region.label %></option>
+                <% end %>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold uppercase tracking-wide mb-1 opacity-60" for="alert-city">City</label>
+              <input id="alert-city" type="text" name="city" placeholder="Any"
+                class="w-full px-2 py-1.5 text-xs border-2 border-base-content bg-base-100" />
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold uppercase tracking-wide mb-1 opacity-60" for="alert-transaction">Deal</label>
+              <select id="alert-transaction" name="transaction_type" class="w-full px-2 py-1.5 text-xs border-2 border-base-content bg-base-100">
+                <option value="">Any</option>
+                <option value="sprzedaż">Sale</option>
+                <option value="wynajem">Rent</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold uppercase tracking-wide mb-1 opacity-60" for="alert-property">Type</label>
+              <select id="alert-property" name="property_type" class="w-full px-2 py-1.5 text-xs border-2 border-base-content bg-base-100">
+                <option value="">Any</option>
+                <option value="mieszkanie">Apartment</option>
+                <option value="dom">House</option>
+                <option value="działka">Plot</option>
+                <option value="pokój">Room</option>
+                <option value="lokal użytkowy">Commercial</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold uppercase tracking-wide mb-1 opacity-60" for="alert-max-price">Max price</label>
+              <input id="alert-max-price" type="number" name="max_price" min="0" step="1000" placeholder="Any"
+                class="w-full px-2 py-1.5 text-xs border-2 border-base-content bg-base-100" />
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold uppercase tracking-wide mb-1 opacity-60" for="alert-min-area">Min m²</label>
+              <input id="alert-min-area" type="number" name="min_area" min="0" step="1" placeholder="Any"
+                class="w-full px-2 py-1.5 text-xs border-2 border-base-content bg-base-100" />
+            </div>
+            <div class="col-span-2 md:col-span-1">
+              <button type="submit" class="w-full px-3 py-1.5 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors cursor-pointer">
+                + Add alert
+              </button>
+            </div>
+          </form>
+
+          <%= if @alert_error do %>
+            <div class="px-4 py-2 text-xs font-bold bg-error/20 text-error border-b border-error">
+              <%= @alert_error %>
+            </div>
+          <% end %>
+
+          <%= if @alerts == [] do %>
+            <div class="p-6 text-center text-xs opacity-50">
+              No alerts yet. New listings matching an alert are emailed once, at :40 past the hour.
+            </div>
+          <% else %>
+            <div class="overflow-x-auto">
+              <table class="w-full text-xs">
+                <thead class="bg-base-200 text-left">
+                  <tr>
+                    <th class="px-3 py-2">Alert</th>
+                    <th class="px-3 py-2">Criteria</th>
+                    <th class="px-3 py-2 text-right">Waiting</th>
+                    <th class="px-3 py-2 text-right">Sent</th>
+                    <th class="px-3 py-2">Last email</th>
+                    <th class="px-3 py-2 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <%= for alert <- @alerts do %>
+                    <tr class="border-t border-base-content/10">
+                      <td class="px-3 py-2 font-bold">
+                        <%= alert.name %>
+                        <%= if !alert.enabled do %>
+                          <span class="ml-1 px-1.5 py-0.5 text-[9px] font-bold uppercase bg-base-300 opacity-70">paused</span>
+                        <% end %>
+                      </td>
+                      <td class="px-3 py-2 opacity-70"><%= criteria_summary(alert.criteria) %></td>
+                      <td class="px-3 py-2 text-right font-bold"><%= alert.pending %></td>
+                      <td class="px-3 py-2 text-right opacity-70"><%= alert.notified_count %></td>
+                      <td class="px-3 py-2 opacity-70"><%= format_alert_time(alert.last_notified_at) %></td>
+                      <td class="px-3 py-2">
+                        <div class="flex justify-end gap-1">
+                          <button phx-click="alert_toggle" phx-value-id={alert.id}
+                            class="px-2 py-1 text-[10px] font-bold uppercase border border-base-content hover:bg-base-content hover:text-base-100 transition-colors cursor-pointer">
+                            <%= if alert.enabled, do: "Pause", else: "Enable" %>
+                          </button>
+                          <button phx-click="alert_run" phx-value-id={alert.id}
+                            class="px-2 py-1 text-[10px] font-bold uppercase border border-primary text-primary hover:bg-primary hover:text-primary-content transition-colors cursor-pointer">
+                            Run
+                          </button>
+                          <button phx-click="alert_delete" phx-value-id={alert.id}
+                            data-confirm={"Delete alert \"#{alert.name}\"?"}
+                            class="px-2 py-1 text-[10px] font-bold uppercase border border-error text-error hover:bg-error hover:text-error-content transition-colors cursor-pointer">
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  <% end %>
+                </tbody>
+              </table>
+            </div>
+          <% end %>
+        </div>
+
         <!-- Property Management -->
         <div class="bg-base-100 border-2 border-base-content mb-6">
           <div class="px-4 py-3 border-b-2 border-base-content bg-base-200 flex flex-wrap items-center justify-between gap-3">
@@ -626,6 +792,57 @@ defmodule RzeczywiscieWeb.AdminLive do
   end
 
   @impl true
+  def handle_event("alert_create", params, socket) do
+    criteria =
+      Map.take(params, [
+        "voivodeship",
+        "city",
+        "transaction_type",
+        "property_type",
+        "max_price",
+        "min_area"
+      ])
+
+    case Alerts.create_alert(%{name: Map.get(params, "name"), criteria: criteria}) do
+      {:ok, _alert} ->
+        {:noreply, socket |> assign(:alert_error, nil) |> load_alerts()}
+
+      {:error, changeset} ->
+        {:noreply, assign(socket, :alert_error, changeset_message(changeset))}
+    end
+  end
+
+  @impl true
+  def handle_event("alert_toggle", %{"id" => id}, socket) do
+    case Alerts.get_alert(id) do
+      nil -> {:noreply, socket}
+      alert ->
+        {:ok, _} = Alerts.toggle_alert(alert)
+        {:noreply, load_alerts(socket)}
+    end
+  end
+
+  @impl true
+  def handle_event("alert_delete", %{"id" => id}, socket) do
+    case Alerts.get_alert(id) do
+      nil -> {:noreply, socket}
+      alert ->
+        {:ok, _} = Alerts.delete_alert(alert)
+        {:noreply, load_alerts(socket)}
+    end
+  end
+
+  @impl true
+  def handle_event("alert_run", %{"id" => id}, socket) do
+    {:ok, _job} = Rzeczywiscie.Workers.AlertWorker.trigger(alert_id: String.to_integer(id))
+
+    {:noreply,
+     socket
+     |> assign(:task_result, "Alert run queued — see Job Queue above")
+     |> assign(:queue, get_queue_snapshot())}
+  end
+
+  @impl true
   def handle_event("run_task", %{"task" => task}, socket) do
     socket = 
       socket
@@ -693,10 +910,17 @@ defmodule RzeczywiscieWeb.AdminLive do
     "Stale cleanup queued (96h threshold) — see Job Queue above"
   end
 
-  defp covered_regions do
-    Rzeczywiscie.RealEstate.Voivodeships.all()
-    |> Enum.map(& &1.label)
-    |> Enum.join(" + ")
+  defp run_task("alerts") do
+    {:ok, _job} = Rzeczywiscie.Workers.AlertWorker.trigger()
+    "Alert run queued — see Job Queue above"
+  end
+
+  defp run_task("alert_test") do
+    case Alerts.send_test_email() do
+      {:ok, _} -> "Test email sent to #{Alerts.alert_recipient()}"
+      {:error, :not_configured} -> "Mail is not configured — set MAIL_SMTP_* and ALERT_EMAIL_TO"
+      {:error, reason} -> "Test email failed: #{inspect(reason)}"
+    end
   end
 
   defp run_task("dedup") do
@@ -723,6 +947,12 @@ defmodule RzeczywiscieWeb.AdminLive do
 
   # phx-value-task is client-controlled — don't crash on unknown values
   defp run_task(other), do: "Unknown task: #{inspect(other)}"
+
+  defp covered_regions do
+    Rzeczywiscie.RealEstate.Voivodeships.all()
+    |> Enum.map(& &1.label)
+    |> Enum.join(" + ")
+  end
 
   defp get_stats do
     active = Repo.aggregate(from(p in Property, where: p.active == true), :count, :id)
@@ -820,6 +1050,46 @@ defmodule RzeczywiscieWeb.AdminLive do
   end
 
   @prop_page_size 20
+
+  # Alerts carry their pending count so the table shows what each one is
+  # holding; the count is one indexed query per alert and there are few of them.
+  defp load_alerts(socket) do
+    alerts =
+      Enum.map(Alerts.list_alerts(), fn alert ->
+        Map.put(alert, :pending, Alerts.count_pending_matches(alert))
+      end)
+
+    socket
+    |> assign(:alerts, alerts)
+    |> assign(:mail_configured, Alerts.configured?())
+    |> assign(:alert_recipient, Alerts.alert_recipient())
+  end
+
+  defp criteria_summary(criteria) when is_map(criteria) and map_size(criteria) > 0 do
+    criteria
+    |> Enum.sort_by(fn {key, _value} -> key end)
+    |> Enum.map(fn {key, value} -> "#{String.replace(key, "_", " ")}: #{value}" end)
+    |> Enum.join(" · ")
+  end
+
+  defp criteria_summary(_), do: "everything"
+
+  defp format_alert_time(nil), do: "—"
+
+  defp format_alert_time(%DateTime{} = datetime) do
+    Calendar.strftime(datetime, "%Y-%m-%d %H:%M")
+  end
+
+  defp changeset_message(changeset) do
+    changeset
+    |> Ecto.Changeset.traverse_errors(fn {msg, opts} ->
+      Enum.reduce(opts, msg, fn {key, value}, acc ->
+        String.replace(acc, "%{#{key}}", to_string(value))
+      end)
+    end)
+    |> Enum.map(fn {field, messages} -> "#{field} #{Enum.join(messages, ", ")}" end)
+    |> Enum.join("; ")
+  end
 
   defp load_admin_properties(socket) do
     search = socket.assigns[:prop_search] || ""

@@ -31,6 +31,14 @@ config :rzeczywiscie, RzeczywiscieWeb.Endpoint,
 # at the `config/runtime.exs`.
 config :rzeczywiscie, Rzeczywiscie.Mailer, adapter: Swoosh.Adapters.Local
 
+# Addresses used by outgoing mail. Overridden from the environment in
+# config/runtime.exs once MAIL_SMTP_HOST is set; without that the mailer stays
+# on the local adapter and alert delivery is reported as :not_configured.
+config :rzeczywiscie, :mail,
+  from: nil,
+  from_name: "Kruk.live",
+  alert_to: nil
+
 # Configure Oban
 config :rzeczywiscie, Oban,
   repo: Rzeczywiscie.Repo,
@@ -48,6 +56,11 @@ config :rzeczywiscie, Oban,
        # Otodom: Scrape with enrichment every 6 hours (offset from OLX)
        {"0 1,7,13,21 * * *", Rzeczywiscie.Workers.OtodomScraperWorker, args: %{"pages" => 5, "delay" => 3000, "enrich" => true}},
        
+       # === ALERTS ===
+       # Saved-search alerts, at :40 past the hour so a run lands after the
+       # scrapes on the hour have finished writing
+       {"40 * * * *", Rzeczywiscie.Workers.AlertWorker},
+
        # === ENRICHMENT ===
        # Geocode properties every hour
        {"0 * * * *", Rzeczywiscie.Workers.GeocodingWorker},
