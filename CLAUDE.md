@@ -331,28 +331,37 @@ bailiff sale, co-op/TBS right, contract assignment, product not property,
 wanted ad, swap), features (balcony, parking, lift, cellar, garden, ground
 floor, pets allowed, furnished, no commission), rental terms (pets forbidden,
 long-term let, beds rather than a home, subletting forbidden, business use only, women or
-students only), `condition` and
-`seller_pressure`. It runs as step 3 of `LLMAnalysisWorker` on listings GPT has
-analyzed, 200 per run, and for alerts with Jev criteria, when
-`TYPESAFE_API_KEY` is set. `/admin` → Manual Actions → **🧪 Jev Analysis**
-runs step 3 alone on up to 1000 of them.
+students only), `condition` and `seller_pressure`.
 
-Answers land verbatim in `properties.jev_signals` (with the model version and
-token usage) and `jev_analyzed_at`. Alerts filter on them. `/admin` →
-**🧪 Jev vs GPT** compares them with the `llm_*` columns on the listings both
-analyzed:
+**Jev owns the judgment columns; GPT keeps the prose.** `LLMAnalysisWorker`
+runs Jev as step 2 on every active listing with a description (newest first,
+200 per run), then GPT as step 3. `Jev.overlay/2` puts Jev's answers over the
+`llm_*` columns, whichever model runs first:
 
-- condition against `llm_condition`;
-- seller pressure against `llm_motivation`;
-- the latest disagreements, to check by hand;
-- the latest listings Jev flags as not what they seem, next to GPT's free-text
-  red flags.
+- `llm_condition` from `condition`, unless Jev says unknown (GPT's stays);
+- `llm_motivation` and `llm_urgency` from `seller_pressure` (none/some/strong →
+  standard/motivated/very_motivated, urgency 5/8/10; GPT's urgency was 5 almost
+  everywhere);
+- a Polish red flag in `llm_red_flags` for each "what is really on offer" yes
+  (swap excluded: it's an option, not a problem);
+- `product` caps `llm_investment_score` at 2 (this replaced a keyword check
+  that flagged flats and allotments);
+- `llm_score` recomputed from the result.
 
-Once that settles, thresholds can be picked in code without calling the model
-again. The rental
-questions were checked on 339 dev room/house rentals plus 12 synthetic cases:
-the pets answers followed the text, and 20 of 23 workers' houses counted as
-`bed_space`. The model is pinned (`jev-1.13.0`) because
+GPT still writes the summary, investment score, positive signals, its own red
+flags and the extracted numbers (fee, year, floor, street, corrections). The
+switch followed a comparison on 1050 production listings (2026-09-23):
+condition agreed 84% where both named one, pressure 90%, and Jev caught
+shares, TBS and swaps GPT never flagged.
+
+Answers also land verbatim in `properties.jev_signals` (with the model version
+and token usage) and `jev_analyzed_at`, and alerts filter on them.
+`/admin` → Manual Actions → **🧪 Jev Analysis** runs step 2 alone on up to
+1000 listings.
+
+The rental questions were checked on 339 dev room/house rentals plus 12
+synthetic cases: the pets answers followed the text, and 20 of 23 workers'
+houses counted as `bed_space`. The model is pinned (`jev-1.13.0`) because
 thresholds are tuned against a version. A yes/no answer counts as yes at 0.7
 or above (`Jev.yes?/2`): in a 39-listing smoke test, true cases scored 0.9 or
 more and false ones 0.42 at most.

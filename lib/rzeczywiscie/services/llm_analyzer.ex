@@ -677,71 +677,36 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
     }
   end
   
-  defp normalize_condition("needs_renovation"), do: :needs_renovation
-  defp normalize_condition("to_finish"), do: :to_finish
-  defp normalize_condition("good"), do: :good
-  defp normalize_condition("renovated"), do: :renovated
-  defp normalize_condition("new"), do: :new
-  defp normalize_condition(_), do: :unknown
+  def normalize_condition("needs_renovation"), do: :needs_renovation
+  def normalize_condition("to_finish"), do: :to_finish
+  def normalize_condition("good"), do: :good
+  def normalize_condition("renovated"), do: :renovated
+  def normalize_condition("new"), do: :new
+  def normalize_condition(_), do: :unknown
   
-  defp normalize_motivation("standard"), do: :standard
-  defp normalize_motivation("motivated"), do: :motivated
-  defp normalize_motivation("very_motivated"), do: :very_motivated
-  defp normalize_motivation(_), do: :unknown
+  def normalize_motivation("standard"), do: :standard
+  def normalize_motivation("motivated"), do: :motivated
+  def normalize_motivation("very_motivated"), do: :very_motivated
+  def normalize_motivation(_), do: :unknown
   
   defp get_api_key do
     Application.get_env(:rzeczywiscie, :openai_api_key, "")
   end
   
   @doc """
-  Check if a property title/description indicates a product being sold (not real estate).
-  Returns true if the listing is for a prefab house, metal shed, or other product.
+  The judgment fields stored on `property`, shaped like analyzer signals so
+  `Jev.overlay/2` and `calculate_signal_score/1` can work on them.
   """
-  def is_prefab_house?(text) when is_binary(text) do
-    text_lower = String.downcase(text)
-    
-    # Prefab/modular houses - products, not real estate
-    prefab_patterns = [
-      "dom szkieletowy",
-      "dom modułowy", 
-      "dom prefabrykowany",
-      "dom mobilny",
-      "domek mobilny",
-      "domek modułowy",
-      "domek szkieletowy",
-      "z montażem w",
-      "montaż w",
-      "gotowy do montażu",
-      "dom całoroczny drewniany",
-      "dom drewniany całoroczny",
-      "domek letniskowy",
-      # Metal sheds - definitely products
-      "garaż blaszany",
-      "blaszak",
-      "garaże blaszane",
-      "wiata blaszana",
-      "hala blaszana",
-      # Commercial kiosks/pavilions without land
-      "pawilon handlowy",
-      "kiosk handlowy",
-      "kontener",
-      # Product indicators
-      "producent",
-      "całe małopolskie",  # delivery range = product
-      "całe podkarpackie",
-      "całe śląskie",
-      "całe opolskie",
-      "całe dolnośląskie",
-      "dostawa gratis",
-      "transport w cenie"
-    ]
-    
-    Enum.any?(prefab_patterns, fn pattern -> 
-      String.contains?(text_lower, pattern)
-    end)
+  def signals_from_property(property) do
+    %{
+      urgency: property.llm_urgency || 0,
+      condition: normalize_condition(property.llm_condition),
+      seller_motivation: normalize_motivation(property.llm_motivation),
+      red_flags: property.llm_red_flags || [],
+      positive_signals: property.llm_positive_signals || [],
+      investment_score: property.llm_investment_score
+    }
   end
-  
-  def is_prefab_house?(_), do: false
   
   @doc """
   Calculate score bonus from LLM signals.

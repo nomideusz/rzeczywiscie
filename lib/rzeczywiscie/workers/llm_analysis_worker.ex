@@ -4,8 +4,10 @@ defmodule Rzeczywiscie.Workers.LLMAnalysisWorker do
   
   Runs the full analysis workflow automatically:
   1. Fetch descriptions for top-scored properties missing them
-  2. Run LLM analysis on properties with descriptions
-  3. Ask Jev (Services.Jev) about the listings GPT has analyzed, in shadow
+  2. Ask Jev (Services.Jev) about listings with descriptions; it owns the
+     judgment columns (condition, motivation, urgency, red flags for what is
+     really on offer)
+  3. Run GPT on them for the summary, investment score and extracted numbers
 
   Scheduled to run every 6 hours via cron.
   """
@@ -25,7 +27,7 @@ defmodule Rzeczywiscie.Workers.LLMAnalysisWorker do
   # Admin's "Jev Analysis": step 3 alone, on up to jev_limit listings
   def perform(%Oban.Job{args: %{"jev_only" => true} = args} = job) do
     progress = fn msg -> Rzeczywiscie.JobProgress.report(job, msg) end
-    jev_result = run_jev_shadow(progress, args["jev_limit"])
+    jev_result = run_jev(progress, args["jev_limit"])
     Logger.info("🧪 Jev only: #{jev_result}")
     progress.("done - #{jev_result}")
     :ok
@@ -33,53 +35,48 @@ defmodule Rzeczywiscie.Workers.LLMAnalysisWorker do
 
   def perform(%Oban.Job{args: args} = job) do
     limit = Map.get(args, "limit", 30)
-    
+    progress = fn step, msg -> Rzeczywiscie.JobProgress.report(job, "step #{step}/3 - " <> msg) end
+
     Logger.info("🤖 LLM Analysis Worker starting (limit: #{limit})")
-    
-    # Check if API key is configured
+
+    # Step 1: Fetch descriptions for properties that need them
+    progress.(1, "fetching descriptions (up to #{limit})")
+    fetch_result = fetch_descriptions(limit, &progress.(1, &1))
+    Logger.info("📝 Description fetch: #{fetch_result}")
+
+    # Step 2: Jev judges every listing with a description
+    jev_result = run_jev(&progress.(2, &1))
+    Logger.info("🧪 Jev: #{jev_result}")
+
+    # Step 3: GPT writes what Jev can't - summary, investment score, extracted numbers
     api_key = Application.get_env(:rzeczywiscie, :openai_api_key, "")
     gpt_result = if api_key == "" do
       Logger.warning("⚠️ LLM Analysis skipped: OpenAI API key not configured")
       "GPT skipped: no OpenAI key"
     else
-      # Step 1: Fetch descriptions for properties that need them
-      Rzeczywiscie.JobProgress.report(job, "step 1/3 - fetching descriptions (up to #{limit})")
-      fetch_result = fetch_descriptions(limit, fn msg -> Rzeczywiscie.JobProgress.report(job, "step 1/3 - " <> msg) end)
-      Logger.info("📝 Description fetch: #{fetch_result}")
-
-      # Small delay between steps
-      Process.sleep(2000)
-
-      # Step 2: Run LLM analysis on properties with descriptions
-      Rzeczywiscie.JobProgress.report(job, "step 2/3 - descriptions: #{fetch_result}; analyzing")
-      llm_result = run_llm_analysis(limit, fn msg -> Rzeczywiscie.JobProgress.report(job, "step 2/3 - " <> msg) end)
+      llm_result = run_llm_analysis(limit, &progress.(3, &1))
       Logger.info("🤖 LLM analysis: #{llm_result}")
-      "#{fetch_result}; #{llm_result}"
+      llm_result
     end
 
-    # Step 3: Jev on the listings GPT has analyzed (runs even when GPT can't)
-    jev_result = run_jev_shadow(fn msg -> Rzeczywiscie.JobProgress.report(job, "step 3/3 - " <> msg) end)
-    Logger.info("🧪 Jev shadow: #{jev_result}")
-    Rzeczywiscie.JobProgress.report(job, "done - #{gpt_result}; #{jev_result}")
-
+    Rzeczywiscie.JobProgress.report(job, "done - #{fetch_result}; #{jev_result}; #{gpt_result}")
     :ok
   end
 
-  # Newest GPT analyses first, so each run's fresh listings are covered and the
-  # backlog drains @jev_batch at a time (a Jev call takes ~300ms). llm_condition
-  # is only written by a real GPT analysis, never by the garbage/metadata paths.
+  # Newest listings first, so each run's fresh ones are covered and the backlog
+  # drains @jev_batch at a time (a Jev call takes ~300ms).
   @jev_batch 200
 
-  defp run_jev_shadow(progress, limit \\ nil) do
+  defp run_jev(progress, limit \\ nil) do
     alias Rzeczywiscie.Services.Jev
 
     if Jev.configured?() do
       properties = from(p in Property,
         where: p.active == true and
-               not is_nil(p.llm_analyzed_at) and
-               not is_nil(p.llm_condition) and
+               not is_nil(p.description) and
+               fragment("length(?)", p.description) > 50 and
                is_nil(p.jev_analyzed_at),
-        order_by: [desc: p.llm_analyzed_at],
+        order_by: [desc: p.inserted_at],
         limit: ^(limit || @jev_batch)
       )
       |> Repo.all()
@@ -183,7 +180,7 @@ defmodule Rzeczywiscie.Workers.LLMAnalysisWorker do
         
         case analyze_with_timeout(property.description, context) do
           {:ok, signals} ->
-            signals = enhance_with_prefab_detection(signals, property)
+            signals = Rzeczywiscie.Services.Jev.overlay(signals, property.jev_signals)
             save_analysis(property, signals)
             {ok + 1, failed, last_error}
             
@@ -248,23 +245,6 @@ defmodule Rzeczywiscie.Workers.LLMAnalysisWorker do
     case Task.yield(task, 35_000) || Task.shutdown(task) do
       {:ok, result} -> result
       nil -> {:error, :timeout}
-    end
-  end
-
-  defp enhance_with_prefab_detection(signals, property) do
-    alias Rzeczywiscie.Services.LLMAnalyzer
-    
-    is_prefab = LLMAnalyzer.is_prefab_house?(property.title) || 
-                LLMAnalyzer.is_prefab_house?(property.description || "")
-    
-    if is_prefab do
-      red_flags = ["Dom prefabrykowany - produkt, nie nieruchomość" | (signals.red_flags || [])]
-      inv_score = min(signals[:investment_score] || 5, 2)
-      signals
-      |> Map.put(:red_flags, red_flags)
-      |> Map.put(:investment_score, inv_score)
-    else
-      signals
     end
   end
 
@@ -377,8 +357,8 @@ defmodule Rzeczywiscie.Workers.LLMAnalysisWorker do
   defp atom_to_string(_), do: "unknown"
 
   @doc """
-  Manually trigger the LLM analysis job. `jev_only: true` skips the GPT steps
-  and asks Jev about up to `jev_limit` GPT-analyzed listings.
+  Manually trigger the LLM analysis job. `jev_only: true` runs step 2 alone,
+  on up to `jev_limit` listings.
   """
   def trigger(opts \\ []) do
     opts

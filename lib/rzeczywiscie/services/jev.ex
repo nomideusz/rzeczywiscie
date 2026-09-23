@@ -4,9 +4,9 @@ defmodule Rzeczywiscie.Services.Jev do
   on offer, which features the property has, its condition and how hard the
   seller is pushing. All questions go out in one request per listing.
 
-  Runs next to the GPT analyzer (step 3 of `LLMAnalysisWorker`) and for
-  alerts with Jev criteria (`Rzeczywiscie.Alerts`); /admin compares the
-  answers with GPT's. Answers are stored verbatim in `properties.jev_signals`
+  Runs before the GPT analyzer (step 2 of `LLMAnalysisWorker`) and for
+  alerts with Jev criteria (`Rzeczywiscie.Alerts`), and owns the `llm_*`
+  judgment columns (`overlay/2`). Answers are stored verbatim in `properties.jev_signals`
   under the question ids below, so thresholds and weights can be tuned later
   without asking the model again:
 
@@ -19,6 +19,8 @@ defmodule Rzeczywiscie.Services.Jev do
   meaning. Listings are Polish; questions are English (Jev's strongest
   language) with the Polish phrasing quoted.
   """
+
+  alias Rzeczywiscie.Services.LLMAnalyzer
 
   @url "https://api.typesafe.ai/v1/systemone"
   # Pinned: thresholds get tuned against a model version, so bump it on purpose.
@@ -320,14 +322,83 @@ defmodule Rzeczywiscie.Services.Jev do
     end
   end
 
-  @doc "Asks about `property` and stores the answers on it. A failure leaves it untouched."
+  @doc """
+  Asks about `property` and stores the answers on it, along with the `llm_*`
+  judgment columns they stand for (`overlay/2`). A failure leaves it untouched.
+  """
   def analyze_and_store(property) do
     with {:ok, signals} <- analyze(property) do
-      Rzeczywiscie.RealEstate.update_property(property, %{
-        jev_signals: signals,
-        jev_analyzed_at: DateTime.utc_now()
-      })
+      Rzeczywiscie.RealEstate.update_property(
+        property,
+        Map.merge(judgment_columns(property, signals), %{
+          jev_signals: signals,
+          jev_analyzed_at: DateTime.utc_now()
+        })
+      )
     end
+  end
+
+  @doc "The `llm_*` columns of `property` once Jev's `signals` are laid over them."
+  def judgment_columns(property, signals) do
+    judged = property |> LLMAnalyzer.signals_from_property() |> overlay(signals)
+
+    %{
+      llm_condition: to_string(judged.condition),
+      llm_motivation: to_string(judged.seller_motivation),
+      llm_urgency: judged.urgency,
+      llm_red_flags: judged.red_flags,
+      llm_investment_score: judged.investment_score,
+      llm_score: LLMAnalyzer.calculate_signal_score(judged)
+    }
+  end
+
+  # Jev took these judgments over from GPT after /admin's side-by-side
+  # comparison on 1050 listings (2026-09-23): condition agreed 84% and pressure
+  # 90%, but Jev also caught shares, TBS and swaps that GPT never flagged, and
+  # the keyword product check it replaces flagged flats and allotments. GPT keeps
+  # the summary, the investment score and the numbers it extracts.
+  @red_flags %{
+    "fractional_share" => "Tylko udział w nieruchomości",
+    "sitting_tenant" => "Z lokatorem",
+    "forced_sale" => "Sprzedaż komornicza lub przymusowa",
+    "occupancy_right" => "Prawo spółdzielcze lub TBS, nie własność",
+    "contract_assignment" => "Cesja umowy, nie własność",
+    "product" => "Produkt, nie nieruchomość",
+    "wanted_ad" => "Ogłoszenie poszukującego, nie oferta"
+  }
+  # Stripped before Jev's flags go back on, so overlaying twice changes nothing.
+  # The last one is the keyword check's label, which Jev's product flag replaces.
+  @owned_flags Map.values(@red_flags) ++ ["Dom prefabrykowany - produkt, nie nieruchomość"]
+  @motivations [:standard, :motivated, :very_motivated]
+
+  @doc """
+  Puts Jev's judgments over GPT-shaped `signals` (see
+  `LLMAnalyzer.calculate_signal_score/1`): condition unless Jev can't tell,
+  seller motivation and urgency from `seller_pressure`, red flags for what is
+  really on offer, and a product listing's investment score capped at 2.
+  `nil` answers leave `signals` alone.
+  """
+  def overlay(signals, nil), do: signals
+
+  def overlay(signals, jev) do
+    pressure = get_in(jev, ["answers", "seller_pressure", "score"])
+    condition = LLMAnalyzer.normalize_condition(get_in(jev, ["answers", "condition", "choice"]))
+    flags = for {id, label} <- Enum.sort(@red_flags), yes?(jev, id), do: label
+
+    signals
+    |> Map.update(:red_flags, flags, &(Enum.reject(&1 || [], fn f -> f in @owned_flags end) ++ flags))
+    |> then(&if(condition == :unknown, do: &1, else: Map.put(&1, :condition, condition)))
+    |> then(fn signals ->
+      if pressure do
+        # GPT's urgency sat at 5 for most listings; none/some/strong → 5/8/10
+        level = pressure |> round() |> min(2) |> max(0)
+        %{signals | seller_motivation: Enum.at(@motivations, level)}
+        |> Map.put(:urgency, round(5 + pressure * 2.5))
+      else
+        signals
+      end
+    end)
+    |> then(&if(yes?(jev, "product"), do: Map.update(&1, :investment_score, 2, fn s -> min(s || 2, 2) end), else: &1))
   end
 
   @doc "Whether stored `jev_signals` answer the yes/no question `id` with yes."
