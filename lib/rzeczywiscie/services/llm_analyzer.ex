@@ -763,7 +763,7 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
       _ -> 0
     end
     
-    red_flag_penalty = min(length(signals.red_flags) * -3, -9)  # Max -9
+    red_flag_penalty = max(length(signals.red_flags) * -3, -9)  # Max -9
     positive_bonus = min(length(signals.positive_signals) * 2, 6)  # Max +6
     
     # Total: urgency (0-10) + condition (-5 to +5) + motivation (0-5) 

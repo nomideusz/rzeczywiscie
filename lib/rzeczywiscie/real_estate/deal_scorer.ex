@@ -20,7 +20,14 @@ defmodule Rzeczywiscie.RealEstate.DealScorer do
   # Property types to EXCLUDE from hot deals (non-residential)
   # These are filtered both in the query and in validation
   @excluded_types ~w(działka garaż magazyn hala blaszak boks kontener biuro lokal)
-  
+
+  # Title words that give away a non-home the portal filed as a flat or house
+  # (containers, pavilions and warehouses turn up as "mieszkanie"/"dom").
+  # Only words that can't describe part of a home: matching the type list
+  # above against titles dropped every "z garażem", "dom z działką",
+  # "świetna lokalizacja" and "Osiedle Podhalanin" from Hot Deals.
+  @excluded_title_words ~w(kontener pawilon magazyn blaszak)
+
   # Valid Kraków districts - properties outside these are excluded from Hot Deals
   # This ensures we only compare properties within the same market
   @krakow_districts [
@@ -101,13 +108,8 @@ defmodule Rzeczywiscie.RealEstate.DealScorer do
     type_lower = String.downcase(type)
     title_lower = String.downcase(title || "")
     
-    # Exclude if type is in excluded list
-    excluded = Enum.any?(@excluded_types, fn excluded_type ->
-      String.contains?(type_lower, excluded_type) or
-      String.contains?(title_lower, excluded_type)
-    end)
-    
-    not excluded
+    not Enum.any?(@excluded_types, &String.contains?(type_lower, &1)) and
+      not Enum.any?(@excluded_title_words, &String.contains?(title_lower, &1))
   end
   
   # Check if price is within reasonable range for the transaction type
@@ -190,8 +192,9 @@ defmodule Rzeczywiscie.RealEstate.DealScorer do
     
     # Exclude non-residential types unless explicitly requested
     base_query = unless include_all_types do
-      # Exclude działka, garaż, magazyn, etc. by checking type and title
-      excluded_pattern = "%działk%" 
+      # Exclude działka, garaż, magazyn, etc. by type; titles are checked in
+      # valid_property_type?/1
+      excluded_pattern = "%działk%"
       base_query
       |> where([p], not ilike(p.property_type, ^excluded_pattern))
       |> where([p], not ilike(p.property_type, "%garaż%"))
@@ -202,10 +205,6 @@ defmodule Rzeczywiscie.RealEstate.DealScorer do
       |> where([p], not ilike(p.property_type, "%kontener%"))
       |> where([p], not ilike(p.property_type, "%biuro%"))
       |> where([p], not ilike(p.property_type, "%lokal%"))
-      |> where([p], not ilike(p.title, "%działk%"))
-      |> where([p], not ilike(p.title, "%garaż%"))
-      |> where([p], not ilike(p.title, "%magazyn%"))
-      |> where([p], not ilike(p.title, "%blaszak%"))
     else
       base_query
     end
@@ -324,8 +323,7 @@ defmodule Rzeczywiscie.RealEstate.DealScorer do
     |> where([p], not ilike(p.property_type, "%działk%"))
     |> where([p], not ilike(p.property_type, "%garaż%"))
     |> where([p], not ilike(p.property_type, "%magazyn%"))
-    |> where([p], not ilike(p.title, "%działk%"))
-    
+
     stats = from(p in query,
       select: %{
         count: count(p.id),
