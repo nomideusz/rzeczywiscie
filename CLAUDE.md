@@ -281,6 +281,14 @@ whitelisted on write (`Alert.criteria_keys/0`) and again on read
 (`Alerts.to_filters/1`); nothing from the database reaches the query builder as
 an arbitrary atom.
 
+Two keys the listing page doesn't send, `jev_yes` and `jev_no`, hold lists of
+Jev yes/no question ids (`Jev.noul_ids/0`): the stored answer must be at least
+0.7, or below it. A listing Jev hasn't answered matches neither way, so
+`run_alert/1` first asks Jev about up to 300 candidates per alert that lack a
+needed answer (newest first; listings without a description wait). **Backfill
+days** in the admin form starts an alert N days back instead of at the newest
+listing, which suits Jev alerts since they match few listings.
+
 ### Mail transport
 
 Alerts go out over SMTP submission to our own Stalwart server — **port 465 with
@@ -310,20 +318,26 @@ Use `/admin` → **Email Alerts** → **Send test** to verify the path end to en
 scraped titles are HTML-escaped in the digest, so a listing title cannot inject
 markup into the email.
 
-## Jev shadow analysis
+## Jev analysis
 
-`Services.Jev` asks TypeSafe's Jev model 19 typed questions per listing in one
-request: what is really on offer (fractional share, sitting tenant, bailiff
-sale, co-op/TBS right, contract assignment, product not property, wanted ad,
-swap), features (balcony, parking, lift, cellar, garden, ground floor, pets,
-furnished, no commission), `condition` and `seller_pressure`. It runs as step 3
-of `LLMAnalysisWorker` on listings GPT has analyzed, 200 per run, when
+`Services.Jev` asks TypeSafe's Jev model 23 typed questions per listing in one
+request, sending the portal's transaction type, property type and price along
+with the text: what is really on offer (fractional share, sitting tenant,
+bailiff sale, co-op/TBS right, contract assignment, product not property,
+wanted ad, swap), features (balcony, parking, lift, cellar, garden, ground
+floor, pets allowed, furnished, no commission), rental terms (pets forbidden,
+long-term let, beds rather than a home, subletting forbidden), `condition` and
+`seller_pressure`. It runs as step 3 of `LLMAnalysisWorker` on listings GPT has
+analyzed, 200 per run, and for alerts with Jev criteria, when
 `TYPESAFE_API_KEY` is set.
 
 Answers land verbatim in `properties.jev_signals` (with the model version and
-token usage) and `jev_analyzed_at`; **nothing reads them yet**. That is on
-purpose: compare against the `llm_*` columns, then pick thresholds in code
-without calling the model again. The model is pinned (`jev-1.13.0`) because
+token usage) and `jev_analyzed_at`. Alert criteria are the only reader so far;
+the rest waits for a comparison against the `llm_*` columns, after which
+thresholds can be picked in code without calling the model again. The rental
+questions were checked on 339 dev room/house rentals plus 12 synthetic cases:
+the pets answers followed the text, and 20 of 23 workers' houses counted as
+`bed_space`. The model is pinned (`jev-1.13.0`) because
 thresholds are tuned against a version. A yes/no answer counts as yes at 0.7
 or above (`Jev.yes?/2`): in a 39-listing smoke test, true cases scored 0.9 or
 more and false ones 0.42 at most.
@@ -523,7 +537,7 @@ Just use Tailwind classes in your Svelte components and they'll be included.
   - `alerts/alert.ex` - Saved search schema, criteria whitelist
   - `alerts/alert_match.ex` - Ledger of already-reported listings
   - `alerts/alert_email.ex` - Digest email (text + HTML)
-- `lib/rzeczywiscie/services/jev.ex` - Jev (TypeSafe) listing judgments, shadow mode
+- `lib/rzeczywiscie/services/jev.ex` - Jev (TypeSafe) listing judgments, stored for alerts and later scoring
 - `lib/rzeczywiscie/scrapers/` - Web scraper modules
   - `olx_scraper.ex` - OLX.pl scraper
   - `otodom_scraper.ex` - Otodom.pl scraper

@@ -13,6 +13,7 @@ defmodule RzeczywiscieWeb.AdminLive do
   alias Rzeczywiscie.RealEstate
   alias Rzeczywiscie.RealEstate.Property
   alias Rzeczywiscie.RealEstate.Voivodeships
+  alias Rzeczywiscie.Services.Jev
 
   @impl true
   def mount(_params, _session, socket) do
@@ -551,6 +552,21 @@ defmodule RzeczywiscieWeb.AdminLive do
               <input id="alert-min-area" type="number" name="min_area" min="0" step="1" placeholder="Any"
                 class="w-full px-2 py-1.5 text-xs border-2 border-base-content bg-base-100" />
             </div>
+            <%= for {field, label} <- [{"jev_yes", "Jev says yes"}, {"jev_no", "Jev says no"}] do %>
+              <div class="col-span-2">
+                <label class="block text-[10px] font-bold uppercase tracking-wide mb-1 opacity-60" for={"alert-#{field}"}><%= label %></label>
+                <select id={"alert-#{field}"} name={"#{field}[]"} multiple size="4" class="w-full px-2 py-1 text-xs border-2 border-base-content bg-base-100">
+                  <%= for id <- Jev.noul_ids() do %>
+                    <option value={id}><%= id %></option>
+                  <% end %>
+                </select>
+              </div>
+            <% end %>
+            <div>
+              <label class="block text-[10px] font-bold uppercase tracking-wide mb-1 opacity-60" for="alert-backfill" title="Also report matching listings first seen in the last N days">Backfill days</label>
+              <input id="alert-backfill" type="number" name="backfill_days" min="0" max="90" step="1" placeholder="0"
+                class="w-full px-2 py-1.5 text-xs border-2 border-base-content bg-base-100" />
+            </div>
             <div class="col-span-2 md:col-span-1">
               <button type="submit" class="w-full px-3 py-1.5 text-xs font-bold uppercase tracking-wide border-2 border-base-content hover:bg-base-content hover:text-base-100 transition-colors cursor-pointer">
                 + Add alert
@@ -800,10 +816,21 @@ defmodule RzeczywiscieWeb.AdminLive do
         "transaction_type",
         "property_type",
         "max_price",
-        "min_area"
+        "min_area",
+        "jev_yes",
+        "jev_no"
       ])
 
-    case Alerts.create_alert(%{name: Map.get(params, "name"), criteria: criteria}) do
+    attrs = %{name: Map.get(params, "name"), criteria: criteria}
+
+    # Backfill starts the alert N days back instead of at the newest listing
+    attrs =
+      case Integer.parse(Map.get(params, "backfill_days", "")) do
+        {days, ""} when days > 0 -> Map.put(attrs, :since_property_id, RealEstate.max_property_id(days))
+        _ -> attrs
+      end
+
+    case Alerts.create_alert(attrs) do
       {:ok, _alert} ->
         {:noreply, socket |> assign(:alert_error, nil) |> load_alerts()}
 
@@ -1068,7 +1095,9 @@ defmodule RzeczywiscieWeb.AdminLive do
   defp criteria_summary(criteria) when is_map(criteria) and map_size(criteria) > 0 do
     criteria
     |> Enum.sort_by(fn {key, _value} -> key end)
-    |> Enum.map(fn {key, value} -> "#{String.replace(key, "_", " ")}: #{value}" end)
+    |> Enum.map(fn {key, value} ->
+      "#{String.replace(key, "_", " ")}: #{value |> List.wrap() |> Enum.join(", ")}"
+    end)
     |> Enum.join(" · ")
   end
 

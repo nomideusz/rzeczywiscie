@@ -158,7 +158,9 @@ defmodule Rzeczywiscie.Alerts.AlertEmail do
         criteria["search"] && "\"#{criteria["search"]}\"",
         range_label(criteria["min_price"], criteria["max_price"], "zł"),
         range_label(criteria["min_area"], criteria["max_area"], "m²"),
-        criteria["rooms"] && "#{criteria["rooms"]} rooms"
+        criteria["rooms"] && "#{criteria["rooms"]} rooms",
+        criteria["jev_yes"] && "Jev yes: #{Enum.join(criteria["jev_yes"], ", ")}",
+        criteria["jev_no"] && "Jev no: #{Enum.join(criteria["jev_no"], ", ")}"
       ]
       |> Enum.reject(&is_nil/1)
 

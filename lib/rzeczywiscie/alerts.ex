@@ -15,6 +15,10 @@ defmodule Rzeczywiscie.Alerts do
     * **Never twice.** Everything reported is written to `property_alert_matches`
       under a unique index, so retries, overlapping cron ticks and manual runs
       cannot re-send a listing.
+
+  Criteria can also require Jev's yes/no answers (`jev_yes` / `jev_no`). Those
+  are stored per listing, so a run first asks Jev about candidates that lack
+  one, and a listing Jev hasn't answered waits rather than matching.
   """
 
   import Ecto.Query, warn: false
@@ -26,10 +30,14 @@ defmodule Rzeczywiscie.Alerts do
   alias Rzeczywiscie.Mailer
   alias Rzeczywiscie.RealEstate
   alias Rzeczywiscie.Repo
+  alias Rzeczywiscie.Services.Jev
 
   # Cap per email. Anything above this waits for the next run rather than
   # producing a mail nobody reads.
   @max_matches_per_email 40
+
+  # Jev calls per alert per run (~300ms each). A backfill drains over runs.
+  @jev_per_run 300
 
   ## Alerts CRUD
 
@@ -152,6 +160,8 @@ defmodule Rzeczywiscie.Alerts do
   defp filter_key("source"), do: :source
   defp filter_key("transaction_type"), do: :transaction_type
   defp filter_key("property_type"), do: :property_type
+  defp filter_key("jev_yes"), do: :jev_yes
+  defp filter_key("jev_no"), do: :jev_no
   defp filter_key(_), do: nil
 
   ## Running
@@ -195,6 +205,7 @@ defmodule Rzeczywiscie.Alerts do
   delivery failure simply means the same listings are retried next run.
   """
   def run_alert(%Alert{} = alert) do
+    ask_jev(alert)
     now = DateTime.utc_now() |> DateTime.truncate(:second)
 
     case pending_matches(alert) do
@@ -216,6 +227,46 @@ defmodule Rzeczywiscie.Alerts do
             Logger.error("Alert #{alert.id} (#{alert.name}) delivery failed: #{inspect(reason)}")
             {:error, reason}
         end
+    end
+  end
+
+  # Asks Jev about the alert's candidates that lack an answer it needs: new
+  # listings, and ones asked before a question existed. Newest first.
+  defp ask_jev(%Alert{criteria: criteria} = alert) do
+    # A question retired since the alert was saved would never get an answer
+    ids =
+      (List.wrap(criteria["jev_yes"]) ++ List.wrap(criteria["jev_no"]))
+      |> Enum.filter(&(&1 in Jev.noul_ids()))
+
+    if ids != [] and Jev.configured?() do
+      candidates =
+        criteria
+        |> Map.drop(["jev_yes", "jev_no"])
+        |> to_filters()
+        |> RealEstate.filter_query()
+        |> where([p], p.id > ^alert.since_property_id)
+        # The answers come from the text, so a listing without one yet waits
+        |> where([p], fragment("length(?) > 0", p.description))
+        |> where(
+          [p],
+          is_nil(p.jev_signals) or
+            not fragment("(?->'answers') \\?& ?::text[]", p.jev_signals, ^ids)
+        )
+        |> order_by([p], desc: p.id)
+        |> limit(@jev_per_run)
+        |> Repo.all()
+
+      Enum.reduce_while(candidates, 0, fn property, failures ->
+        case Jev.analyze_and_store(property) do
+          {:ok, _} ->
+            {:cont, 0}
+
+          {:error, reason} ->
+            Logger.warning("Alert #{alert.id}: Jev failed for ##{property.id}: #{inspect(reason)}")
+            # Three in a row means Jev is down; the next run picks up the rest
+            if failures < 2, do: {:cont, failures + 1}, else: {:halt, failures + 1}
+        end
+      end)
     end
   end
 

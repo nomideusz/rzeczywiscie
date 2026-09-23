@@ -13,8 +13,10 @@ defmodule Rzeczywiscie.Alerts.Alert do
   import Ecto.Changeset
 
   alias Rzeczywiscie.RealEstate.Voivodeships
+  alias Rzeczywiscie.Services.Jev
 
-  @criteria_keys ~w(search city voivodeship min_price max_price min_area max_area rooms source transaction_type property_type)
+  # jev_yes / jev_no: lists of Jev yes/no question ids the answer must match
+  @criteria_keys ~w(search city voivodeship min_price max_price min_area max_area rooms source transaction_type property_type jev_yes jev_no)
 
   schema "property_alerts" do
     field :name, :string
@@ -50,6 +52,7 @@ defmodule Rzeczywiscie.Alerts.Alert do
     |> validate_required([:name])
     |> validate_length(:name, min: 1, max: 120)
     |> validate_criteria()
+    |> validate_jev_questions()
   end
 
   @doc false
@@ -78,6 +81,14 @@ defmodule Rzeczywiscie.Alerts.Alert do
 
   defp cast_value({key, value}) when key in @numeric_keys, do: {key, to_number(value)}
   defp cast_value({"rooms", value}), do: {"rooms", to_integer(value)}
+
+  defp cast_value({key, ids}) when key in ~w(jev_yes jev_no) do
+    case ids |> List.wrap() |> Enum.uniq() |> Enum.sort() do
+      [] -> {key, nil}
+      ids -> {key, ids}
+    end
+  end
+
   defp cast_value({key, value}) when is_binary(value), do: {key, String.trim(value)}
   defp cast_value(pair), do: pair
 
@@ -118,6 +129,21 @@ defmodule Rzeczywiscie.Alerts.Alert do
         else
           add_error(changeset, :criteria, "unknown region: #{value}")
         end
+    end
+  end
+
+  # An unknown question has no stored answers, so the alert would match nothing
+  # while still asking Jev about every candidate.
+  defp validate_jev_questions(changeset) do
+    criteria = get_field(changeset, :criteria) || %{}
+
+    unknown =
+      (List.wrap(criteria["jev_yes"]) ++ List.wrap(criteria["jev_no"]))
+      |> Enum.reject(&(&1 in Jev.noul_ids()))
+
+    case unknown do
+      [] -> changeset
+      _ -> add_error(changeset, :criteria, "unknown Jev question: #{Enum.join(unknown, ", ")}")
     end
   end
 end

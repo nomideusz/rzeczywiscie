@@ -83,10 +83,10 @@ defmodule Rzeczywiscie.Workers.LLMAnalysisWorker do
         progress.("Jev #{idx}/#{total} (#{ok} ok, #{failed} failed)")
 
         # A failure leaves jev_analyzed_at unset, so the next run retries it
-        with {:ok, signals} <- Jev.analyze(property),
-             {:ok, _} <- RealEstate.update_property(property, %{jev_signals: signals, jev_analyzed_at: DateTime.utc_now()}) do
-          {ok + 1, failed, last_error}
-        else
+        case Jev.analyze_and_store(property) do
+          {:ok, _} ->
+            {ok + 1, failed, last_error}
+
           {:error, reason} ->
             Logger.warning("  ✗ Jev failed for ##{property.id}: #{inspect(reason)}")
             {ok, failed + 1, reason}

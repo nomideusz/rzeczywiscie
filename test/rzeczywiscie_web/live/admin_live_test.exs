@@ -39,6 +39,37 @@ defmodule RzeczywiscieWeb.AdminLiveTest do
       assert alert.enabled
     end
 
+    test "creates a Jev alert that starts N days back", %{conn: conn} do
+      # first seen just now, so a 30-day backfill starts below it
+      listing =
+        Rzeczywiscie.Repo.insert!(%Rzeczywiscie.RealEstate.Property{
+          title: "Pokój",
+          url: "https://olx.pl/oferta/1",
+          source: "olx",
+          external_id: "1"
+        })
+
+      {:ok, view, _html} = live(conn, "/admin")
+
+      html =
+        view
+        |> form("form[phx-submit='alert_create']", %{
+          "name" => "Room, cats OK",
+          "transaction_type" => "wynajem",
+          "jev_yes" => ["pets_allowed", "long_term"],
+          "jev_no" => ["bed_space"],
+          "backfill_days" => "30"
+        })
+        |> render_submit()
+
+      assert html =~ "jev yes: long_term, pets_allowed"
+
+      assert [%{since_property_id: since, criteria: %{"jev_no" => ["bed_space"]}}] =
+               Rzeczywiscie.Alerts.list_alerts()
+
+      assert since < listing.id
+    end
+
     test "surfaces a validation error instead of silently dropping the alert", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/admin")
 

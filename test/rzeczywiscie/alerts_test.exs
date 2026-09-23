@@ -73,6 +73,20 @@ defmodule Rzeczywiscie.AlertsTest do
                alert(%{criteria: %{"voivodeship" => "malopolskie"}})
     end
 
+    test "keeps Jev questions as sorted lists and rejects unknown ones" do
+      alert =
+        alert(%{
+          criteria: %{"jev_yes" => ["pets_allowed", "long_term", "long_term"], "jev_no" => []}
+        })
+
+      assert alert.criteria == %{"jev_yes" => ["long_term", "pets_allowed"]}
+
+      assert {:error, changeset} =
+               Alerts.create_alert(%{name: "Typo", criteria: %{"jev_no" => ["pets_alowed"]}})
+
+      assert "unknown Jev question: pets_alowed" in errors_on(changeset).criteria
+    end
+
     test "to_filters only emits whitelisted keys" do
       filters = Alerts.to_filters(%{"city" => "Rzeszów", "bogus" => 1, "max_price" => 100})
 
@@ -198,6 +212,89 @@ defmodule Rzeczywiscie.AlertsTest do
     end
   end
 
+  describe "Jev criteria" do
+    setup do
+      previous = Application.get_env(:rzeczywiscie, :typesafe_api_key)
+      Application.put_env(:rzeczywiscie, :typesafe_api_key, "test-key")
+      on_exit(fn -> Application.put_env(:rzeczywiscie, :typesafe_api_key, previous) end)
+    end
+
+    test "asks Jev about the candidates it has no answers for, then matches on them" do
+      alert =
+        alert(%{
+          criteria: %{
+            "transaction_type" => "wynajem",
+            "jev_yes" => ["pets_allowed"],
+            "jev_no" => ["bed_space"]
+          }
+        })
+
+      rental = %{transaction_type: "wynajem", property_type: "pokój"}
+
+      cats =
+        property(
+          Map.merge(rental, %{title: "Pokój z kotami", description: "Koty mile widziane."})
+        )
+
+      no_pets =
+        property(Map.merge(rental, %{title: "Pokój bez zwierząt", description: "Bez zwierząt."}))
+
+      # Asked before bed_space existed, so it is asked again
+      stale =
+        property(
+          Map.merge(rental, %{
+            title: "Pokój dla kociarzy",
+            description: "Koty mile widziane.",
+            jev_signals: %{"answers" => %{"pets_allowed" => %{"noul" => 0.9}}}
+          })
+        )
+
+      # No text to judge yet: waits, and fails the "no" check meanwhile
+      no_text = property(Map.put(rental, :title, "Pokój"))
+      sale = property(%{title: "Mieszkanie", description: "Koty mile widziane."})
+
+      Req.Test.stub(Rzeczywiscie.Services.Jev, fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        pets = if body =~ "Koty mile widziane", do: 0.95, else: 0.05
+
+        Req.Test.json(conn, %{
+          "model" => "jev-1.13.0",
+          "answers" => %{"pets_allowed" => %{"noul" => pets}, "bed_space" => %{"noul" => 0.02}}
+        })
+      end)
+
+      assert {:ok, {:sent, 2}} = Alerts.run_alert(alert)
+
+      assert_email_sent(fn email ->
+        refute email.text_body =~ "Pokój bez zwierząt"
+        assert email.text_body =~ "Pokój z kotami"
+        assert email.text_body =~ "Pokój dla kociarzy"
+      end)
+
+      for asked <- [cats, no_pets, stale], do: assert(Repo.reload!(asked).jev_analyzed_at)
+      for skipped <- [no_text, sale], do: refute(Repo.reload!(skipped).jev_signals)
+
+      # Answers are stored, so the next run asks nothing
+      Req.Test.stub(Rzeczywiscie.Services.Jev, fn _conn -> flunk("asked Jev again") end)
+      assert {:ok, :no_matches} = Alerts.run_alert(Alerts.get_alert(alert.id))
+    end
+
+    test "stops asking after three failures in a row" do
+      alert = alert(%{criteria: %{"jev_yes" => ["pets_allowed"]}})
+      for i <- 1..4, do: property(%{title: "Pokój #{i}", description: "Opis."})
+      test = self()
+
+      Req.Test.stub(Rzeczywiscie.Services.Jev, fn conn ->
+        send(test, :asked)
+        Plug.Conn.send_resp(conn, 529, ~s({"error":"overloaded"}))
+      end)
+
+      assert {:ok, :no_matches} = Alerts.run_alert(alert)
+      for _ <- 1..3, do: assert_received(:asked)
+      refute_received :asked
+    end
+  end
+
   describe "alert emails" do
     test "escapes scraped titles in the HTML part" do
       alert = alert()
@@ -225,7 +322,12 @@ defmodule Rzeczywiscie.AlertsTest do
     end
 
     test "summarises the criteria in the digest header" do
-      alert = alert(%{name: "Cheap", criteria: %{"voivodeship" => "podkarpackie", "max_price" => 300_000}})
+      alert =
+        alert(%{
+          name: "Cheap",
+          criteria: %{"voivodeship" => "podkarpackie", "max_price" => 300_000}
+        })
+
       property(%{price: Decimal.new("100000")})
 
       assert {:ok, {:sent, 1}} = Alerts.run_alert(alert)

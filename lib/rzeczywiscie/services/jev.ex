@@ -4,10 +4,11 @@ defmodule Rzeczywiscie.Services.Jev do
   on offer, which features the property has, its condition and how hard the
   seller is pushing. All questions go out in one request per listing.
 
-  Runs in shadow next to the GPT analyzer (step 3 of `LLMAnalysisWorker`);
-  nothing reads the results yet. Answers are stored verbatim in
-  `properties.jev_signals` under the question ids below, so thresholds and
-  weights can be tuned later without asking the model again:
+  Runs next to the GPT analyzer (step 3 of `LLMAnalysisWorker`) and for
+  alerts with Jev criteria (`Rzeczywiscie.Alerts`), the only reader so far.
+  Answers are stored verbatim in `properties.jev_signals` under the question
+  ids below, so thresholds and weights can be tuned later without asking the
+  model again:
 
     * Noul: `%{"noul" => p}`, the probability that the answer is yes
     * Choice: `%{"choice" => option, "probabilities" => %{option => p}, "confidence" => c}`
@@ -154,7 +155,21 @@ defmodule Rzeczywiscie.Services.Jev do
     "pets_allowed" => %{
       type: "noul",
       instructions:
-        "Does `listing` say pets are allowed ('zwierzęta akceptowane', 'przyjazne zwierzętom')?"
+        "Does `listing` accept pets such as cats or dogs, or say they can be agreed with the owner ('zwierzęta akceptowane', 'przyjazne zwierzętom', 'zwierzęta do uzgodnienia')?",
+      criteria: %{
+        "true" => "Pets are welcome, or can be agreed with the owner.",
+        "false" =>
+          "Pets are not accepted ('bez zwierząt', 'nie akceptujemy zwierząt'), or `listing` does not mention pets."
+      }
+    },
+    "pets_forbidden" => %{
+      type: "noul",
+      instructions:
+        "Does `listing` rule out pets ('bez zwierząt', 'zwierzęta nie są akceptowane', 'dla osoby nieposiadającej zwierząt')?",
+      criteria: %{
+        "true" => "Pets are not accepted, or the tenant must not have pets.",
+        "false" => "Pets are welcome or can be agreed, or `listing` does not mention pets."
+      }
     },
     "furnished" => %{
       type: "noul",
@@ -169,6 +184,39 @@ defmodule Rzeczywiscie.Services.Jev do
       type: "noul",
       instructions:
         "Does `listing` say the buyer or tenant pays no agency commission ('bez prowizji', '0% prowizji', 'bezpośrednio od właściciela')?"
+    },
+    # Rental terms
+    "long_term" => %{
+      type: "noul",
+      instructions:
+        "Is the property in `listing` let for months or longer, rather than by the night or week ('na doby', 'noclegi', 'wynajem krótkoterminowy')?",
+      criteria: %{
+        "true" => "A lease of a month or longer, at a monthly rent.",
+        "false" =>
+          "Stays paid by the night or week, holiday or short-term lets, or `listing` is not a rental."
+      }
+    },
+    "bed_space" => %{
+      type: "noul",
+      instructions:
+        "Does `listing` offer beds rather than a home: a place in a room shared with other tenants ('miejsce w pokoju 2-osobowym'), or a house or flat fitted out as quarters for a group of workers ('kwatery pracownicze', 'dom dla pracowników', 'dom dla 10 osób')?",
+      criteria: %{
+        "true" =>
+          "A bed or place in a shared room, or group quarters for workers, often priced per person.",
+        "false" =>
+          "A private room, or a whole flat or house for one tenant, a couple or a family who live there, even if they may sublet rooms; or `listing` is a sale."
+      }
+    },
+    "sublet_forbidden" => %{
+      type: "noul",
+      instructions:
+        "Does `listing` forbid subletting or sharing the property with other tenants, for example by letting it only to a family ('zakaz podnajmu', 'tylko dla rodziny', 'nie dla grup')?",
+      criteria: %{
+        "true" =>
+          "Subletting or flatmates are ruled out, or the property is let only to a family.",
+        "false" =>
+          "Subletting or several tenants are allowed, or `listing` says nothing about it."
+      }
     },
 
     # Condition and seller pressure. Options match the llm_condition values.
@@ -201,18 +249,28 @@ defmodule Rzeczywiscie.Services.Jev do
 
   def configured?, do: api_key() != ""
 
+  @doc "Ids of the yes/no questions, the ones alerts can filter on."
+  def noul_ids, do: for({id, %{type: "noul"}} <- @questions, do: id) |> Enum.sort()
+
+  def yes_threshold, do: @yes_threshold
+
   @doc """
   Asks every question about one listing. Returns
   `{:ok, %{"model" => version, "answers" => answers, "usage" => tokens}}`,
   ready to store (usage makes the spend queryable).
   """
-  def analyze(%{title: title, description: description}) do
+  def analyze(%{title: title, description: description} = listing) do
     body = %{
       model: @model,
       state: %{
+        # The portal's own fields ride along: agency descriptions often never
+        # say that a house is for rent, or that 8000 zł is a monthly rent.
         listing: %{
           title: title,
-          description: String.slice(description || "", 0, @max_description)
+          description: String.slice(description || "", 0, @max_description),
+          transaction_type: Map.get(listing, :transaction_type),
+          property_type: Map.get(listing, :property_type),
+          price_pln: Map.get(listing, :price)
         }
       },
       questions: @questions
@@ -230,6 +288,16 @@ defmodule Rzeczywiscie.Services.Jev do
 
       {:error, exception} ->
         {:error, exception}
+    end
+  end
+
+  @doc "Asks about `property` and stores the answers on it. A failure leaves it untouched."
+  def analyze_and_store(property) do
+    with {:ok, signals} <- analyze(property) do
+      Rzeczywiscie.RealEstate.update_property(property, %{
+        jev_signals: signals,
+        jev_analyzed_at: DateTime.utc_now()
+      })
     end
   end
 

@@ -9,6 +9,7 @@ defmodule Rzeczywiscie.RealEstate do
   alias Rzeczywiscie.RealEstate.Voivodeships
   alias Rzeczywiscie.RealEstate.PriceHistory
   alias Rzeczywiscie.RealEstate.Favorite
+  alias Rzeczywiscie.Services.Jev
 
   @topic "real_estate"
 
@@ -168,6 +169,18 @@ defmodule Rzeczywiscie.RealEstate do
         # Include properties with matching type OR unknown (nil) type
         where(query, [p], p.property_type == ^type or is_nil(p.property_type))
 
+      # Yes/no answers stored by Services.Jev. A listing Jev hasn't answered
+      # matches neither way, so it waits instead of passing a "no" check.
+      {:jev_yes, ids}, query when is_list(ids) ->
+        Enum.reduce(ids, query, fn id, query ->
+          where(query, [p], fragment("(?->'answers'->?::text->>'noul')::float >= ?", p.jev_signals, ^id, ^Jev.yes_threshold()))
+        end)
+
+      {:jev_no, ids}, query when is_list(ids) ->
+        Enum.reduce(ids, query, fn id, query ->
+          where(query, [p], fragment("(?->'answers'->?::text->>'noul')::float < ?", p.jev_signals, ^id, ^Jev.yes_threshold()))
+        end)
+
       {:has_coordinates, true}, query ->
         where(query, [p], not is_nil(p.latitude) and not is_nil(p.longitude))
 
@@ -234,6 +247,11 @@ defmodule Rzeczywiscie.RealEstate do
   """
   def max_property_id do
     Repo.aggregate(Property, :max, :id) || 0
+  end
+
+  @doc "Highest id among the listings first seen more than `days` days ago."
+  def max_property_id(days) when is_integer(days) do
+    Repo.one(from p in Property, where: p.inserted_at < ago(^days, "day"), select: max(p.id)) || 0
   end
 
   @doc """
