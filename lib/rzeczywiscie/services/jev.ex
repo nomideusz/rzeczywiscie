@@ -207,6 +207,16 @@ defmodule Rzeczywiscie.Services.Jev do
           "A private room, or a whole flat or house for one tenant, a couple or a family who live there, even if they may sublet rooms; or `listing` is a sale."
       }
     },
+    "business_only" => %{
+      type: "noul",
+      instructions:
+        "Does `listing` let the property only for business use, such as an office, a law firm or a company seat, rather than as a home ('tylko pod działalność', 'pod biuro', 'na kancelarię')?",
+      criteria: %{
+        "true" => "Only a business may use it; nobody may live there.",
+        "false" =>
+          "It may be lived in, even if a business or office use is also possible, or `listing` does not say."
+      }
+    },
     "women_only" => %{
       type: "noul",
       instructions:
