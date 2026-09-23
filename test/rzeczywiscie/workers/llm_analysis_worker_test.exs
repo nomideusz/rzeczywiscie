@@ -74,4 +74,19 @@ defmodule Rzeczywiscie.Workers.LLMAnalysisWorkerTest do
     assert :ok = perform_job(LLMAnalysisWorker, %{})
     assert %{jev_signals: nil, jev_analyzed_at: nil} = Repo.reload!(analyzed)
   end
+
+  test "a Jev-only run takes jev_limit listings, newest GPT analysis first" do
+    older = property(%{llm_condition: "good", llm_analyzed_at: ~U[2026-09-01 00:00:00Z]})
+    newer = property(%{llm_condition: "good", llm_analyzed_at: ~U[2026-09-02 00:00:00Z]})
+
+    Req.Test.stub(Jev, fn conn ->
+      Req.Test.json(conn, %{"model" => "jev-1.13.0", "answers" => %{}})
+    end)
+
+    assert {:ok, %{args: args}} = LLMAnalysisWorker.trigger(jev_only: true, jev_limit: 1)
+    assert :ok = perform_job(LLMAnalysisWorker, args)
+
+    assert %{jev_analyzed_at: %DateTime{}} = Repo.reload!(newer)
+    assert %{jev_analyzed_at: nil} = Repo.reload!(older)
+  end
 end

@@ -35,6 +35,7 @@ defmodule RzeczywiscieWeb.AdminLive do
       |> assign(:queue, get_queue_snapshot())
       |> assign(:cron_schedule, get_cron_schedule())
       |> assign(:alert_error, nil)
+      |> assign(:jev_compare, nil)
       |> assign(:mail_configured, Alerts.configured?())
       |> assign(:alert_recipient, Alerts.alert_recipient())
       |> load_alerts()
@@ -137,6 +138,7 @@ defmodule RzeczywiscieWeb.AdminLive do
               <div class="text-xs space-y-1 opacity-70">
                 <p>• Runs every 6h (30 properties)</p>
                 <p>• <%= @stats.pending_llm %> with descriptions pending</p>
+                <p>• <%= @stats.pending_jev %> analyzed, waiting for Jev</p>
               </div>
               <%= if @job_status.last_llm do %>
                 <div class="mt-2 text-[10px] opacity-50">Last: <%= format_time_ago(@job_status.last_llm) %></div>
@@ -363,6 +365,15 @@ defmodule RzeczywiscieWeb.AdminLive do
                 >
                   <%= if @running_task == "llm", do: "⏳ Running...", else: "🤖 LLM Analysis" %>
                 </button>
+
+                <button
+                  phx-click="run_task"
+                  phx-value-task="jev"
+                  disabled={@running_task != nil}
+                  class={"px-4 py-3 text-xs font-bold uppercase tracking-wide border-2 transition-colors cursor-pointer #{if @running_task != nil, do: "opacity-50 border-base-content/30", else: "border-accent text-accent hover:bg-accent hover:text-accent-content"}"}
+                >
+                  <%= if @running_task == "jev", do: "⏳ Running...", else: "🧪 Jev Analysis" %>
+                </button>
                 
                 <button 
                   phx-click="run_task" 
@@ -459,6 +470,97 @@ defmodule RzeczywiscieWeb.AdminLive do
             </div>
           </div>
         <% end %>
+
+        <!-- Jev vs GPT, loaded on open: it reads every listing both analyzed -->
+        <div class="bg-base-100 border-2 border-base-content mb-6">
+          <button phx-click="toggle_jev" class="w-full px-4 py-3 flex items-center justify-between hover:bg-base-200 transition-colors cursor-pointer">
+            <div class="text-left">
+              <h2 class="text-sm font-bold uppercase tracking-wide">🧪 Jev vs GPT</h2>
+              <p class="text-[10px] opacity-60">Condition and seller pressure on the listings both analyzed</p>
+            </div>
+            <span class={"transition-transform #{if @jev_compare, do: "rotate-180"}"}>▼</span>
+          </button>
+
+          <%= if @jev_compare do %>
+            <div class="border-t border-base-content/20 p-4 space-y-6">
+              <%= if @jev_compare.total == 0 do %>
+                <p class="text-xs opacity-60">No listing has both answers yet. Run 🧪 Jev Analysis under Manual Actions.</p>
+              <% else %>
+                <div class="flex flex-wrap gap-6 text-xs">
+                  <div><span class="text-2xl font-black"><%= @jev_compare.total %></span> <span class="opacity-60">listings answered by both</span></div>
+                  <div>
+                    <span class="text-2xl font-black"><%= pct(@jev_compare.condition_agree) %></span>
+                    <span class="opacity-60">same condition (<%= pct(@jev_compare.named_agree) %> when both name one)</span>
+                  </div>
+                  <div><span class="text-2xl font-black"><%= pct(@jev_compare.pressure_agree) %></span> <span class="opacity-60">same seller pressure</span></div>
+                </div>
+
+                <div class="grid md:grid-cols-2 gap-6">
+                  <div class="overflow-x-auto">
+                    <h3 class="text-[10px] font-bold uppercase tracking-wide opacity-60 mb-2">Condition: GPT (rows) × Jev (columns)</h3>
+                    <table class="text-[11px]">
+                      <tr>
+                        <th></th>
+                        <%= for jev <- jev_conditions() do %><th class="px-1 font-bold"><%= jev %></th><% end %>
+                      </tr>
+                      <%= for gpt <- jev_conditions() do %>
+                        <tr>
+                          <th class="pr-2 text-left font-bold"><%= gpt %></th>
+                          <%= for jev <- jev_conditions() do %>
+                            <td class={"px-1 text-center #{if gpt == jev, do: "bg-success/20 font-bold"}"}><%= Map.get(@jev_compare.condition, {gpt, jev}, "·") %></td>
+                          <% end %>
+                        </tr>
+                      <% end %>
+                    </table>
+                  </div>
+                  <div class="overflow-x-auto">
+                    <h3 class="text-[10px] font-bold uppercase tracking-wide opacity-60 mb-2">Seller pressure: GPT motivation (rows) × Jev (columns)</h3>
+                    <table class="text-[11px]">
+                      <tr>
+                        <th></th>
+                        <%= for {label, _level} <- jev_pressure_levels() do %><th class="px-1 font-bold"><%= label %></th><% end %>
+                      </tr>
+                      <%= for gpt <- ~w(standard motivated very_motivated unknown) do %>
+                        <tr>
+                          <th class="pr-2 text-left font-bold"><%= gpt %></th>
+                          <%= for {_label, level} <- jev_pressure_levels() do %>
+                            <td class={"px-1 text-center #{if motivation_level(gpt) == level, do: "bg-success/20 font-bold"}"}><%= Map.get(@jev_compare.pressure, {gpt, level}, "·") %></td>
+                          <% end %>
+                        </tr>
+                      <% end %>
+                    </table>
+                  </div>
+                </div>
+
+                <div class="grid md:grid-cols-2 gap-6">
+                  <div>
+                    <h3 class="text-[10px] font-bold uppercase tracking-wide opacity-60 mb-2">Condition differs (latest 15, both name one)</h3>
+                    <ul id="jev-diffs">
+                      <%= for row <- @jev_compare.condition_diffs do %>
+                        <li class="text-xs border-b border-base-content/10 py-1">
+                          <a href={row.url} target="_blank" rel="noopener" class="hover:underline"><%= row.title %></a>
+                          <div class="text-[10px] opacity-60">GPT <%= row.gpt_condition %> · Jev <%= row.jev_condition %></div>
+                        </li>
+                      <% end %>
+                    </ul>
+                  </div>
+                  <div>
+                    <h3 class="text-[10px] font-bold uppercase tracking-wide opacity-60 mb-2">Jev: not what it looks like (latest 15)</h3>
+                    <ul id="jev-flagged">
+                      <%= for row <- @jev_compare.flagged do %>
+                        <li class="text-xs border-b border-base-content/10 py-1">
+                          <a href={row.url} target="_blank" rel="noopener" class="hover:underline"><%= row.title %></a>
+                          <div class="text-[10px] font-bold text-warning">Jev: <%= Enum.join(row.flags, ", ") %></div>
+                          <div class="text-[10px] opacity-60">GPT red flags: <%= if row.red_flags in [nil, []], do: "none", else: Enum.join(row.red_flags, "; ") %></div>
+                        </li>
+                      <% end %>
+                    </ul>
+                  </div>
+                </div>
+              <% end %>
+            </div>
+          <% end %>
+        </div>
 
         <!-- Email Alerts -->
         <div class="bg-base-100 border-2 border-base-content mb-6">
@@ -755,12 +857,19 @@ defmodule RzeczywiscieWeb.AdminLive do
       socket
       |> assign(:stats, get_stats())
       |> assign(:job_status, get_job_status())
+      |> assign(:jev_compare, socket.assigns.jev_compare && get_jev_comparison())
     }
   end
 
   @impl true
   def handle_event("toggle_manual", _params, socket) do
     {:noreply, assign(socket, :show_manual, !socket.assigns.show_manual)}
+  end
+
+  @impl true
+  def handle_event("toggle_jev", _params, socket) do
+    compare = if socket.assigns.jev_compare, do: nil, else: get_jev_comparison()
+    {:noreply, assign(socket, :jev_compare, compare)}
   end
 
   @impl true
@@ -927,6 +1036,11 @@ defmodule RzeczywiscieWeb.AdminLive do
     "LLM analysis queued (30 properties) — see Job Queue above"
   end
 
+  defp run_task("jev") do
+    {:ok, _job} = Rzeczywiscie.Workers.LLMAnalysisWorker.trigger(jev_only: true, jev_limit: 1000)
+    "Jev analysis queued (up to 1000 GPT-analyzed listings) — see Job Queue above"
+  end
+
   defp run_task("maintenance") do
     {:ok, _job} = Rzeczywiscie.Workers.DataMaintenanceWorker.trigger()
     "Maintenance job queued — see Job Queue above"
@@ -1057,7 +1171,18 @@ defmodule RzeczywiscieWeb.AdminLive do
       )
     )
     llm_avg_score = if llm_avg, do: Float.round(Decimal.to_float(llm_avg), 1), else: 0
-    
+
+    # The set the Jev step works through: active listings GPT really analyzed
+    pending_jev = Repo.aggregate(
+      from(p in Property,
+        where: p.active == true and
+               not is_nil(p.llm_analyzed_at) and
+               not is_nil(p.llm_condition) and
+               is_nil(p.jev_analyzed_at)
+      ),
+      :count, :id
+    )
+
     %{
       active: active,
       olx: olx,
@@ -1072,9 +1197,69 @@ defmodule RzeczywiscieWeb.AdminLive do
       llm_high_score: llm_high_score,
       llm_motivated: llm_motivated,
       llm_renovation: llm_renovation,
-      llm_avg_score: llm_avg_score
+      llm_avg_score: llm_avg_score,
+      pending_jev: pending_jev
     }
   end
+
+  # Jev's condition options are GPT's llm_condition values, and its
+  # seller_pressure levels stand against llm_motivation.
+  @jev_conditions ~w(needs_renovation to_finish good renovated new unknown)
+  @motivation_levels %{"standard" => 0, "motivated" => 1, "very_motivated" => 2}
+  # What is really on offer. GPT has no such fields; at best its free-text red
+  # flags mention them, so they are shown side by side, not scored.
+  @jev_offer_flags ~w(fractional_share sitting_tenant forced_sale occupancy_right contract_assignment product wanted_ad swap)
+
+  defp jev_conditions, do: @jev_conditions
+  defp jev_pressure_levels, do: [{"none", 0}, {"some", 1}, {"strong", 2}]
+  defp motivation_level(motivation), do: @motivation_levels[motivation]
+
+  # One pass over the listings both analyzed, newest Jev answer first
+  defp get_jev_comparison do
+    rows =
+      from(p in Property,
+        where: not is_nil(p.jev_signals) and not is_nil(p.llm_condition),
+        order_by: [desc: p.jev_analyzed_at],
+        select: %{
+          title: p.title,
+          url: p.url,
+          gpt_condition: p.llm_condition,
+          gpt_motivation: p.llm_motivation,
+          red_flags: p.llm_red_flags,
+          jev_condition: fragment("?->'answers'->'condition'->>'choice'", p.jev_signals),
+          pressure:
+            fragment("round((?->'answers'->'seller_pressure'->>'score')::numeric)::int", p.jev_signals),
+          flags:
+            fragment(
+              "array(select q.id from unnest(?::text[]) as q(id) where (?->'answers'->q.id->>'noul')::float >= ?)",
+              ^@jev_offer_flags,
+              p.jev_signals,
+              ^Jev.yes_threshold()
+            )
+        }
+      )
+      |> Repo.all()
+
+    named = Enum.filter(rows, &(&1.gpt_condition != "unknown" and &1.jev_condition not in [nil, "unknown"]))
+    rated = Enum.filter(rows, &(motivation_level(&1.gpt_motivation) != nil and &1.pressure != nil))
+
+    %{
+      total: length(rows),
+      condition: Enum.frequencies_by(rows, &{&1.gpt_condition, &1.jev_condition}),
+      condition_agree: share(rows, &(&1.gpt_condition == &1.jev_condition)),
+      named_agree: share(named, &(&1.gpt_condition == &1.jev_condition)),
+      pressure: Enum.frequencies_by(rows, &{&1.gpt_motivation, &1.pressure}),
+      pressure_agree: share(rated, &(motivation_level(&1.gpt_motivation) == &1.pressure)),
+      condition_diffs: named |> Enum.reject(&(&1.gpt_condition == &1.jev_condition)) |> Enum.take(15),
+      flagged: rows |> Enum.filter(&(&1.flags != [])) |> Enum.take(15)
+    }
+  end
+
+  defp share([], _agree?), do: nil
+  defp share(rows, agree?), do: round(Enum.count(rows, agree?) / length(rows) * 100)
+
+  defp pct(nil), do: "–"
+  defp pct(value), do: "#{value}%"
 
   @prop_page_size 20
 

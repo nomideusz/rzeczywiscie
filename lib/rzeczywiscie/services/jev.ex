@@ -5,10 +5,10 @@ defmodule Rzeczywiscie.Services.Jev do
   seller is pushing. All questions go out in one request per listing.
 
   Runs next to the GPT analyzer (step 3 of `LLMAnalysisWorker`) and for
-  alerts with Jev criteria (`Rzeczywiscie.Alerts`), the only reader so far.
-  Answers are stored verbatim in `properties.jev_signals` under the question
-  ids below, so thresholds and weights can be tuned later without asking the
-  model again:
+  alerts with Jev criteria (`Rzeczywiscie.Alerts`); /admin compares the
+  answers with GPT's. Answers are stored verbatim in `properties.jev_signals`
+  under the question ids below, so thresholds and weights can be tuned later
+  without asking the model again:
 
     * Noul: `%{"noul" => p}`, the probability that the answer is yes
     * Choice: `%{"choice" => option, "probabilities" => %{option => p}, "confidence" => c}`

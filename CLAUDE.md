@@ -328,12 +328,22 @@ floor, pets allowed, furnished, no commission), rental terms (pets forbidden,
 long-term let, beds rather than a home, subletting forbidden), `condition` and
 `seller_pressure`. It runs as step 3 of `LLMAnalysisWorker` on listings GPT has
 analyzed, 200 per run, and for alerts with Jev criteria, when
-`TYPESAFE_API_KEY` is set.
+`TYPESAFE_API_KEY` is set. `/admin` → Manual Actions → **🧪 Jev Analysis**
+runs step 3 alone on up to 1000 of them.
 
 Answers land verbatim in `properties.jev_signals` (with the model version and
-token usage) and `jev_analyzed_at`. Alert criteria are the only reader so far;
-the rest waits for a comparison against the `llm_*` columns, after which
-thresholds can be picked in code without calling the model again. The rental
+token usage) and `jev_analyzed_at`. Alerts filter on them. `/admin` →
+**🧪 Jev vs GPT** compares them with the `llm_*` columns on the listings both
+analyzed:
+
+- condition against `llm_condition`;
+- seller pressure against `llm_motivation`;
+- the latest disagreements, to check by hand;
+- the latest listings Jev flags as not what they seem, next to GPT's free-text
+  red flags.
+
+Once that settles, thresholds can be picked in code without calling the model
+again. The rental
 questions were checked on 339 dev room/house rentals plus 12 synthetic cases:
 the pets answers followed the text, and 20 of 23 workers' houses counted as
 `bed_space`. The model is pinned (`jev-1.13.0`) because

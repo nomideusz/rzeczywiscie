@@ -88,11 +88,18 @@ defmodule RzeczywiscieWeb.AdminLiveTest do
       {:ok, view, html} = live(conn, "/admin")
       assert html =~ "Temporary"
 
-      html = view |> element("button[phx-click='alert_toggle'][phx-value-id='#{alert.id}']") |> render_click()
+      html =
+        view
+        |> element("button[phx-click='alert_toggle'][phx-value-id='#{alert.id}']")
+        |> render_click()
+
       assert html =~ "paused"
       refute Rzeczywiscie.Alerts.get_alert(alert.id).enabled
 
-      view |> element("button[phx-click='alert_delete'][phx-value-id='#{alert.id}']") |> render_click()
+      view
+      |> element("button[phx-click='alert_delete'][phx-value-id='#{alert.id}']")
+      |> render_click()
+
       assert Rzeczywiscie.Alerts.get_alert(alert.id) == nil
     end
   end
@@ -180,5 +187,64 @@ defmodule RzeczywiscieWeb.AdminLiveTest do
 
     # discarded: shows up in recently finished with its final error
     assert html =~ "API quota exceeded"
+  end
+
+  test "Jev vs GPT compares condition and pressure and lists what differs", %{conn: conn} do
+    conn = Plug.Test.init_test_session(conn, %{admin_authed: true})
+
+    insert = fn n, gpt, {condition, pressure, flags} ->
+      answers =
+        Map.new(flags, &{&1, %{"noul" => 0.95}})
+        |> Map.put("condition", %{"choice" => condition})
+        |> Map.put("seller_pressure", %{"score" => pressure})
+
+      Rzeczywiscie.Repo.insert!(
+        struct!(
+          Rzeczywiscie.RealEstate.Property,
+          Map.merge(
+            %{
+              title: "Listing #{n}",
+              url: "https://olx.pl/oferta/#{n}",
+              source: "olx",
+              external_id: "#{n}",
+              jev_signals: %{"answers" => answers},
+              jev_analyzed_at: ~U[2026-09-23 06:00:00Z]
+            },
+            gpt
+          )
+        )
+      )
+    end
+
+    insert.(1, %{llm_condition: "good", llm_motivation: "standard"}, {"good", 0.1, []})
+
+    insert.(
+      2,
+      %{llm_condition: "good", llm_motivation: "motivated"},
+      {"needs_renovation", 1.2, []}
+    )
+
+    insert.(
+      3,
+      %{
+        llm_condition: "unknown",
+        llm_motivation: "standard",
+        llm_red_flags: ["Tylko udział 1/2"]
+      },
+      {"renovated", 1.8, ["fractional_share"]}
+    )
+
+    {:ok, view, _html} = live(conn, "/admin")
+    html = render_click(view, "toggle_jev")
+
+    # condition: 1 of 3 same, 1 of the 2 where GPT names one; pressure: 2 of 3
+    assert html =~ "33%"
+    assert html =~ "50% when both name one"
+    assert html =~ "67%"
+    assert has_element?(view, "#jev-diffs", "Listing 2")
+    # GPT had no condition for listing 3, so it is not a disagreement
+    refute has_element?(view, "#jev-diffs", "Listing 3")
+    assert has_element?(view, "#jev-flagged", "fractional_share")
+    assert has_element?(view, "#jev-flagged", "Tylko udział 1/2")
   end
 end

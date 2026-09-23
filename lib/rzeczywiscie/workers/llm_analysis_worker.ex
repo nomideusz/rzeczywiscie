@@ -22,6 +22,15 @@ defmodule Rzeczywiscie.Workers.LLMAnalysisWorker do
   alias Rzeczywiscie.RealEstate.Property
 
   @impl Oban.Worker
+  # Admin's "Jev Analysis": step 3 alone, on up to jev_limit listings
+  def perform(%Oban.Job{args: %{"jev_only" => true} = args} = job) do
+    progress = fn msg -> Rzeczywiscie.JobProgress.report(job, msg) end
+    jev_result = run_jev_shadow(progress, args["jev_limit"])
+    Logger.info("🧪 Jev only: #{jev_result}")
+    progress.("done - #{jev_result}")
+    :ok
+  end
+
   def perform(%Oban.Job{args: args} = job) do
     limit = Map.get(args, "limit", 30)
     
@@ -61,7 +70,7 @@ defmodule Rzeczywiscie.Workers.LLMAnalysisWorker do
   # is only written by a real GPT analysis, never by the garbage/metadata paths.
   @jev_batch 200
 
-  defp run_jev_shadow(progress) do
+  defp run_jev_shadow(progress, limit \\ nil) do
     alias Rzeczywiscie.Services.Jev
 
     if Jev.configured?() do
@@ -71,7 +80,7 @@ defmodule Rzeczywiscie.Workers.LLMAnalysisWorker do
                not is_nil(p.llm_condition) and
                is_nil(p.jev_analyzed_at),
         order_by: [desc: p.llm_analyzed_at],
-        limit: @jev_batch
+        limit: ^(limit || @jev_batch)
       )
       |> Repo.all()
 
@@ -368,10 +377,13 @@ defmodule Rzeczywiscie.Workers.LLMAnalysisWorker do
   defp atom_to_string(_), do: "unknown"
 
   @doc """
-  Manually trigger the LLM analysis job.
+  Manually trigger the LLM analysis job. `jev_only: true` skips the GPT steps
+  and asks Jev about up to `jev_limit` GPT-analyzed listings.
   """
   def trigger(opts \\ []) do
-    %{"limit" => Keyword.get(opts, :limit, 30)}
+    opts
+    |> Keyword.put_new(:limit, 30)
+    |> Map.new(fn {key, value} -> {to_string(key), value} end)
     |> __MODULE__.new()
     |> Oban.insert()
   end
