@@ -291,28 +291,27 @@ listing, which suits Jev alerts since they match few listings.
 
 ### Mail transport
 
-Alerts go out over SMTP submission to our own Stalwart server — **port 465 with
-implicit TLS**, authenticating as a real mailbox. Configured entirely from the
-environment in `config/runtime.exs`:
+Alerts go out over SMTP submission to our own Stalwart server (the `mail`
+container on the Contabo box that also runs Dokploy) — **port 465 with implicit
+TLS** — authenticating as `noreply@zaur.app`, the account the `register` app in
+the `zaur` monorepo sends from (`INVITE_SMTP_*`). Configured entirely from the
+environment in `config/runtime.exs`; production values live in Dokploy →
+rzeczywiscie → Environment:
 
 ```
 MAIL_SMTP_HOST=mail.zaur.app
 MAIL_SMTP_PORT=465
-MAIL_SMTP_USERNAME=contact@kruk.live
-MAIL_SMTP_PASSWORD=…
-MAIL_FROM=contact@kruk.live
-ALERT_EMAIL_TO=contact@kruk.live
+MAIL_SMTP_USERNAME=noreply@zaur.app
+MAIL_SMTP_PASSWORD=…              # register's INVITE_SMTP_PASSWORD
+MAIL_FROM=noreply@zaur.app        # Stalwart only sends as the signed-in account
+MAIL_FROM_NAME=Kruk.live
+ALERT_EMAIL_TO=bartek@zaur.app
 ```
 
 With `MAIL_SMTP_HOST` unset the mailer stays on Swoosh's local adapter,
 `Alerts.configured?/0` returns false, and the worker logs and skips instead of
 failing jobs. Certificates are verified against the system CA store with SNI
 pinned to the host; `MAIL_SMTP_INSECURE=true` exists for self-signed setups.
-
-Port 465 is not a preference — 25 isn't reachable from inside CapRover
-(`srv-captain--mail` only serves HTTP), and Stalwart's 587/STARTTLS listener has
-historically not been exposed. The `register` app in the `zaur` monorepo uses
-the same settings (`INVITE_SMTP_*`).
 
 Use `/admin` → **Email Alerts** → **Send test** to verify the path end to end;
 scraped titles are HTML-escaped in the digest, so a listing title cannot inject
