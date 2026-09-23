@@ -359,4 +359,19 @@ defmodule Rzeczywiscie.AlertsTest do
       assert Alerts.count_pending_matches(Alerts.get_alert(enabled.id)) == 0
     end
   end
+
+  describe "mailer config" do
+    test "implicit TLS on 465 verifies the server certificate" do
+      System.put_env("MAIL_SMTP_HOST", "mail.example.com")
+      on_exit(fn -> System.delete_env("MAIL_SMTP_HOST") end)
+
+      mailer =
+        Config.Reader.read!("config/runtime.exs", env: :test)[:rzeczywiscie][Rzeczywiscie.Mailer]
+
+      # gen_smtp ignores tls_options on the implicit-TLS path; ssl:connect gets sockopts
+      assert mailer[:ssl]
+      assert mailer[:sockopts][:verify] == :verify_peer
+      assert [_ | _] = mailer[:sockopts][:cacerts]
+    end
+  end
 end

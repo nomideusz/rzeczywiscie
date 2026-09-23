@@ -126,18 +126,16 @@ end
 # ## Mailer - SMTP submission to our own Stalwart server
 #
 # Alerts are sent through the mailbox server (Stalwart) over SMTP submission.
-# Only 465 with implicit TLS is used: Stalwart's 587/STARTTLS submission
-# listener is not reliably exposed, and on CapRover the internal
-# srv-captain--mail address only serves HTTP - so this always goes out over the
-# public submission endpoint with a real mailbox login.
+# Production uses 465 with implicit TLS and a real mailbox login, the same
+# account the register app sends from; the values live in Dokploy.
 #
 #     MAIL_SMTP_HOST=mail.zaur.app
 #     MAIL_SMTP_PORT=465
-#     MAIL_SMTP_USERNAME=contact@kruk.live
-#     MAIL_SMTP_PASSWORD=…            # mailbox password or Stalwart app password
-#     MAIL_FROM=contact@kruk.live
+#     MAIL_SMTP_USERNAME=noreply@zaur.app
+#     MAIL_SMTP_PASSWORD=…            # register's INVITE_SMTP_PASSWORD
+#     MAIL_FROM=noreply@zaur.app      # Stalwart only sends as the signed-in account
 #     MAIL_FROM_NAME=Kruk.live
-#     ALERT_EMAIL_TO=contact@kruk.live # where alert digests are delivered
+#     ALERT_EMAIL_TO=bartek@zaur.app  # where alert digests are delivered
 #
 # With MAIL_SMTP_HOST unset the mailer stays on the local (no-op) adapter and
 # Alerts.deliver/1 reports {:error, :not_configured} instead of crashing jobs.
@@ -179,7 +177,11 @@ if smtp_host not in [nil, ""] do
     ssl: implicit_tls?,
     tls: if(implicit_tls?, do: :never, else: :always),
     auth: :always,
+    # gen_smtp hands tls_options only to STARTTLS; the implicit-TLS connect on
+    # 465 takes its ssl options from sockopts, and without cacerts OTP refuses
+    # verify_peer
     tls_options: tls_options,
+    sockopts: if(implicit_tls?, do: tls_options, else: []),
     retries: 1,
     no_mx_lookups: true
 
