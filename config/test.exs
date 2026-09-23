@@ -32,6 +32,11 @@ config :rzeczywiscie, :mail,
 # Disable Oban plugins and cron during tests
 config :rzeczywiscie, Oban, testing: :manual
 
+# Jev (TypeSafe) requests go to a Req.Test stub, never the network
+config :rzeczywiscie, :jev_req_options,
+  plug: {Req.Test, Rzeczywiscie.Services.Jev},
+  retry: false
+
 # Disable swoosh api client as it is only required for production adapters
 config :swoosh, :api_client, false
 

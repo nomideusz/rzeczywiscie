@@ -310,6 +310,24 @@ Use `/admin` → **Email Alerts** → **Send test** to verify the path end to en
 scraped titles are HTML-escaped in the digest, so a listing title cannot inject
 markup into the email.
 
+## Jev shadow analysis
+
+`Services.Jev` asks TypeSafe's Jev model 19 typed questions per listing in one
+request: what is really on offer (fractional share, sitting tenant, bailiff
+sale, co-op/TBS right, contract assignment, product not property, wanted ad,
+swap), features (balcony, parking, lift, cellar, garden, ground floor, pets,
+furnished, no commission), `condition` and `seller_pressure`. It runs as step 3
+of `LLMAnalysisWorker` on listings GPT has analyzed, 200 per run, when
+`TYPESAFE_API_KEY` is set.
+
+Answers land verbatim in `properties.jev_signals` (with the model version and
+token usage) and `jev_analyzed_at`; **nothing reads them yet**. That is on
+purpose: compare against the `llm_*` columns, then pick thresholds in code
+without calling the model again. The model is pinned (`jev-1.13.0`) because
+thresholds are tuned against a version. A yes/no answer counts as yes at 0.7
+or above (`Jev.yes?/2`): in a 39-listing smoke test, true cases scored 0.9 or
+more and false ones 0.42 at most.
+
 ## Performance Optimizations
 
 The application has been heavily optimized for performance:
@@ -505,6 +523,7 @@ Just use Tailwind classes in your Svelte components and they'll be included.
   - `alerts/alert.ex` - Saved search schema, criteria whitelist
   - `alerts/alert_match.ex` - Ledger of already-reported listings
   - `alerts/alert_email.ex` - Digest email (text + HTML)
+- `lib/rzeczywiscie/services/jev.ex` - Jev (TypeSafe) listing judgments, shadow mode
 - `lib/rzeczywiscie/scrapers/` - Web scraper modules
   - `olx_scraper.ex` - OLX.pl scraper
   - `otodom_scraper.ex` - Otodom.pl scraper

@@ -5,7 +5,8 @@ defmodule Rzeczywiscie.Workers.LLMAnalysisWorker do
   Runs the full analysis workflow automatically:
   1. Fetch descriptions for top-scored properties missing them
   2. Run LLM analysis on properties with descriptions
-  
+  3. Ask Jev (Services.Jev) about the listings GPT has analyzed, in shadow
+
   Scheduled to run every 6 hours via cron.
   """
 
@@ -28,25 +29,74 @@ defmodule Rzeczywiscie.Workers.LLMAnalysisWorker do
     
     # Check if API key is configured
     api_key = Application.get_env(:rzeczywiscie, :openai_api_key, "")
-    if api_key == "" do
+    gpt_result = if api_key == "" do
       Logger.warning("⚠️ LLM Analysis skipped: OpenAI API key not configured")
-      :ok
+      "GPT skipped: no OpenAI key"
     else
       # Step 1: Fetch descriptions for properties that need them
-      Rzeczywiscie.JobProgress.report(job, "step 1/2 - fetching descriptions (up to #{limit})")
-      fetch_result = fetch_descriptions(limit, fn msg -> Rzeczywiscie.JobProgress.report(job, "step 1/2 - " <> msg) end)
+      Rzeczywiscie.JobProgress.report(job, "step 1/3 - fetching descriptions (up to #{limit})")
+      fetch_result = fetch_descriptions(limit, fn msg -> Rzeczywiscie.JobProgress.report(job, "step 1/3 - " <> msg) end)
       Logger.info("📝 Description fetch: #{fetch_result}")
-      
+
       # Small delay between steps
       Process.sleep(2000)
-      
+
       # Step 2: Run LLM analysis on properties with descriptions
-      Rzeczywiscie.JobProgress.report(job, "step 2/2 - descriptions: #{fetch_result}; analyzing")
-      llm_result = run_llm_analysis(limit, fn msg -> Rzeczywiscie.JobProgress.report(job, "step 2/2 - " <> msg) end)
+      Rzeczywiscie.JobProgress.report(job, "step 2/3 - descriptions: #{fetch_result}; analyzing")
+      llm_result = run_llm_analysis(limit, fn msg -> Rzeczywiscie.JobProgress.report(job, "step 2/3 - " <> msg) end)
       Logger.info("🤖 LLM analysis: #{llm_result}")
-      Rzeczywiscie.JobProgress.report(job, "done - #{fetch_result}; #{llm_result}")
-      
-      :ok
+      "#{fetch_result}; #{llm_result}"
+    end
+
+    # Step 3: Jev on the listings GPT has analyzed (runs even when GPT can't)
+    jev_result = run_jev_shadow(fn msg -> Rzeczywiscie.JobProgress.report(job, "step 3/3 - " <> msg) end)
+    Logger.info("🧪 Jev shadow: #{jev_result}")
+    Rzeczywiscie.JobProgress.report(job, "done - #{gpt_result}; #{jev_result}")
+
+    :ok
+  end
+
+  # Newest GPT analyses first, so each run's fresh listings are covered and the
+  # backlog drains @jev_batch at a time (a Jev call takes ~300ms). llm_condition
+  # is only written by a real GPT analysis, never by the garbage/metadata paths.
+  @jev_batch 200
+
+  defp run_jev_shadow(progress) do
+    alias Rzeczywiscie.Services.Jev
+
+    if Jev.configured?() do
+      properties = from(p in Property,
+        where: p.active == true and
+               not is_nil(p.llm_analyzed_at) and
+               not is_nil(p.llm_condition) and
+               is_nil(p.jev_analyzed_at),
+        order_by: [desc: p.llm_analyzed_at],
+        limit: @jev_batch
+      )
+      |> Repo.all()
+
+      total = length(properties)
+
+      {ok, failed, last_error} = properties
+      |> Enum.with_index(1)
+      |> Enum.reduce({0, 0, nil}, fn {property, idx}, {ok, failed, last_error} ->
+        progress.("Jev #{idx}/#{total} (#{ok} ok, #{failed} failed)")
+
+        # A failure leaves jev_analyzed_at unset, so the next run retries it
+        with {:ok, signals} <- Jev.analyze(property),
+             {:ok, _} <- RealEstate.update_property(property, %{jev_signals: signals, jev_analyzed_at: DateTime.utc_now()}) do
+          {ok + 1, failed, last_error}
+        else
+          {:error, reason} ->
+            Logger.warning("  ✗ Jev failed for ##{property.id}: #{inspect(reason)}")
+            {ok, failed + 1, reason}
+        end
+      end)
+
+      result = "Jev #{ok}/#{total} analyzed"
+      if failed > 0, do: result <> ", #{failed} failed (last: #{inspect(last_error)})", else: result
+    else
+      "Jev skipped: no TypeSafe key"
     end
   end
 

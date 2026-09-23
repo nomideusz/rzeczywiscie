@@ -28,6 +28,10 @@ config :rzeczywiscie,
 config :rzeczywiscie,
   openai_api_key: System.get_env("OPENAI_API_KEY", "")
 
+# TypeSafe (Jev) key for the shadow listing judgments; unset skips them
+config :rzeczywiscie,
+  typesafe_api_key: System.get_env("TYPESAFE_API_KEY", "")
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||

@@ -60,6 +60,10 @@ defmodule Rzeczywiscie.RealEstate.Property do
     field :llm_listing_quality, :integer  # 1-5 quality score
     field :llm_is_agency, :boolean  # true=agency, false=private, nil=unknown
 
+    # TypeSafe Jev answers, stored raw (see Services.Jev); shadow-only for now
+    field :jev_signals, :map
+    field :jev_analyzed_at, :utc_datetime
+
     # Price position vs archive median zł/m² for comparable listings
     # (set by RealEstate.update_price_positions/0, negative = below median)
     field :price_vs_median, :integer
@@ -113,7 +117,9 @@ defmodule Rzeczywiscie.RealEstate.Property do
       # Data quality fields
       :llm_data_issues,
       :llm_listing_quality,
-      :llm_is_agency
+      :llm_is_agency,
+      :jev_signals,
+      :jev_analyzed_at
     ])
     |> validate_required([:source, :external_id, :title, :url])
     |> validate_inclusion(:source, ["olx", "otodom", "gratka"])
