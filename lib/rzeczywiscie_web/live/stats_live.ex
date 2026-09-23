@@ -6,6 +6,7 @@ defmodule RzeczywiscieWeb.StatsLive do
   alias Rzeczywiscie.Repo
   alias Rzeczywiscie.RealEstate
   alias Rzeczywiscie.RealEstate.Property
+  alias Rzeczywiscie.RealEstate.Voivodeships
 
   # Stale threshold in hours (4 days)
   @stale_hours 96
@@ -19,19 +20,13 @@ defmodule RzeczywiscieWeb.StatsLive do
   
   @impl true
   def mount(_params, _session, socket) do
-    # Get available property types for filter
-    property_types = get_property_types()
-    
     socket =
       socket
-      |> assign(:stats, cached(:stats, &calculate_stats/0))
-      |> assign(:market, cached(:market, &calculate_market_stats/0))
+      |> assign(:region, nil)
       |> assign(:city_property_type, "mieszkanie")
       |> assign(:city_transaction_type, "sprzedaż")
-      |> assign(:city_medians, cached({:medians, "mieszkanie", "sprzedaż"}, fn -> calculate_city_medians("mieszkanie", "sprzedaż") end))
       |> assign(:refreshing, false)
-      |> assign(:last_updated, DateTime.utc_now())
-      |> assign(:property_types, property_types)
+      |> assign(:property_types, get_property_types())
       |> assign(:selected_property_type, "mieszkanie")
       |> assign(:selected_transaction_type, "all")
       |> assign(:min_area, nil)
@@ -40,13 +35,44 @@ defmodule RzeczywiscieWeb.StatsLive do
       |> assign(:max_rooms, nil)
       |> assign(:sort_by, "sale_count")
       |> assign(:sort_dir, :desc)
-      |> assign(:filtered_district_prices, cached({:districts, "mieszkanie", "all"}, fn -> calculate_filtered_district_prices("mieszkanie", "all") end))
-      |> assign(:expanded_district, nil)
-      |> assign(:district_properties, [])
-      |> sort_filtered_prices()
 
     {:ok, socket}
   end
+
+  # ?region=<slug> scopes the whole page; anything unknown means all regions
+  @impl true
+  def handle_params(params, _uri, socket) do
+    {:noreply,
+     socket
+     |> assign(:region, Voivodeships.normalize(params["region"]))
+     |> load_stats(&cached/2)}
+  end
+
+  defp load_stats(socket, fetch) do
+    a = socket.assigns
+    region = a.region
+
+    socket
+    |> assign(:stats, fetch.({:stats, region}, fn -> calculate_stats(region) end))
+    |> assign(:market, fetch.({:market, region}, fn -> calculate_market_stats(region) end))
+    |> assign(:region_stats, if(region, do: [], else: fetch.(:regions, &calculate_region_stats/0)))
+    |> assign(:city_medians, fetch.({:medians, region, a.city_property_type, a.city_transaction_type}, fn ->
+      calculate_city_medians(region, a.city_property_type, a.city_transaction_type)
+    end))
+    |> assign(:filtered_district_prices, fetch.(district_key(a), fn ->
+      calculate_filtered_district_prices(region, a.selected_property_type, a.selected_transaction_type,
+        a.min_area, a.max_area, a.min_rooms, a.max_rooms)
+    end))
+    |> assign(:expanded_district, nil)
+    |> assign(:district_properties, [])
+    |> assign(:last_updated, DateTime.utc_now())
+    |> sort_filtered_prices()
+  end
+
+  defp district_key(a),
+    do: {:districts, a.region, a.selected_property_type, a.selected_transaction_type, a.min_area, a.max_area, a.min_rooms, a.max_rooms}
+
+  defp fresh(key, fun), do: cache_put(key, fun.())
 
   @impl true
   def render(assigns) do
@@ -54,7 +80,7 @@ defmodule RzeczywiscieWeb.StatsLive do
     <.app flash={@flash} current_path={@current_path}>
     <div class="min-h-screen bg-base-200">
       <!-- Header -->
-      <.property_page_header current_path={@current_path} title="Statistics" subtitle="Data Monitoring Dashboard">
+      <.property_page_header current_path={@current_path} title="Statistics" subtitle={if @region, do: Voivodeships.get(@region).label, else: "All regions"}>
         <:actions>
           <div class="flex items-center gap-3">
             <span class="text-xs opacity-50">
@@ -70,6 +96,27 @@ defmodule RzeczywiscieWeb.StatsLive do
           </div>
         </:actions>
       </.property_page_header>
+
+      <!-- Region picker: scopes every number on the page -->
+      <div class="bg-base-100 border-b-2 border-base-content">
+        <div class="container mx-auto px-4 py-2 flex flex-wrap items-center gap-1" id="region-picker">
+          <span class="text-xs font-bold uppercase tracking-wide opacity-60 mr-1">Region:</span>
+          <.link
+            patch={~p"/stats"}
+            class={"px-2 py-1 text-xs font-bold border transition-colors #{if @region == nil, do: "bg-base-content text-base-100 border-base-content", else: "border-base-content/30 hover:bg-base-200"}"}
+          >
+            All
+          </.link>
+          <%= for v <- Voivodeships.all() do %>
+            <.link
+              patch={~p"/stats?region=#{v.slug}"}
+              class={"px-2 py-1 text-xs font-bold border transition-colors #{if @region == v.name, do: "bg-primary text-primary-content border-primary", else: "border-base-content/30 hover:bg-base-200"}"}
+            >
+              <%= v.label %>
+            </.link>
+          <% end %>
+        </div>
+      </div>
 
       <!-- Main Stats Grid -->
       <div class="bg-base-100 border-b-2 border-base-content">
@@ -125,6 +172,46 @@ defmodule RzeczywiscieWeb.StatsLive do
         <style>
           .viz-root { --viz-1: #2a78d6; --viz-2: #1baf7a; --viz-3: #eda100; }
         </style>
+
+        <!-- Region comparison (all-regions view only) -->
+        <%= if @region_stats != [] do %>
+          <div class="bg-base-100 border-2 border-base-content mb-6" id="region-comparison">
+            <div class="px-4 py-2 border-b-2 border-base-content bg-primary/20">
+              <h2 class="text-sm font-bold uppercase tracking-wide">&#128506;&#65039; Regions</h2>
+              <p class="text-[10px] opacity-60">Full archive &bull; price medians for flats (mieszkania), outliers excluded &bull; click a region to scope the page</p>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead class="bg-base-200 border-b border-base-content/30">
+                  <tr class="text-left text-[10px] font-bold uppercase tracking-wide">
+                    <th class="px-3 py-2">Region</th>
+                    <th class="px-3 py-2 text-right">Active</th>
+                    <th class="px-3 py-2 text-right">Total</th>
+                    <th class="px-3 py-2 text-right">New 24h</th>
+                    <th class="px-3 py-2 text-right">Sale z&#322;/m&sup2;</th>
+                    <th class="px-3 py-2 text-right">Rent z&#322;</th>
+                    <th class="px-3 py-2 text-right">Days on market</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <%= for r <- @region_stats do %>
+                    <tr class="border-t border-base-content/10 hover:bg-base-200/50">
+                      <td class="px-3 py-1.5 font-bold">
+                        <.link patch={~p"/stats?region=#{r.slug}"} class="hover:underline"><%= r.label %></.link>
+                      </td>
+                      <td class="px-3 py-1.5 text-right font-black"><%= r.active %></td>
+                      <td class="px-3 py-1.5 text-right opacity-60"><%= r.total %></td>
+                      <td class="px-3 py-1.5 text-right"><%= r.added_24h %></td>
+                      <td class="px-3 py-1.5 text-right font-bold text-info"><%= axis_number(r.sale_sqm) %></td>
+                      <td class="px-3 py-1.5 text-right font-bold text-warning"><%= axis_number(r.rent) %></td>
+                      <td class="px-3 py-1.5 text-right"><%= if r.days_on_market, do: "#{round(r.days_on_market)}d", else: "—" %></td>
+                    </tr>
+                  <% end %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        <% end %>
 
         <!-- Market Trends: computed over the FULL archive, not just active listings -->
         <div class="viz-root bg-base-100 border-2 border-base-content mb-6">
@@ -1099,43 +1186,17 @@ defmodule RzeczywiscieWeb.StatsLive do
 
   @impl true
   def handle_event("city_property_type", %{"type" => type}, socket) do
-    {:noreply,
-     socket
-     |> assign(:city_property_type, type)
-     |> assign(:city_medians, cached({:medians, type, socket.assigns.city_transaction_type}, fn -> calculate_city_medians(type, socket.assigns.city_transaction_type) end))}
+    socket = assign(socket, :city_property_type, type)
+    {:noreply, assign(socket, :city_medians, city_medians(socket))}
   end
 
   def handle_event("city_transaction_type", %{"type" => type}, socket) do
-    {:noreply,
-     socket
-     |> assign(:city_transaction_type, type)
-     |> assign(:city_medians, cached({:medians, socket.assigns.city_property_type, type}, fn -> calculate_city_medians(socket.assigns.city_property_type, type) end))}
+    socket = assign(socket, :city_transaction_type, type)
+    {:noreply, assign(socket, :city_medians, city_medians(socket))}
   end
 
   def handle_event("refresh_stats", _params, socket) do
-    socket =
-      socket
-      |> assign(:refreshing, true)
-      |> assign(:stats, cache_put(:stats, calculate_stats()))
-      |> assign(:market, cache_put(:market, calculate_market_stats()))
-      |> assign(:city_medians, cache_put(
-          {:medians, socket.assigns.city_property_type, socket.assigns.city_transaction_type},
-          calculate_city_medians(
-            socket.assigns.city_property_type,
-            socket.assigns.city_transaction_type
-          )
-        ))
-      |> assign(:filtered_district_prices, cache_put(
-          {:districts, socket.assigns.selected_property_type, socket.assigns.selected_transaction_type},
-          calculate_filtered_district_prices(
-            socket.assigns.selected_property_type,
-            socket.assigns.selected_transaction_type
-          )
-        ))
-      |> assign(:last_updated, DateTime.utc_now())
-      |> assign(:refreshing, false)
-
-    {:noreply, socket}
+    {:noreply, load_stats(socket, &fresh/2)}
   end
 
   @impl true
@@ -1225,6 +1286,7 @@ defmodule RzeczywiscieWeb.StatsLive do
     else
       # Expand with properties
       properties = fetch_district_properties(
+        socket.assigns.region,
         district,
         socket.assigns.selected_property_type,
         socket.assigns.selected_transaction_type,
@@ -1251,8 +1313,15 @@ defmodule RzeczywiscieWeb.StatsLive do
     end
   end
 
+  defp city_medians(%{assigns: a}) do
+    cached({:medians, a.region, a.city_property_type, a.city_transaction_type}, fn ->
+      calculate_city_medians(a.region, a.city_property_type, a.city_transaction_type)
+    end)
+  end
+
   defp refresh_district_prices(socket) do
     filtered = calculate_filtered_district_prices(
+      socket.assigns.region,
       socket.assigns.selected_property_type,
       socket.assigns.selected_transaction_type,
       socket.assigns.min_area,
@@ -1288,11 +1357,11 @@ defmodule RzeczywiscieWeb.StatsLive do
 
   # Market analytics over ALL properties (including delisted ones) - the
   # historical archive is what makes trends and velocity computable
-  defp calculate_city_medians(property_type, transaction_type) do
+  defp calculate_city_medians(region, property_type, transaction_type) do
     {pmin, pmax} = price_range(transaction_type)
 
     Repo.all(
-      from p in Property,
+      from p in scoped(region),
         where:
           p.transaction_type == ^transaction_type and p.property_type == ^property_type and
             not is_nil(p.price) and p.price >= ^pmin and p.price <= ^pmax and
@@ -1321,13 +1390,13 @@ defmodule RzeczywiscieWeb.StatsLive do
     )
   end
 
-  defp calculate_market_stats do
+  defp calculate_market_stats(region) do
     {sale_min, sale_max} = price_range("sprzedaż")
     {rent_min, rent_max} = price_range("wynajem")
 
     monthly_sale =
       Repo.all(
-        from p in Property,
+        from p in scoped(region),
           where:
             p.transaction_type == "sprzedaż" and p.property_type == "mieszkanie" and
               not is_nil(p.price) and p.price >= ^sale_min and p.price <= ^sale_max and
@@ -1348,7 +1417,7 @@ defmodule RzeczywiscieWeb.StatsLive do
 
     monthly_rent =
       Repo.all(
-        from p in Property,
+        from p in scoped(region),
           where:
             p.transaction_type == "wynajem" and p.property_type == "mieszkanie" and
               not is_nil(p.price) and p.price >= ^rent_min and p.price <= ^rent_max,
@@ -1363,7 +1432,7 @@ defmodule RzeczywiscieWeb.StatsLive do
 
     monthly_volume =
       Repo.all(
-        from p in Property,
+        from p in scoped(region),
           group_by: [fragment("to_char(?, 'YYYY-MM')", p.inserted_at), p.source],
           order_by: fragment("to_char(?, 'YYYY-MM')", p.inserted_at),
           select: {fragment("to_char(?, 'YYYY-MM')", p.inserted_at), p.source, count(p.id)}
@@ -1380,7 +1449,7 @@ defmodule RzeczywiscieWeb.StatsLive do
 
     velocity =
       Repo.all(
-        from p in Property,
+        from p in scoped(region),
           where:
             p.active == false and not is_nil(p.last_seen_at) and
               not is_nil(p.transaction_type) and p.last_seen_at > p.inserted_at,
@@ -1399,7 +1468,7 @@ defmodule RzeczywiscieWeb.StatsLive do
 
     velocity_by_type =
       Repo.all(
-        from p in Property,
+        from p in scoped(region),
           where:
             p.active == false and not is_nil(p.last_seen_at) and
               not is_nil(p.property_type) and p.last_seen_at > p.inserted_at,
@@ -1431,20 +1500,20 @@ defmodule RzeczywiscieWeb.StatsLive do
       monthly_volume: monthly_volume,
       velocity: Map.new(velocity, &{&1.key, &1}),
       velocity_by_type: velocity_by_type,
-      tracked_since: Repo.one(from p in Property, select: min(p.inserted_at)),
+      tracked_since: Repo.one(from p in scoped(region), select: min(p.inserted_at)),
       delisted_count:
-        Repo.aggregate(from(p in Property, where: p.active == false), :count, :id)
+        Repo.aggregate(from(p in scoped(region), where: p.active == false), :count, :id)
     }
   end
 
-  defp calculate_stats do
-    total_properties = Repo.aggregate(Property, :count, :id)
-    active_properties = Repo.aggregate(from(p in Property, where: p.active == true), :count, :id)
+  defp calculate_stats(region) do
+    total_properties = Repo.aggregate(scoped(region), :count, :id)
+    active_properties = Repo.aggregate(from(p in scoped(region), where: p.active == true), :count, :id)
 
     # Geocoding stats
     geocoded_count =
       Repo.aggregate(
-        from(p in Property,
+        from(p in scoped(region),
           where: not is_nil(p.latitude) and not is_nil(p.longitude) and p.active == true
         ),
         :count,
@@ -1457,7 +1526,7 @@ defmodule RzeczywiscieWeb.StatsLive do
     aqi_count =
       try do
         Repo.one(
-          from p in Property,
+          from p in scoped(region),
             join: aq in "air_quality_cache",
             on: fragment("ROUND(?::numeric, 2)", p.latitude) == aq.lat and
                fragment("ROUND(?::numeric, 2)", p.longitude) == aq.lng,
@@ -1472,12 +1541,12 @@ defmodule RzeczywiscieWeb.StatsLive do
 
     # Added today
     today = DateTime.utc_now() |> DateTime.add(-24, :hour)
-    added_today = Repo.aggregate(from(p in Property, where: p.inserted_at >= ^today), :count, :id)
+    added_today = Repo.aggregate(from(p in scoped(region), where: p.inserted_at >= ^today), :count, :id)
 
     # By source
     by_source =
       Repo.all(
-        from p in Property,
+        from p in scoped(region),
           where: p.active == true,
           group_by: p.source,
           select: {p.source, count(p.id)},
@@ -1488,7 +1557,7 @@ defmodule RzeczywiscieWeb.StatsLive do
     # This groups "Kraków", "Kraków, Stare Miasto", "Kraków, Podgórze" all as "Kraków"
     top_cities =
       Repo.all(
-        from p in Property,
+        from p in scoped(region),
           where: p.active == true and not is_nil(p.city),
           group_by: fragment("SPLIT_PART(?, ',', 1)", p.city),
           select: {fragment("SPLIT_PART(?, ',', 1)", p.city), count(p.id)},
@@ -1497,13 +1566,13 @@ defmodule RzeczywiscieWeb.StatsLive do
       )
 
     # Data quality
-    with_price = Repo.aggregate(from(p in Property, where: p.active == true and not is_nil(p.price)), :count, :id)
-    with_area = Repo.aggregate(from(p in Property, where: p.active == true and not is_nil(p.area_sqm)), :count, :id)
-    with_rooms = Repo.aggregate(from(p in Property, where: p.active == true and not is_nil(p.rooms)), :count, :id)
+    with_price = Repo.aggregate(from(p in scoped(region), where: p.active == true and not is_nil(p.price)), :count, :id)
+    with_area = Repo.aggregate(from(p in scoped(region), where: p.active == true and not is_nil(p.area_sqm)), :count, :id)
+    with_rooms = Repo.aggregate(from(p in scoped(region), where: p.active == true and not is_nil(p.rooms)), :count, :id)
 
     complete_data =
       Repo.aggregate(
-        from(p in Property,
+        from(p in scoped(region),
           where:
             p.active == true and
             not is_nil(p.price) and
@@ -1525,14 +1594,14 @@ defmodule RzeczywiscieWeb.StatsLive do
 
         total =
           Repo.aggregate(
-            from(p in Property, where: p.inserted_at >= ^start_datetime and p.inserted_at <= ^end_datetime),
+            from(p in scoped(region), where: p.inserted_at >= ^start_datetime and p.inserted_at <= ^end_datetime),
             :count,
             :id
           )
 
         olx =
           Repo.aggregate(
-            from(p in Property,
+            from(p in scoped(region),
               where: p.source == "olx" and p.inserted_at >= ^start_datetime and p.inserted_at <= ^end_datetime
             ),
             :count,
@@ -1541,7 +1610,7 @@ defmodule RzeczywiscieWeb.StatsLive do
 
         otodom =
           Repo.aggregate(
-            from(p in Property,
+            from(p in scoped(region),
               where: p.source == "otodom" and p.inserted_at >= ^start_datetime and p.inserted_at <= ^end_datetime
             ),
             :count,
@@ -1558,17 +1627,20 @@ defmodule RzeczywiscieWeb.StatsLive do
       |> Enum.reverse()
 
     # Price drops
-    price_drops = RealEstate.get_properties_with_price_drops(7) |> Enum.take(10)
+    price_drops =
+      RealEstate.get_properties_with_price_drops(7)
+      |> Enum.filter(fn {p, _} -> region in [nil, p.voivodeship] end)
+      |> Enum.take(10)
 
     # Price statistics for sale properties
-    sale_price_stats = calculate_price_stats("sprzedaż")
-    rent_price_stats = calculate_price_stats("wynajem")
+    sale_price_stats = calculate_price_stats(region, "sprzedaż")
+    rent_price_stats = calculate_price_stats(region, "wynajem")
 
     
     # Room distribution
     room_distribution =
       Repo.all(
-        from p in Property,
+        from p in scoped(region),
           where: p.active == true and not is_nil(p.rooms),
           group_by: p.rooms,
           select: {p.rooms, count(p.id)},
@@ -1579,11 +1651,11 @@ defmodule RzeczywiscieWeb.StatsLive do
     # Stale properties (not seen in 96+ hours / 4 days)
     cutoff = DateTime.utc_now() |> DateTime.add(-@stale_hours * 3600, :second)
     stale_count = Repo.aggregate(
-      from(p in Property, where: p.active == true and p.last_seen_at < ^cutoff),
+      from(p in scoped(region), where: p.active == true and p.last_seen_at < ^cutoff),
       :count, :id
     )
 
-    stale_by_source = from(p in Property,
+    stale_by_source = from(p in scoped(region),
       where: p.active == true and p.last_seen_at < ^cutoff,
       group_by: p.source,
       select: {p.source, count(p.id)}
@@ -1592,10 +1664,10 @@ defmodule RzeczywiscieWeb.StatsLive do
     |> Enum.into(%{})
 
     # Missing data breakdown
-    missing_price = Repo.aggregate(from(p in Property, where: p.active == true and is_nil(p.price)), :count, :id)
-    missing_area = Repo.aggregate(from(p in Property, where: p.active == true and is_nil(p.area_sqm)), :count, :id)
-    missing_rooms = Repo.aggregate(from(p in Property, where: p.active == true and is_nil(p.rooms)), :count, :id)
-    missing_location = Repo.aggregate(from(p in Property, where: p.active == true and is_nil(p.latitude)), :count, :id)
+    missing_price = Repo.aggregate(from(p in scoped(region), where: p.active == true and is_nil(p.price)), :count, :id)
+    missing_area = Repo.aggregate(from(p in scoped(region), where: p.active == true and is_nil(p.area_sqm)), :count, :id)
+    missing_rooms = Repo.aggregate(from(p in scoped(region), where: p.active == true and is_nil(p.rooms)), :count, :id)
+    missing_location = Repo.aggregate(from(p in scoped(region), where: p.active == true and is_nil(p.latitude)), :count, :id)
 
     %{
       total_properties: total_properties,
@@ -1625,10 +1697,10 @@ defmodule RzeczywiscieWeb.StatsLive do
     }
   end
 
-  defp calculate_price_stats(transaction_type) do
+  defp calculate_price_stats(region, transaction_type) do
     {min_valid, max_valid} = price_range(transaction_type)
     
-    query = from p in Property,
+    query = from p in scoped(region),
       where: p.active == true and 
              p.transaction_type == ^transaction_type and 
              not is_nil(p.price) and 
@@ -1646,7 +1718,7 @@ defmodule RzeczywiscieWeb.StatsLive do
       
       # Calculate average price per sqm
       avg_price_per_sqm = Repo.one(
-        from p in Property,
+        from p in scoped(region),
           where: p.active == true and 
                  p.transaction_type == ^transaction_type and 
                  not is_nil(p.price) and 
@@ -1708,6 +1780,47 @@ defmodule RzeczywiscieWeb.StatsLive do
   defp decimal_to_float(nil), do: 0.0
   defp decimal_to_float(decimal), do: Decimal.to_float(decimal)
 
+  # Every stats query starts here, so one region picker scopes the whole page
+  defp scoped(nil), do: Property
+  defp scoped(region), do: where(Property, [p], p.voivodeship == ^region)
+
+  # Side-by-side regional numbers for the "all regions" view: flats only for the
+  # price medians, same outlier bounds as price_range/1
+  defp calculate_region_stats do
+    since = DateTime.utc_now() |> DateTime.add(-24, :hour)
+
+    rows =
+      Repo.all(
+        from p in Property,
+          where: not is_nil(p.voivodeship),
+          group_by: p.voivodeship,
+          select: {p.voivodeship, %{
+            total: count(p.id),
+            active: filter(count(p.id), p.active == true),
+            added_24h: filter(count(p.id), p.inserted_at >= ^since),
+            sale_sqm:
+              fragment(
+                "percentile_cont(0.5) WITHIN GROUP (ORDER BY ?::float / ?::float) FILTER (WHERE ? = 'sprzedaż' AND ? = 'mieszkanie' AND ? BETWEEN 30000 AND 50000000 AND ? > 0)",
+                p.price, p.area_sqm, p.transaction_type, p.property_type, p.price, p.area_sqm
+              ),
+            rent:
+              fragment(
+                "percentile_cont(0.5) WITHIN GROUP (ORDER BY ?::float) FILTER (WHERE ? = 'wynajem' AND ? = 'mieszkanie' AND ? BETWEEN 300 AND 100000)",
+                p.price, p.transaction_type, p.property_type, p.price
+              ),
+            days_on_market:
+              fragment(
+                "percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (? - ?)) / 86400.0) FILTER (WHERE NOT ? AND ? > ?)",
+                p.last_seen_at, p.inserted_at, p.active, p.last_seen_at, p.inserted_at
+              )
+          }}
+      )
+      |> Map.new()
+
+    empty = %{total: 0, active: 0, added_24h: 0, sale_sqm: nil, rent: nil, days_on_market: nil}
+    Enum.map(Voivodeships.all(), &Map.merge(Map.get(rows, &1.name, empty), %{slug: &1.slug, label: &1.label}))
+  end
+
   defp get_property_types do
     Repo.all(
       from p in Property,
@@ -1725,12 +1838,12 @@ defmodule RzeczywiscieWeb.StatsLive do
   defp price_range("wynajem"), do: {Decimal.new("300"), Decimal.new("100000")}
   defp price_range(_), do: {Decimal.new("1"), Decimal.new("999999999")}
 
-  defp calculate_filtered_district_prices(property_type, transaction_type, min_area \\ nil, max_area \\ nil, min_rooms \\ nil, max_rooms \\ nil) do
+  defp calculate_filtered_district_prices(region, property_type, transaction_type, min_area, max_area, min_rooms, max_rooms) do
     filters = %{min_area: min_area, max_area: max_area, min_rooms: min_rooms, max_rooms: max_rooms}
     
     # Get districts with this property type (with price sanity filter)
     # Uses the FULL archive including delisted listings
-    base_query = from p in Property,
+    base_query = from p in scoped(region),
       where: p.property_type == ^property_type and
              not is_nil(p.district) and 
              p.district != "" and
@@ -1787,13 +1900,13 @@ defmodule RzeczywiscieWeb.StatsLive do
       case transaction_type do
         "all" ->
           # Show both sale and rent
-          sale = get_district_stats(property_type, district, "sprzedaż", filters)
-          rent = get_district_stats(property_type, district, "wynajem", filters)
+          sale = get_district_stats(region, property_type, district, "sprzedaż", filters)
+          rent = get_district_stats(region, property_type, district, "wynajem", filters)
           %{district: district, sale: sale, rent: rent, mode: :both}
         
         type ->
           # Show only selected type
-          stats = get_district_stats(property_type, district, type, filters)
+          stats = get_district_stats(region, property_type, district, type, filters)
           %{district: district, stats: stats, mode: :single, transaction_type: type}
       end
     end)
@@ -1805,9 +1918,9 @@ defmodule RzeczywiscieWeb.StatsLive do
     end)
   end
 
-  defp get_district_stats(property_type, district, transaction_type, filters \\ %{}) do
+  defp get_district_stats(region, property_type, district, transaction_type, filters) do
     {min_valid, max_valid} = price_range(transaction_type)
-    base_query = from(p in Property,
+    base_query = from(p in scoped(region),
       where: p.property_type == ^property_type and
              p.district == ^district and
              p.transaction_type == ^transaction_type and
@@ -1847,7 +1960,7 @@ defmodule RzeczywiscieWeb.StatsLive do
     max_price = Repo.aggregate(base_query, :max, :price)
 
     # For avg_per_sqm, also apply the same filters
-    sqm_query = from(p in Property,
+    sqm_query = from(p in scoped(region),
       where: p.property_type == ^property_type and
              p.district == ^district and
              p.transaction_type == ^transaction_type and
@@ -1892,9 +2005,9 @@ defmodule RzeczywiscieWeb.StatsLive do
     }
   end
 
-  defp fetch_district_properties(district, property_type, transaction_type, min_area, max_area, min_rooms, max_rooms) do
+  defp fetch_district_properties(region, district, property_type, transaction_type, min_area, max_area, min_rooms, max_rooms) do
     # Build base query
-    base_query = from p in Property,
+    base_query = from p in scoped(region),
       where: p.property_type == ^property_type and
              p.district == ^district and
              not is_nil(p.price),
