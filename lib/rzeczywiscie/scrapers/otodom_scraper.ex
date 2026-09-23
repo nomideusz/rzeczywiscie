@@ -3,7 +3,7 @@ defmodule Rzeczywiscie.Scrapers.OtodomScraper do
   Scraper for Otodom.pl real estate listings.
 
   Covers every voivodeship in `Rzeczywiscie.RealEstate.Voivodeships` (currently
-  małopolskie and podkarpackie); each region is a path segment in the search URL.
+  five southern regions); each region is a path segment in the search URL.
   """
 
   require Logger

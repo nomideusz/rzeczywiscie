@@ -2,11 +2,11 @@
 
 ## Project Overview
 
-**Kruk.live** is a real estate listing aggregator for the Małopolskie and Podkarpackie regions of Poland, built with Phoenix 1.8.1 and LiveSvelte 0.16.0 (Svelte 5). It scrapes property listings from OLX and Otodom, stores them in PostgreSQL, and provides a modern web interface for browsing, filtering, and favoriting properties.
+**Kruk.live** is a real estate listing aggregator for southern Poland (Małopolskie, Podkarpackie, Śląskie, Opolskie, Dolnośląskie), built with Phoenix 1.8.1 and LiveSvelte 0.16.0 (Svelte 5). It scrapes property listings from OLX and Otodom, stores them in PostgreSQL, and provides a modern web interface for browsing, filtering, and favoriting properties.
 
 **Key Features:**
 - 🏠 **Property Listings**: Browse thousands of real estate listings from multiple sources
-- 🗾 **Multi-region**: Małopolskie and Podkarpackie, filterable per voivodeship
+- 🗾 **Multi-region**: five southern voivodeships, filterable per voivodeship
 - ⭐ **Favorites**: Save properties with persistent user sessions (browser fingerprint)
 - 🗺️ **Map View**: Interactive map showing properties with coordinates
 - 🔍 **Advanced Filters**: Filter by region, city, price, area, transaction type, property type, source
@@ -129,7 +129,7 @@ create table(:properties) do
   add :rooms, :integer
   add :city, :string
   add :district, :string
-  add :voivodeship, :string  # "małopolskie", "podkarpackie"
+  add :voivodeship, :string  # "małopolskie", "śląskie", ... (see Voivodeships)
   add :url, :text, null: false
   add :source, :string  # "olx", "otodom", "gratka"
   add :external_id, :string
@@ -196,6 +196,9 @@ center:
 |---|---|---|---|
 | Małopolskie | `małopolskie` | 4 | `malopolskie` |
 | Podkarpackie | `podkarpackie` | 17 | `podkarpackie` |
+| Śląskie | `śląskie` | 6 | `slaskie` |
+| Opolskie | `opolskie` | 12 | `opolskie` |
+| Dolnośląskie | `dolnośląskie` | 3 | `dolnoslaskie` |
 
 Adding another voivodeship means adding one entry there (plus, optionally, its
 locality coordinates in `Services.Geocoding`) — scrapers, workers, filters and
@@ -217,7 +220,9 @@ iex> Rzeczywiscie.Workers.OlxScraperWorker.trigger(pages: 3, enrich: true)
 iex> Rzeczywiscie.Workers.OtodomScraperWorker.trigger(pages: 3, voivodeships: ["podkarpackie"])
 ```
 
-Note: `:pages` is **per region** — a 5-page run over two regions fetches 10 pages.
+Note: `:pages` is **per region** — a 5-page run over five regions fetches 25 pages.
+Only Małopolskie and Podkarpackie have a locality cache in `Services.Geocoding`;
+the other regions geocode through Google.
 
 ### Metadata Extraction
 

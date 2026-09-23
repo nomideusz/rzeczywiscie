@@ -30,6 +30,33 @@ defmodule Rzeczywiscie.RealEstate.Voivodeships do
       otodom_slug: "podkarpackie",
       capital: "Rzeszów",
       center: %{lat: 50.0413, lng: 21.9990}
+    },
+    %{
+      name: "śląskie",
+      slug: "slaskie",
+      label: "Śląskie",
+      olx_region_id: 6,
+      otodom_slug: "slaskie",
+      capital: "Katowice",
+      center: %{lat: 50.2649, lng: 19.0238}
+    },
+    %{
+      name: "opolskie",
+      slug: "opolskie",
+      label: "Opolskie",
+      olx_region_id: 12,
+      otodom_slug: "opolskie",
+      capital: "Opole",
+      center: %{lat: 50.6751, lng: 17.9213}
+    },
+    %{
+      name: "dolnośląskie",
+      slug: "dolnoslaskie",
+      label: "Dolnośląskie",
+      olx_region_id: 3,
+      otodom_slug: "dolnoslaskie",
+      capital: "Wrocław",
+      center: %{lat: 51.1079, lng: 17.0385}
     }
   ]
 

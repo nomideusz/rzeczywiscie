@@ -456,11 +456,12 @@ defmodule Rzeczywiscie.Services.Geocoding do
     |> String.trim()
   end
   
-  # Caches to search: just the property's region when known, all of them otherwise
+  # Caches to search: just the property's region when known, all of them otherwise.
+  # Regions without a cache fall through to the Google API.
   defp coords_for(voivodeship) do
     case Voivodeships.normalize(voivodeship) do
-      nil -> Enum.map(Voivodeships.names(), &Map.fetch!(@coords_by_voivodeship, &1))
-      name -> [Map.fetch!(@coords_by_voivodeship, name)]
+      nil -> Map.values(@coords_by_voivodeship)
+      name -> [Map.get(@coords_by_voivodeship, name, %{})]
     end
   end
 

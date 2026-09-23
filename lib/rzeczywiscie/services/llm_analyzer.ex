@@ -729,6 +729,9 @@ defmodule Rzeczywiscie.Services.LLMAnalyzer do
       "producent",
       "całe małopolskie",  # delivery range = product
       "całe podkarpackie",
+      "całe śląskie",
+      "całe opolskie",
+      "całe dolnośląskie",
       "dostawa gratis",
       "transport w cenie"
     ]

@@ -3,7 +3,7 @@ defmodule Rzeczywiscie.Scrapers.OlxScraper do
   Scraper for OLX.pl real estate listings.
 
   Covers every voivodeship in `Rzeczywiscie.RealEstate.Voivodeships` (currently
-  małopolskie and podkarpackie); each region maps to an OLX `region_id`.
+  five southern regions); each region maps to an OLX `region_id`.
   """
 
   require Logger
