@@ -319,13 +319,14 @@ markup into the email.
 
 ## Jev analysis
 
-`Services.Jev` asks TypeSafe's Jev model 23 typed questions per listing in one
+`Services.Jev` asks TypeSafe's Jev model 25 typed questions per listing in one
 request, sending the portal's transaction type, property type and price along
 with the text: what is really on offer (fractional share, sitting tenant,
 bailiff sale, co-op/TBS right, contract assignment, product not property,
 wanted ad, swap), features (balcony, parking, lift, cellar, garden, ground
 floor, pets allowed, furnished, no commission), rental terms (pets forbidden,
-long-term let, beds rather than a home, subletting forbidden), `condition` and
+long-term let, beds rather than a home, subletting forbidden, women or
+students only), `condition` and
 `seller_pressure`. It runs as step 3 of `LLMAnalysisWorker` on listings GPT has
 analyzed, 200 per run, and for alerts with Jev criteria, when
 `TYPESAFE_API_KEY` is set. `/admin` → Manual Actions → **🧪 Jev Analysis**

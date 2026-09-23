@@ -207,6 +207,25 @@ defmodule Rzeczywiscie.Services.Jev do
           "A private room, or a whole flat or house for one tenant, a couple or a family who live there, even if they may sublet rooms; or `listing` is a sale."
       }
     },
+    "women_only" => %{
+      type: "noul",
+      instructions:
+        "Does `listing` let only to women ('dla kobiety', 'dla pani', 'dla dziewczyny', 'dla studentki')?",
+      criteria: %{
+        "true" => "Only a woman or women may rent it.",
+        "false" => "Men are welcome too, or `listing` does not say who may rent it."
+      }
+    },
+    "students_only" => %{
+      type: "noul",
+      instructions:
+        "Does `listing` let only to students ('dla studenta', 'dla studentki', 'tylko dla studentów')?",
+      criteria: %{
+        "true" => "Only a student or students may rent it.",
+        "false" =>
+          "Working people or anyone may rent it, students are one option among others ('dla studenta lub osoby pracującej'), or `listing` does not say."
+      }
+    },
     "sublet_forbidden" => %{
       type: "noul",
       instructions:
